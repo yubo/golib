@@ -1,1 +1,3 @@
-# libgo
+# golib
+
+golang library
