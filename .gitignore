@@ -1,0 +1,6 @@
+*.out
+*.swp
+test.sh
+
+tmp/
+run/

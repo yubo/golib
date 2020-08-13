@@ -1,0 +1,17 @@
+syntax = "proto3";
+option go_package = "github.com/yubo/golib/api";
+package sso;
+
+enum TokenType {
+	TokenTypeUnknow = 0;
+	Oauth           = 1;
+	ApiKey          = 2;
+}
+
+
+enum AclType {
+	Unknow          = 0;
+	Ip              = 1;
+	Service         = 2;
+}
+
