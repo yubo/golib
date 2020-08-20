@@ -76,11 +76,18 @@ func (p Pagination2) SqlExtra(orders ...string) string {
 }
 
 type Pagination struct {
-	Dump        *bool   `param:"-" flags:"dump,," description:"dump list without pagination"`
 	PageSize    *int    `param:"query" flags:"-" description:"page size"`
 	CurrentPage *int    `param:"query" flags:"-" description:"current page number"`
 	Sorter      *string `param:"query" flags:"-" description:"column name"`
 	Order       *string `param:"query" flags:"-" description:"asc(default)/desc"`
+}
+
+type Resp struct {
+	Error string `json:"err" description:"error msg"`
+}
+
+type RespTotal struct {
+	Total int64 `json:"total" description:"total number"`
 }
 
 func (p Pagination) SqlExtra(orders ...string) string {

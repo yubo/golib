@@ -20,24 +20,6 @@ func (p Version) String() string {
 	return util.Prettify(p)
 }
 
-type Resp struct {
-	Status string `json:"status,omitempty" description:"success/fail"`
-	Msg    string `json:"msg,omitempty" description:"detail of fail"`
-}
-
-type RespTotal struct {
-	Total int64 `json:"total,omitempty"`
-}
-
-type RespId struct {
-	Id int64 `json:"id,omitempty"`
-}
-
-type RespNum struct {
-	Success int `json:"success,omitempty"`
-	Fail    int `json:"fail,omitempty"`
-}
-
 func WithTokenInfo(r *restful.Request, token *AuthToken) *restful.Request {
 	r.SetAttribute(AuthTokenKey, token)
 	return r

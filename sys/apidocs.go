@@ -15,20 +15,19 @@ var (
 	swaggerInfoProps = &spec.InfoProps{
 		Title:       "sys Service",
 		Description: "sys service template",
-		Contact: &spec.ContactInfo{
-			Name:  "yubo",
-			Email: "yubo@yubo.org",
-			URL:   "http://www.yubo.org",
-		},
-		License: &spec.License{
-			Name: "BSD-3-Clause",
-			URL:  "https://opensource.org/licenses/BSD-3-Clause",
-		},
-		Version: "0.0.1",
+		Version:     "0.0.1",
 	}
 	swaggerTags     = []spec.Tag{}
 	securitySchemes = map[string]*spec.SecurityScheme{}
 )
+
+func init() {
+	contactInfo := &spec.ContactInfo{}
+	contactInfo.Name = "yubo"
+	contactInfo.Email = "yubo@yubo.org"
+	contactInfo.URL = "http://www.yubo.org"
+	swaggerInfoProps.Contact = contactInfo
+}
 
 func (p *Module) InstallApidocs() {
 	ws := restfulspec.NewOpenAPIService(restfulspec.Config{
