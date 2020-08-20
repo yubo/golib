@@ -77,8 +77,8 @@ func (dbt *DBTest) fail(method, query string, err error) {
 	if len(query) > 300 {
 		query = "[query too large to print]"
 	}
-	dbt.Fatalf("error on %s %s: %s\n %s", method, query, err.Error(), status.GetDetail(err))
 	dbt.Log(string(debug.Stack()))
+	dbt.Fatalf("error on %s %s: %s\n %s", method, query, err.Error(), status.GetDetail(err))
 }
 
 func (dbt *DBTest) queryRow(output interface{}, query string, args ...interface{}) {
@@ -440,7 +440,7 @@ func TestSqlArg(t *testing.T) {
 		dbt.mustExec("INSERT INTO test VALUES (?);", a)
 
 		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", a)
-		require.Equal(t, v, 1)
+		require.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
@@ -453,7 +453,7 @@ func TestSqlArg(t *testing.T) {
 		dbt.mustExec("INSERT INTO test VALUES (?);", &a)
 
 		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", &a)
-		require.Equal(t, v, 1)
+		require.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
@@ -477,7 +477,87 @@ func TestSqlArg(t *testing.T) {
 		require.Equal(t, v, vt{&pointX, nil, nil, nil})
 
 		// dbt.mustQueryRow(&v, "SELECT value FROM test where b = ?;", 0)
-		// require.Equal(t, v, 1)
+		// require.Equal(t, 1, v)
+
+		dbt.mustExec("DROP TABLE IF EXISTS test;")
+	})
+
+}
+
+func TestTx(t *testing.T) {
+	if driver != "mysql" {
+		return
+	}
+	runTests(t, dsn, func(dbt *DBTest) {
+		a := 1
+		var v int
+		dbt.mustExec("CREATE TABLE test (value int) ENGINE=InnoDB;")
+
+		tx, err := dbt.db.Begin()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tx.Exec("INSERT INTO test VALUES (?);", &a); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
+
+		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", &a)
+		require.Equal(t, 1, v)
+
+		dbt.mustExec("DROP TABLE IF EXISTS test;")
+	})
+
+	runTests(t, dsn, func(dbt *DBTest) {
+		a := 1
+		var v int
+		dbt.mustExec("CREATE TABLE test (value int) ENGINE=InnoDB;")
+
+		tx, err := dbt.db.Begin()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tx.Exec("INSERT INTO test VALUES (?);", &a); err != nil {
+			t.Fatal(err)
+		}
+		if err := tx.Rollback(); err != nil {
+			t.Fatal(err)
+		}
+
+		dbt.queryRow(&v, "SELECT value FROM test where value=?;", &a)
+		require.Equal(t, 0, v)
+
+		dbt.mustExec("DROP TABLE IF EXISTS test;")
+	})
+
+	runTests(t, dsn, func(dbt *DBTest) {
+		type test struct {
+			Id    *int
+			Value *int
+		}
+
+		dbt.mustExec(`CREATE TABLE test (
+id int not null auto_increment,
+value int,
+PRIMARY KEY (id)
+) ENGINE=InnoDB auto_increment=1000;`)
+
+		tx, err := dbt.db.Begin()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := 0; i < 10; i++ {
+			if id, err := tx.InsertLastId("test", &test{Value: &i}); err != nil {
+				t.Fatal(err)
+			} else {
+				t.Logf("id %d", id)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			t.Fatal(err)
+		}
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})

@@ -4,6 +4,8 @@
  */
 package util
 
+/*
+
 import (
 	"errors"
 	"time"
@@ -247,3 +249,4 @@ func (p *EtcdCli) Puts(kvs map[string]string) (err error) {
 	_, err = clientv3.NewKV(p.client).Txn(ctx).If().Then(ops...).Commit()
 	return
 }
+*/

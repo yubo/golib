@@ -20,9 +20,16 @@ const (
 	MAX_ROWS = 1000
 )
 
+type db interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+}
+
 type Db struct {
 	Greatest string
 	Db       *sql.DB
+	tx       *sql.Tx
+	db       db
 }
 
 func printString(b []byte) string {
@@ -68,7 +75,7 @@ func DbOpen(driverName, dataSourceName string) (*Db, error) {
 		return nil, err
 	}
 
-	ret := &Db{Db: db, Greatest: "greatest"}
+	ret := &Db{Db: db, db: db, Greatest: "greatest"}
 
 	if driverName == "sqlite3" {
 		ret.Greatest = "max"
@@ -97,6 +104,36 @@ func DbOpenWithCtx(driverName, dsn string, ctx context.Context) (*Db, error) {
 	return db, nil
 }
 
+func (p *Db) Tx() bool {
+	return p.tx != nil
+}
+
+func (p *Db) BeginWithCtx(ctx context.Context) (*Db, error) {
+	if tx, err := p.Db.BeginTx(ctx, nil); err != nil {
+		return nil, err
+	} else {
+		return &Db{tx: tx, db: tx, Greatest: p.Greatest}, nil
+	}
+}
+
+func (p *Db) Rollback() error {
+	if p.tx != nil {
+		return p.tx.Rollback()
+	}
+	return status.Errorf(codes.Internal, "tx is nil")
+}
+
+func (p *Db) Commit() error {
+	if p.tx != nil {
+		return p.tx.Commit()
+	}
+	return status.Errorf(codes.Internal, "tx is nil")
+}
+
+func (p *Db) Begin() (*Db, error) {
+	return p.BeginWithCtx(context.Background())
+}
+
 func (p *Db) SetConns(maxIdleConns, maxOpenConns int) {
 	p.Db.SetMaxIdleConns(maxIdleConns)
 	p.Db.SetMaxOpenConns(maxOpenConns)
@@ -109,7 +146,7 @@ func (p *Db) Close() {
 func (p *Db) Query(query string, args ...interface{}) *Rows {
 	dlogSql(query, args...)
 	ret := &Rows{}
-	ret.rows, ret.err = p.Db.Query(query, args...)
+	ret.rows, ret.err = p.db.Query(query, args...)
 	return ret
 }
 
@@ -267,7 +304,7 @@ func (p *Rows) Rows(dst interface{}, opts ...int) error {
 func (p *Db) Exec(sql string, args ...interface{}) (sql.Result, error) {
 	dlogSql(sql, args...)
 
-	ret, err := p.Db.Exec(sql, args...)
+	ret, err := p.db.Exec(sql, args...)
 	if err != nil {
 		klog.V(3).Info(1, err)
 		return nil, status.Errorf(codes.Internal, "Exec() err: "+err.Error())
@@ -279,7 +316,7 @@ func (p *Db) Exec(sql string, args ...interface{}) (sql.Result, error) {
 func (p *Db) ExecErr(sql string, args ...interface{}) error {
 	dlogSql(sql, args...)
 
-	_, err := p.Db.Exec(sql, args...)
+	_, err := p.db.Exec(sql, args...)
 	if err != nil {
 		klog.InfoDepth(1, err)
 	}
@@ -287,9 +324,13 @@ func (p *Db) ExecErr(sql string, args ...interface{}) error {
 }
 
 func (p *Db) ExecLastId(sql string, args ...interface{}) (int64, error) {
+	// if p.Tx() {
+	// 	return 0, status.Errorf(codes.Internal, "In TX mode, reading data is not supported")
+	// }
+
 	dlogSql(sql, args...)
 
-	res, err := p.Db.Exec(sql, args...)
+	res, err := p.db.Exec(sql, args...)
 	if err != nil {
 		klog.InfoDepth(1, err)
 		return 0, status.Errorf(codes.Internal, "Exec() err: "+err.Error())
@@ -305,7 +346,7 @@ func (p *Db) ExecLastId(sql string, args ...interface{}) (int64, error) {
 }
 
 func (p *Db) execNum(sql string, args ...interface{}) (int64, error) {
-	res, err := p.Db.Exec(sql, args...)
+	res, err := p.db.Exec(sql, args...)
 	if err != nil {
 		dlogSql("%v", err)
 		return 0, status.Errorf(codes.Internal, "Exec() err: "+err.Error())
@@ -402,7 +443,7 @@ func (p *Db) Update(table string, sample interface{}) error {
 	}
 
 	dlogSql(sql, args...)
-	_, err = p.Db.Exec(sql, args...)
+	_, err = p.db.Exec(sql, args...)
 	if err != nil {
 		dlog("%v", err)
 	}
@@ -417,7 +458,7 @@ func (p *Db) Insert(table string, sample interface{}) error {
 	}
 
 	dlogSql(sql, args...)
-	if _, err := p.Db.Exec(sql, args...); err != nil {
+	if _, err := p.db.Exec(sql, args...); err != nil {
 		dlog("%v", err)
 		return status.Errorf(codes.Internal,
 			"Insert() err: "+err.Error())
@@ -426,13 +467,17 @@ func (p *Db) Insert(table string, sample interface{}) error {
 }
 
 func (p *Db) InsertLastId(table string, sample interface{}) (int64, error) {
+	//if p.Tx() {
+	//	return 0, status.Errorf(codes.Internal, "In TX mode, reading data is not supported")
+	//}
+
 	sql, args, err := GenInsertSql(table, sample)
 	if err != nil {
 		return 0, err
 	}
 
 	dlogSql(sql, args...)
-	res, err := p.Db.Exec(sql, args...)
+	res, err := p.db.Exec(sql, args...)
 	if err != nil {
 		dlog("%v", err)
 		return 0, status.Errorf(codes.Internal, "Exec() err: "+err.Error())
