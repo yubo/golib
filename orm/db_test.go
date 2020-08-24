@@ -39,7 +39,6 @@ func init() {
 		}
 		db.Close()
 	}
-
 }
 
 type DBTest struct {
@@ -544,19 +543,57 @@ value int,
 PRIMARY KEY (id)
 ) ENGINE=InnoDB auto_increment=1000;`)
 
-		tx, err := dbt.db.Begin()
-		if err != nil {
-			t.Fatal(err)
-		}
-		for i := 0; i < 10; i++ {
-			if id, err := tx.InsertLastId("test", &test{Value: &i}); err != nil {
+		{
+			tx, err := dbt.db.Begin()
+			if err != nil {
 				t.Fatal(err)
-			} else {
-				t.Logf("id %d", id)
 			}
+			for i := 0; i < 10; i++ {
+				if id, err := tx.InsertLastId("test", &test{Value: &i}); err != nil {
+					t.Fatal(err)
+				} else {
+					t.Logf("id %d", id)
+				}
+			}
+
+			{
+				var v []int
+				if err := tx.Query("SELECT value FROM test").Rows(&v); err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("before rollback %#v", v)
+			}
+
+			if err := tx.Rollback(); err != nil {
+				t.Fatal(err)
+			}
+
+			{
+				var v []int
+				if err := dbt.db.Query("SELECT value FROM test").Rows(&v); err != nil {
+					t.Log(err)
+				}
+				t.Logf("after rollback %#v", v)
+			}
+
 		}
-		if err := tx.Commit(); err != nil {
-			t.Fatal(err)
+
+		{
+			tx, err := dbt.db.Begin()
+			if err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 10; i++ {
+				if id, err := tx.InsertLastId("test", &test{Value: &i}); err != nil {
+					t.Fatal(err)
+				} else {
+					t.Logf("id %d", id)
+				}
+			}
+
+			if err := tx.Commit(); err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")

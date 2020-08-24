@@ -19,7 +19,7 @@ import (
 type HookFn func(ops *HookOps, cf *Configer) error
 
 func New(env *Settings) *Settings {
-	if env.Name == "" {
+	if env.Debug == false {
 		env.Debug = getenvBool(strings.ToUpper(env.Name) + "_DEBUG")
 	}
 	if env.Config == "" {
