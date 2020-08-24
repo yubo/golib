@@ -90,25 +90,27 @@ type RespTotal struct {
 	Total int64 `json:"total" description:"total number"`
 }
 
+func (p *Pagination) OffsetLimit() (int, int) {
+	limit := util.IntValue(p.PageSize)
+
+	if limit == 0 {
+		limit = defLimitPage
+	}
+
+	if limit > maxLimitPage {
+		limit = maxLimitPage
+	}
+
+	currentPage := util.IntValue(p.CurrentPage)
+	if currentPage <= 1 {
+		return 0, limit
+	}
+
+	return (currentPage - 1) * limit, limit
+}
+
 func (p Pagination) SqlExtra(orders ...string) string {
-	limit, offset := func() (int, int) {
-		limit := util.IntValue(p.PageSize)
-
-		if limit == 0 {
-			limit = defLimitPage
-		}
-
-		if limit > maxLimitPage {
-			limit = maxLimitPage
-		}
-
-		currentPage := util.IntValue(p.CurrentPage)
-		if currentPage <= 1 {
-			return 0, limit
-		}
-
-		return (currentPage - 1) * limit, limit
-	}()
+	offset, limit := p.OffsetLimit()
 
 	var order string
 	if sorter := util.SnakeCasedName(util.StringValue(p.Sorter)); sorter != "" {
@@ -120,7 +122,7 @@ func (p Pagination) SqlExtra(orders ...string) string {
 		order = " order by " + strings.Join(orders, ", ")
 	}
 
-	return fmt.Sprintf(order+" limit %d, %d", limit, offset)
+	return fmt.Sprintf(order+" limit %d, %d", offset, limit)
 }
 
 func sqlOrder(order string) string {
