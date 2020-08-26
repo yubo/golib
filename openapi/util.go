@@ -29,7 +29,8 @@ func Req2curl(req *http.Request, body []byte, inputFile, outputFile *string) str
 	}
 
 	if len(body) > 0 {
-		buf.WriteString(" -d " + escapeShell(util.SubStr3(string(body), 512, -512)))
+		data := printStr(util.SubStr3(string(body), 512, -512))
+		buf.WriteString(" -d " + escapeShell(data))
 	}
 
 	var keys []string
@@ -238,4 +239,13 @@ func rvInfo(rv reflect.Value) {
 		klog.InfoDepth(1, fmt.Sprintf("isValid %v", rv.IsValid()))
 		klog.InfoDepth(1, fmt.Sprintf("rv string %s kind %s", rv.String(), rv.Kind()))
 	}
+}
+
+func printStr(in string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsPrint(r) {
+			return r
+		}
+		return '.'
+	}, in)
 }

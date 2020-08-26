@@ -125,6 +125,24 @@ func (p Pagination) SqlExtra(orders ...string) string {
 	return fmt.Sprintf(order+" limit %d, %d", offset, limit)
 }
 
+// ungly hack
+func (p Pagination) SqlExtra2(prefix string, orders ...string) string {
+	offset, limit := p.OffsetLimit()
+
+	var order string
+	if sorter := util.SnakeCasedName(util.StringValue(p.Sorter)); sorter != "" {
+		orders = append([]string{fmt.Sprintf("`%s.%s` %s",
+			prefix, sorter, sqlOrder(util.StringValue(p.Order)))},
+			orders...)
+	}
+
+	if len(orders) > 0 {
+		order = " order by " + strings.Join(orders, ", ")
+	}
+
+	return fmt.Sprintf(order+" limit %d, %d", offset, limit)
+}
+
 func sqlOrder(order string) string {
 	switch order {
 	case "ascend", "asc":

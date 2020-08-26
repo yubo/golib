@@ -473,6 +473,10 @@ func SubStr2(in string, begin, end int) string {
 // SubStr3 return [0:pre]...[suf:len]
 func SubStr3(in string, pre, suf int) string {
 	L := len(in)
+
+	if pre+suf >= L {
+		return in
+	}
 	if pre < 0 {
 		pre += L
 	}
@@ -491,11 +495,8 @@ func SubStr3(in string, pre, suf int) string {
 	if suf > L {
 		suf = L
 	}
-	if pre > suf {
-		pre, suf = suf, pre
-	}
 
-	if pre == suf {
+	if pre >= suf {
 		return in
 	}
 
