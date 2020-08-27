@@ -559,15 +559,41 @@ func Diff(src, dst []string) (add, del []string) {
 		d[v] = true
 	}
 
-	for k, _ := range d {
-		if !s[k] {
-			add = append(add, k)
+	for _, v := range dst {
+		if !s[v] {
+			add = append(add, v)
 		}
 	}
 
-	for k, _ := range s {
-		if !d[k] {
-			del = append(del, k)
+	for _, v := range src {
+		if !d[v] {
+			del = append(del, v)
+		}
+	}
+
+	return
+}
+
+func Diff3(src, dst []string) (add, del, eq []string) {
+	s := map[string]bool{}
+	d := map[string]bool{}
+
+	for _, v := range src {
+		s[v] = true
+	}
+
+	for _, v := range dst {
+		d[v] = true
+		if !s[v] {
+			add = append(add, v)
+		} else {
+			eq = append(eq, v)
+		}
+	}
+
+	for _, v := range src {
+		if !d[v] {
+			del = append(del, v)
 		}
 	}
 
