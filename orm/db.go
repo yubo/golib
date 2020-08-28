@@ -294,10 +294,6 @@ func (p *Rows) Rows(dst interface{}, opts ...int) error {
 		}
 	}
 
-	if n == 0 {
-		return status.Errorf(codes.NotFound, "sql: no rows in result set")
-	}
-
 	return nil
 }
 
