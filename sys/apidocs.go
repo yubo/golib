@@ -93,7 +93,7 @@ func (p *Module) EnrichSwaggeerObjectSecurity(swo *spec.Swagger) {
 			}
 
 			if _, ok := swo.SecurityDefinitions[sEntry.Name]; !ok {
-				klog.Warningf("skipping Security openapi spec for %s:%s, '%s' not found in SecurityDefinitions", route.Method, route.Path, sEntry.Name)
+				// klog.Warningf("skipping Security openapi spec for %s:%s, '%s' not found in SecurityDefinitions", route.Method, route.Path, sEntry.Name)
 				continue
 			}
 
