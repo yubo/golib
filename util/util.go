@@ -600,6 +600,37 @@ func Diff3(src, dst []string) (add, del, eq []string) {
 	return
 }
 
+type DiffEntity interface {
+	Key() string
+}
+
+func Diff4(src, dst []DiffEntity) (add, del, eq []DiffEntity) {
+	s := map[string]bool{}
+	d := map[string]bool{}
+
+	for _, v := range src {
+		s[v.Key()] = true
+	}
+
+	for _, v := range dst {
+		d[v.Key()] = true
+		if !s[v.Key()] {
+			add = append(add, v)
+		} else {
+			eq = append(eq, v)
+		}
+	}
+
+	for _, v := range src {
+		if !d[v.Key()] {
+			del = append(del, v)
+		}
+	}
+
+	return
+
+}
+
 // convert like this: "HelloWorld" to "hello_world"
 func SnakeCasedName(name string) string {
 	newstr := make([]rune, 0, len(name)+8)
