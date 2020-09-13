@@ -213,6 +213,7 @@ func (p *Rows) scanRow(dst interface{}) error {
 // Rows(*[]*struct{})
 // Rows([]string)
 // Rows([]*string)
+// Rows ignore notfound err msg
 func (p *Rows) Rows(dst interface{}, opts ...int) error {
 	if p.err != nil {
 		return p.err

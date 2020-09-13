@@ -826,7 +826,8 @@ func toInt64(v interface{}) int64 {
 	}
 }
 
-func SetValue(rv reflect.Value, rt reflect.Type, data []string) error {
+func SetValue(rv reflect.Value, data []string) error {
+	rt := rv.Type()
 	if len(data) == 0 {
 		return nil
 	}
@@ -879,8 +880,9 @@ func SetValue(rv reflect.Value, rt reflect.Type, data []string) error {
 	return nil
 }
 
-func GetValue(rv reflect.Value, rt reflect.Type) (data []string, err error) {
+func GetValue(rv reflect.Value) (data []string, err error) {
 	rv = reflect.Indirect(rv)
+	rt := rv.Type()
 	switch rv.Kind() {
 	case reflect.String, reflect.Bool, reflect.Int, reflect.Int8,
 		reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint,
@@ -894,9 +896,9 @@ func GetValue(rv reflect.Value, rt reflect.Type) (data []string, err error) {
 		} else if typeName == "*string" {
 			return StringValueSlice(rv.Interface().([]*string)), nil
 		}
-		return nil, status.Errorf(codes.Internal, "unsupported type: %s %s", rt.String(), rv.Kind().String())
+		return nil, status.Errorf(codes.Internal, "unsupported type: %s %s", rt, rv.Kind())
 	default:
-		return nil, status.Errorf(codes.Internal, "unsupported type: %s %s", rt.String(), rv.Kind().String())
+		return nil, status.Errorf(codes.Internal, "unsupported type: %s %s", rt, rv.Kind())
 	}
 }
 

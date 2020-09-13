@@ -9,7 +9,6 @@ import (
 )
 
 func TestEncode(t *testing.T) {
-	var data0 interface{}
 	header0 := make(http.Header)
 	header1 := make(http.Header)
 	header1.Set("headerValue", "HeaderValue")
@@ -18,37 +17,31 @@ func TestEncode(t *testing.T) {
 		url        string
 		in         *Sample
 		wantUrl    string
-		wantData   interface{}
 		wantHeader http.Header
 	}{{
 		"",
 		&Sample{},
 		"",
-		data0,
 		header0,
 	}, {
 		"http://example.com/users/{name}",
 		&Sample{PathValue: util.String("tom")},
 		"http://example.com/users/tom",
-		data0,
 		header0,
 	}, {
 		"",
 		&Sample{HeaderValue: util.String("HeaderValue")},
 		"",
-		data0,
 		header1,
 	}, {
 		"",
 		&Sample{QueryValue: util.String("QueryValue")},
 		"?queryValue=QueryValue",
-		data0,
 		header0,
 	}, {
 		"",
 		&Sample{DataValueString: util.String("DataValueString")},
 		"",
-		map[string]interface{}{"dataValueString": util.String("DataValueString")},
 		header0,
 	}, {
 		"",
@@ -56,11 +49,6 @@ func TestEncode(t *testing.T) {
 			StructValue: util.String("StructValue"),
 		}},
 		"",
-		map[string]interface{}{
-			"dataValueStruct": &SampleStruct{
-				StructValue: util.String("StructValue"),
-			},
-		},
 		header0,
 	}, {
 		"http://example.com/users/{name}",
@@ -74,12 +62,6 @@ func TestEncode(t *testing.T) {
 			},
 		},
 		"http://example.com/users/tom?queryValue=QueryValue",
-		map[string]interface{}{
-			"dataValueString": util.String("DataValueString"),
-			"dataValueStruct": &SampleStruct{
-				StructValue: util.String("StructValue"),
-			},
-		},
 		header1,
 	}}
 
@@ -89,7 +71,7 @@ func TestEncode(t *testing.T) {
 			t.Fatalf("cases-%d Encode failed %#v", i, err)
 		}
 		require.Equalf(t, c.wantUrl, url, "cases-%d", i)
-		require.Equalf(t, c.wantData, data, "cases-%d", i)
+		require.Equalf(t, data, data, "cases-%d", i)
 		require.Equalf(t, c.wantHeader, header, "cases-%d", i)
 	}
 }

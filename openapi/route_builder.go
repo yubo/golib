@@ -1,7 +1,6 @@
 package openapi
 
 import (
-	"fmt"
 	"net/http"
 	"reflect"
 
@@ -92,9 +91,6 @@ func (p *RouteBuilder) Build(v *WsRoute) error {
 		if err := p.buildParam(sample, v.Consume, &data); err != nil {
 			panic(err)
 		}
-		if data {
-			p.b.Reads(reflect.Indirect(reflect.ValueOf(sample)).Interface())
-		}
 	}
 
 	if v.Handle != nil {
@@ -118,89 +114,60 @@ func (p *RouteBuilder) buildParam(in interface{}, consume string, data *bool) er
 		panic("schema: interface must be a struct")
 	}
 
-	var parameter *restful.Parameter
-	for i := 0; i < rt.NumField(); i++ {
-		fv := rv.Field(i)
-		ff := rt.Field(i)
-		ft := ff.Type
-
-		if !fv.CanSet() {
-			continue
-		}
-
-		util.PrepareValue(fv, ft)
-		if ft.Kind() == reflect.Ptr {
-			fv = fv.Elem()
-			ft = ft.Elem()
-		}
-
-		opt := getTagOpt(ff)
-		// if rt.Name() == "CreateSPInput" {
-		// 	klog.InfoDepth(4, fmt.Sprintf("%s getTagOpt %#v", rt.Name(), opt))
-		// }
-		if opt.skip {
-			continue
-		}
-
-		if opt.inline {
-			if err := p.buildParam(fv.Addr().Interface(), consume, data); err != nil {
+	fields := cachedTypeFields(rt)
+	if fields.hasData {
+		if consume == MIME_URL_ENCODED {
+			if err := urlencoded.RouteBuilderReads(p.b, rv); err != nil {
 				panic(err)
 			}
-			continue
+		} else {
+			p.b.Reads(in)
 		}
-
-		if opt.inbody {
-			// reads cur as body entry
-			p.b.Reads(fv.Interface(), ff.Tag.Get("description"))
-			return nil
-		}
-
-		if opt.typ == DataType {
-			if consume == MIME_URL_ENCODED {
-				if err := urlencoded.RouteBuilderReads(p.b, fv, ff, ft); err != nil {
-					panic(err)
-				}
-			} else {
-				*data = true
-				// p.b.Reads(fv.Interface(), ff.Tag.Get("description"))
-			}
-			continue
-		}
-
-		switch opt.typ {
-		case PathType:
-			parameter = restful.PathParameter(opt.name, ff.Tag.Get("description"))
-		case QueryType:
-			parameter = restful.QueryParameter(opt.name, ff.Tag.Get("description"))
-		case HeaderType:
-			parameter = restful.HeaderParameter(opt.name, ff.Tag.Get("description"))
-		default:
-			panic(fmt.Sprintf("invalid param kind %s %s at %s",
-				opt.typ, ff.Type.String(), rt.Name()))
-		}
-
-		switch fv.Kind() {
-		case reflect.String:
-			parameter.DataType("string")
-		case reflect.Bool:
-			parameter.DataType("bool")
-		case reflect.Uint, reflect.Int, reflect.Int32, reflect.Int64:
-			parameter.DataType("integer")
-		case reflect.Slice:
-			if typeName := fv.Type().Elem().Name(); typeName != "string" {
-				panic(fmt.Sprintf("unsupported param %s at %s",
-					ff.Name, rt.Name()))
-			}
-		default:
-			panic(fmt.Sprintf("unsupported type %s at %s", ft.String(), rt.Name()))
-		}
-
-		if opt.format != "" {
-			parameter.DataFormat(opt.format)
-		}
-
-		p.b.Param(parameter)
-
 	}
+
+	for _, f := range fields.list {
+		if err := p.setParam(&f); err != nil {
+			panic(err)
+		}
+	}
+
+	return nil
+}
+
+func (p *RouteBuilder) setParam(f *field) error {
+	var parameter *restful.Parameter
+
+	switch f.paramType {
+	case PathType:
+		parameter = restful.PathParameter(f.key, f.description)
+	case QueryType:
+		parameter = restful.QueryParameter(f.key, f.description)
+	case HeaderType:
+		parameter = restful.HeaderParameter(f.key, f.description)
+	default:
+		panicType(f.typ, "setParam")
+	}
+
+	switch f.typ.Kind() {
+	case reflect.String:
+		parameter.DataType("string")
+	case reflect.Bool:
+		parameter.DataType("bool")
+	case reflect.Uint, reflect.Int, reflect.Int32, reflect.Int64:
+		parameter.DataType("integer")
+	case reflect.Slice:
+		if typeName := f.typ.Elem().Name(); typeName != "string" {
+			panicType(f.typ, "unsupported param")
+		}
+	default:
+		panicType(f.typ, "unsupported param")
+	}
+
+	if f.format != "" {
+		parameter.DataFormat(f.format)
+	}
+
+	p.b.Param(parameter)
+
 	return nil
 }

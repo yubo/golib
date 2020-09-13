@@ -128,11 +128,11 @@ func (p OAuthAuthorizeOutput) String() string {
 
 // GetOAuthTokenInput GET /oauth/token input (https://tools.ietf.org/html/rfc6749#section-4.1.3)
 type GetOAuthTokenInput struct {
-	AuthorizatioinBasicInput `param:",inline"`
-	GrantType                *string `param:"query" name:"grant_type" description:"authorization_code/password/client_credentials/refresh_token"`
-	Code                     *string `param:"query" name:"code" description:"The authorization code received from the authorization server"`
-	RefreshToken             *string `param:"query" name:"refresh_token" description:"The refresh token received from the authorization server"`
-	RedirectUri              *string `param:"query" name:"redirect_uri" description:"if the \"redirect_uri\" parameter was included in the authorization request as described in Section 4.1.1, and their values MUST be identical.(grant_type:code)"`
+	AuthorizatioinBasicInput
+	GrantType    *string `param:"query" name:"grant_type" description:"authorization_code/password/client_credentials/refresh_token"`
+	Code         *string `param:"query" name:"code" description:"The authorization code received from the authorization server"`
+	RefreshToken *string `param:"query" name:"refresh_token" description:"The refresh token received from the authorization server"`
+	RedirectUri  *string `param:"query" name:"redirect_uri" description:"if the \"redirect_uri\" parameter was included in the authorization request as described in Section 4.1.1, and their values MUST be identical.(grant_type:code)"`
 }
 
 func (p GetOAuthTokenInput) String() string {
@@ -141,7 +141,7 @@ func (p GetOAuthTokenInput) String() string {
 
 // PostOAuthTokenInput POST /oauth/token input (https://tools.ietf.org/html/rfc6749#section-4.1.3)
 type PostOAuthTokenInput struct {
-	AuthorizatioinBasicInput `param:",inline" json:"-"`
+	AuthorizatioinBasicInput `json:"-"`
 	GrantType                *string `param:"data" json:"grant_type,omitempty" name:"grant_type" description:"authorization_code/password/client_credentials/refresh_token"`
 	Code                     *string `param:"data" json:"code,omitempty" name:"code" description:"The authorization code received from the authorization server"`
 	RefreshToken             *string `param:"data" json:"refresh_token,omitempty" name:"refresh_token" description:"The refresh token received from the authorization server"`
@@ -219,9 +219,9 @@ func (p *OAuthUserInfoOutput) User() *User {
 
 // OAuthInfoInput POST /oauth/info input
 type OAuthInfoInput struct {
-	AuthorizatioinBasicInput `param:",inline"`
-	Code                     *string `param:"query" name:"code" description:"access token"`
-	Typ                      *int    `param:"query" name:"code_type" description:"Oauth:1 ApiKey:2"`
+	AuthorizatioinBasicInput
+	Code *string `param:"query" name:"code" description:"access token"`
+	Typ  *int    `param:"query" name:"code_type" description:"Oauth:1 ApiKey:2"`
 }
 
 func (p OAuthInfoInput) String() string {
@@ -566,8 +566,8 @@ func (p GetApiKeyCntInput) String() string {
 }
 
 type GetApiKeysInput struct {
-	GetApiKeyCntInput `param:",inline" flags:",inline"`
-	Pagination        `param:",inline" flags:",inline"`
+	GetApiKeyCntInput `flags:",inline"`
+	Pagination        `flags:",inline"`
 }
 
 func (p GetApiKeysInput) String() string {
@@ -853,8 +853,8 @@ func (p GetTokenCntInput) String() string {
 }
 
 type GetTokensInput struct {
-	GetTokenCntInput `param:",inline" flags:",inline"`
-	Pagination       `param:",inline" flags:",inline"`
+	GetTokenCntInput `flags:",inline"`
+	Pagination       `flags:",inline"`
 }
 
 func (p GetTokensInput) String() string {
@@ -1028,8 +1028,8 @@ func (p GetUserCntInput) String() string {
 }
 
 type GetUsersInput struct {
-	GetUserCntInput `param:",inline"`
-	Pagination      `param:",inline"`
+	GetUserCntInput
+	Pagination
 }
 
 func (p GetUsersInput) String() string {
@@ -1235,8 +1235,8 @@ func (p GetClientCntInput) String() string {
 }
 
 type GetClientsInput struct {
-	GetClientCntInput `param:",inline" flags:",inline"`
-	Pagination        `param:",inline" flags:",inline"`
+	GetClientCntInput `flags:",inline"`
+	Pagination        `flags:",inline"`
 }
 
 func (p GetClientsInput) String() string {

@@ -54,7 +54,7 @@ func (p *Encoder) scanMap(src map[string]interface{}) error {
 			p.scan(v)
 			continue
 		}
-		data, err := util.GetValue(rv, rt)
+		data, err := util.GetValue(rv)
 		if err != nil {
 			return err
 		}
@@ -83,7 +83,6 @@ func (p *Encoder) scan(src interface{}) error {
 	for i := 0; i < rt.NumField(); i++ {
 		fv := rv.Field(i)
 		ff := rt.Field(i)
-		ft := ff.Type
 
 		if fv.Kind() == reflect.Ptr {
 			if fv.IsNil() {
@@ -108,7 +107,7 @@ func (p *Encoder) scan(src interface{}) error {
 			continue
 		}
 
-		data, err := util.GetValue(fv, ft)
+		data, err := util.GetValue(fv)
 		if err != nil {
 			return err
 		}

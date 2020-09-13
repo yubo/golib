@@ -32,6 +32,12 @@ func NewEncoder() *Encoder {
 }
 
 func (p *Encoder) Encode(url1 string, src interface{}) (url2 string, data interface{}, header http.Header, err error) {
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		err = fmt.Errorf("openapi.Encode %s", r)
+	// 	}
+	// }()
+
 	header = p.header
 	data = p.data
 
@@ -45,11 +51,22 @@ func (p *Encoder) Encode(url1 string, src interface{}) (url2 string, data interf
 	}
 
 	if src != nil {
-		if err = p.scan(src); err != nil {
-			panic(err)
+		rv := reflect.Indirect(reflect.ValueOf(src))
+		rt := rv.Type()
+
+		if rv.Kind() != reflect.Struct || rt.String() == "time.Time" {
+			err = errors.New(fmt.Sprintf("rest-encode: input must be a struct, got %v/%v", rv.Kind(), rt))
+			return
 		}
-		if p.data == nil && len(p.data2) > 0 {
-			p.data = p.data2
+
+		fields := cachedTypeFields(rt)
+
+		if fields.hasData && p.data == nil {
+			p.data = src
+		}
+
+		if err = p.scan(rv, fields); err != nil {
+			panic(err)
 		}
 	}
 
@@ -75,69 +92,53 @@ func (p *Encoder) Encode(url1 string, src interface{}) (url2 string, data interf
 }
 
 // struct -> request's path, query, header, data
-func (p *Encoder) scan(sample interface{}) error {
-	rv := reflect.Indirect(reflect.ValueOf(sample))
-	rt := rv.Type()
+func (p *Encoder) scan(rv reflect.Value, fields structFields) error {
+	klog.V(5).Info("entering openapi.scan()")
 
-	if rv.Kind() != reflect.Struct || rt.String() == "time.Time" {
-		return errors.New(fmt.Sprintf("rest-encode: input must be a struct, got %v/%v", rv.Kind(), rt))
-	}
-
-	for i := 0; i < rt.NumField(); i++ {
-		fv := rv.Field(i)
-		ff := rt.Field(i)
-		ft := ff.Type
-
-		if fv.Kind() == reflect.Ptr {
-			if fv.IsNil() {
-				continue
-			}
-			// fv = fv.Elem()
-		}
-
-		if !fv.CanInterface() {
-			continue
-		}
-
-		opt := getTagOpt(ff)
-		if opt.skip {
-			continue
-		}
-
-		if opt.inbody {
-			p.data = fv.Interface()
-			return nil
-		}
-
-		if opt.inline {
-			if err := p.scan(fv.Interface()); err != nil {
-				return err
+	for i, f := range fields.list {
+		klog.V(11).Infof("%s[%d] %s", rv.Type(), i, f)
+		subv, err := getSubv(rv, f.index, false)
+		if subv.IsNil() || err != nil {
+			if f.required {
+				return fmt.Errorf("%v must be set", f.key)
 			}
 			continue
 		}
-
-		if opt.typ == DataType {
-			p.data2[opt.name] = fv.Interface()
+		if f.paramType == DataType {
 			continue
 		}
-
-		data, err := util.GetValue(fv, ft)
-		if err != nil {
+		if err := p.setValue(&f, subv); err != nil {
+			klog.V(11).Infof("f %v subv %v", f, subv)
 			return err
-		}
-
-		if opt.typ == PathType {
-			p.path[opt.name] = data[0]
-		} else if opt.typ == QueryType {
-			p.param[opt.name] = data
-		} else if opt.typ == HeaderType {
-			p.header.Set(opt.name, data[0])
-		} else {
-			return errors.New("invalid kind: " + opt.typ + " " + ff.Type.String())
 		}
 	}
 
 	return nil
+}
+
+func (p *Encoder) setValue(f *field, v reflect.Value) error {
+	data, err := util.GetValue(v)
+	if err != nil {
+		return err
+	}
+
+	key := f.name
+	if key == "" {
+		key = f.key
+	}
+
+	switch f.paramType {
+	case PathType:
+		p.path[key] = data[0]
+	case QueryType:
+		p.param[key] = data
+	case HeaderType:
+		p.header.Set(key, data[0])
+	default:
+		return fmt.Errorf("invalid kind: %s %s", f.paramType, f.key)
+	}
+	return nil
+
 }
 
 func invokePathVariable(rawurl string, data map[string]string) (string, error) {

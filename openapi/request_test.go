@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/yubo/golib/util"
+	"k8s.io/klog/v2"
 )
 
 type SampleStruct struct {
@@ -20,6 +21,11 @@ type Sample struct {
 	DataValueStruct *SampleStruct `param:"data" name:"dataValueStruct"`
 	foo             *string
 	bar             string
+}
+
+func init() {
+	var level klog.Level
+	level.Set("20")
 }
 
 func TestRequest(t *testing.T) {
@@ -41,3 +47,10 @@ func TestRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+/*
+func TestJson(t *testing.T) {
+	json.Unmarshal()
+	json.Marshal()
+}
+*/

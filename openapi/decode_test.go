@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"encoding/json"
+	"flag"
 	"net/http"
 	"strings"
 	"testing"
@@ -11,6 +12,14 @@ import (
 	"github.com/yubo/golib/util"
 )
 
+var _ = func() bool {
+	testing.Init()
+	return true
+}()
+
+func init() {
+	flag.Parse()
+}
 func TestDecode(t *testing.T) {
 	header0 := make(http.Header)
 	header1 := make(http.Header)

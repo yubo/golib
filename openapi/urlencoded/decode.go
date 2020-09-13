@@ -108,7 +108,7 @@ func (p *Decoder) decode(rv reflect.Value, rt reflect.Type) error {
 			continue
 		}
 
-		if err := util.SetValue(fv, ft, p.values[name]); err != nil {
+		if err := util.SetValue(fv, p.values[name]); err != nil {
 			return err
 		}
 

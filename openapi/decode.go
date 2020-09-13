@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 
@@ -18,9 +19,16 @@ type Validator interface {
 }
 
 // dst: must be ptr
-func ReadEntity(req *restful.Request, dst interface{}) error {
+func ReadEntity(req *restful.Request, dst interface{}) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("openapi.ReadEntity %s", r)
+		}
+	}()
+
 	req.SetAttribute(ReqEntityKey, dst)
-	return NewDecoder().Decode(req, dst)
+	err = NewDecoder().Decode(req, dst)
+	return
 }
 
 // http.Request -> struct
@@ -58,28 +66,31 @@ func (p *Decoder) Decode(r *restful.Request, dst interface{}) error {
 	rv = rv.Elem()
 	rt = rv.Type()
 
-	// p.decode will set p.data
-	if err := p.decode(rv, rt); err != nil {
-		return err
+	if rv.Kind() != reflect.Struct || rv.Kind() == reflect.Slice || rt.String() == "time.Time" {
+		return status.Errorf(codes.InvalidArgument,
+			"schema: interface must be a pointer to struct")
 	}
 
-	if p.data {
-		if r.Request.Method == "GET" {
-			data, ok := r.Attribute(api.RshDataKey).([]byte)
-			if ok && len(data) > 0 {
-				//klog.V(3).Infof(">>>> %s", string(data))
-				if err := json.Unmarshal(data, dst); err != nil {
-					klog.V(5).Infof("rsh data json.Unmarshal() error %s", err)
-					return err
-				}
-				//klog.V(3).Infof(">>> %s", dst)
+	fields := cachedTypeFields(rt)
+	if fields.hasData {
+		if data, ok := r.Attribute(api.RshDataKey).([]byte); ok && len(data) > 0 {
+			//klog.V(3).Infof(">>>> %s", string(data))
+			if err := json.Unmarshal(data, dst); err != nil {
+				klog.V(5).Infof("rsh data json.Unmarshal() error %s", err)
+				return err
 			}
+			//klog.V(3).Infof(">>> %s", dst)
 		} else {
 			if err := r.ReadEntity(dst); err != nil {
 				klog.V(5).Infof("restful.ReadEntity() error %s", err)
 				return err
 			}
 		}
+	}
+
+	// p.decode will set p.data
+	if err := p.decode(rv, fields); err != nil {
+		return err
 	}
 
 	// postcheck
@@ -89,84 +100,62 @@ func (p *Decoder) Decode(r *restful.Request, dst interface{}) error {
 	return nil
 }
 
-func (p *Decoder) decode(rv reflect.Value, rt reflect.Type) error {
+func (p *Decoder) decode(rv reflect.Value, fields structFields) error {
 	klog.V(5).Info("entering openapi.decode()")
 
-	if rv.Kind() != reflect.Struct || rv.Kind() == reflect.Slice || rt.String() == "time.Time" {
-		return status.Errorf(codes.InvalidArgument, "schema: interface must be a pointer to struct")
-	}
-
-	for i := 0; i < rt.NumField(); i++ {
-		// Notify: ignore ptr, use indirect elem
-		fv := rv.Field(i)
-		ff := rt.Field(i)
-		ft := ff.Type
-
-		opt := getTagOpt(ff)
-
-		if !fv.CanSet() {
-			klog.V(5).Infof("can't addr name %s, continue", opt.name)
-			continue
+	for _, f := range fields.list {
+		subv, err := getSubv(rv, f.index, true)
+		if err != nil {
+			return err
 		}
-
-		if opt.inbody {
-			util.PrepareValue(fv, ft)
-			if fv.Kind() == reflect.Ptr {
-				fv = fv.Elem()
-				ft = fv.Type()
-			}
-			return p.r.ReadEntity(fv.Addr().Interface())
-		}
-
-		if opt.inline {
-			util.PrepareValue(fv, ft)
-			if fv.Kind() == reflect.Ptr {
-				fv = fv.Elem()
-				ft = fv.Type()
-			}
-			if err := p.decode(fv, ft); err != nil {
-				return err
-			}
-			continue
-		}
-
-		if opt.skip {
-			continue
-		}
-
-		if opt.typ == "data" {
-			p.data = true
-			continue
-		}
-
-		{
-			var data []string
-			var value string
-			var ok bool
-
-			switch opt.typ {
-			case PathType:
-				if value, ok = p.path[opt.name]; !ok {
-					continue
-				}
-				data = []string{value}
-			case HeaderType:
-				if value = p.header.Get(opt.name); value == "" {
-					continue
-				}
-				data = []string{value}
-			case QueryType:
-				if data, ok = p.query[opt.name]; !ok {
-					continue
-				}
-			default:
-				panic("invalid opt type " + opt.typ)
-			}
-
-			if err := util.SetValue(fv, ft, data); err != nil {
-				return err
-			}
+		if err := p.setValue(&f, subv); err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+func (p *Decoder) setValue(f *field, v reflect.Value) error {
+	var data []string
+	var value string
+	var ok bool
+
+	key := f.name
+	if key == "" {
+		key = f.key
+	}
+
+	switch f.paramType {
+	case PathType:
+		if value, ok = p.path[key]; !ok {
+			if f.required {
+				return status.Errorf(codes.InvalidArgument, "%s must be set", key)
+			}
+			return nil
+		}
+		data = []string{value}
+	case HeaderType:
+		if value = p.header.Get(key); value == "" {
+			if f.required {
+				return status.Errorf(codes.InvalidArgument, "%s must be set", key)
+			}
+			return nil
+		}
+		data = []string{value}
+	case QueryType:
+		if data, ok = p.query[key]; !ok {
+			if f.required {
+				return status.Errorf(codes.InvalidArgument, "%s must be set", key)
+			}
+			return nil
+		}
+	default:
+		panicType(f.typ, "invalid opt type")
+	}
+
+	if err := util.SetValue(v, data); err != nil {
+		return err
+	}
+
 	return nil
 }
