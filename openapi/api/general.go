@@ -1,7 +1,6 @@
 package api
 
 import (
-	"github.com/emicklei/go-restful"
 	"github.com/yubo/golib/util"
 )
 
@@ -18,24 +17,4 @@ type Version struct {
 
 func (p Version) String() string {
 	return util.Prettify(p)
-}
-
-func WithTokenInfo(r *restful.Request, token *AuthToken) *restful.Request {
-	r.SetAttribute(AuthTokenKey, token)
-	return r
-}
-
-func TokenInfoFrom(r *restful.Request) (*AuthToken, bool) {
-	token, ok := r.Attribute(AuthTokenKey).(*AuthToken)
-	return token, ok
-}
-
-func WithReqEntityConn(r *restful.Request, entity interface{}) *restful.Request {
-	r.SetAttribute(ReqEntityKey, entity)
-	return r
-}
-
-func ReqEntityFrom(r *restful.Request) (interface{}, bool) {
-	entity := r.Attribute(ReqEntityKey)
-	return entity, entity != nil
 }

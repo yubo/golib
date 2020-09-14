@@ -5,10 +5,10 @@ import (
 
 	restful "github.com/emicklei/go-restful"
 	"github.com/yubo/golib/openapi"
-	"github.com/yubo/golib/openapi/api"
 	"github.com/yubo/golib/util"
 	"k8s.io/klog/v2"
 
+	. "github.com/yubo/golib/sys/api"
 	. "github.com/yubo/golib/sys/model"
 )
 
@@ -21,18 +21,18 @@ func (p *Module) InstallLogWs(aclHandle func(aclName string) (restful.FilterFunc
 		Kind:        "log",
 		Tags:        []string{"log"},
 		Acl:         aclHandle,
-		Obj:         api.Log{},
+		Obj:         Log{},
 		ResourceKey: "id",
 	}
 
 	openapi.WsRouteBuild(opt, []openapi.WsRoute{{
 		Action: "list", Acl: "read",
 		Handle: p.getLogs,
-		Input:  api.GetLogsInput{},
+		Input:  GetLogsInput{},
 	}, {
 		Action: "get", Acl: "read",
 		Handle: p.getLog,
-		Input:  api.GetLogInput{},
+		Input:  GetLogInput{},
 	}})
 
 	p.RestAdd(ws)
@@ -40,9 +40,9 @@ func (p *Module) InstallLogWs(aclHandle func(aclName string) (restful.FilterFunc
 
 // ###########################
 func (p *Module) getLogs(req *restful.Request, resp *restful.Response) {
-	in := &api.GetLogsInput{}
+	in := &GetLogsInput{}
 
-	ret, err := func() ([]api.Log, error) {
+	ret, err := func() ([]Log, error) {
 		if err := openapi.ReadEntity(req, in); err != nil {
 			return nil, err
 		}
@@ -54,8 +54,8 @@ func (p *Module) getLogs(req *restful.Request, resp *restful.Response) {
 }
 
 func (p *Module) getLog(req *restful.Request, resp *restful.Response) {
-	in := &api.GetLogInput{}
-	ret, err := func() (*api.Log, error) {
+	in := &GetLogInput{}
+	ret, err := func() (*Log, error) {
 		if err := openapi.ReadEntity(req, in); err != nil {
 			return nil, err
 		}
@@ -68,19 +68,19 @@ func (p *Module) getLog(req *restful.Request, resp *restful.Response) {
 type Extra struct {
 	Method    string
 	Url       string
-	PeerAddr  *string
-	TokenName *string
+	PeerAddr  string
+	TokenName string
 	Data      interface{}
 }
 
-func (p *Module) Log(in *api.CreateLogInput) error {
+func (p *Module) Log(in *CreateLogInput) error {
 	return CreateLog(p.db, in)
 }
 
 func (p *Module) Log5(req *restful.Request, action, target *string, data interface{}, err error) (e error) {
-	token, ok := api.TokenInfoFrom(req)
+	token, ok := openapi.TokenFrom(req)
 	if !ok {
-		token = &api.AuthToken{UserName: util.String("anonymous")}
+		token = &openapi.BaseToken{}
 	}
 
 	addr := util.GetIPAdress(req.Request)
@@ -94,22 +94,22 @@ func (p *Module) Log5(req *restful.Request, action, target *string, data interfa
 		req.Request.Method,
 		req.SelectedRoutePath(),
 		err,
-		util.StringValue(token.UserName),
-		util.StringValue(token.Name),
+		token.GetUserName(),
+		token.GetTokenName(),
 		addr,
 		util.JsonStr(data),
 	)
 
-	return CreateLog(p.db, &api.CreateLogInput{
-		UserName: token.UserName,
+	return CreateLog(p.db, &CreateLogInput{
+		UserName: util.String(token.GetUserName()),
 		Target:   target,
 		Action:   action,
 		PeerAddr: &addr,
 		Extra: util.String(util.JsonStr(Extra{
 			Method:    req.Request.Method,
 			Url:       req.SelectedRoutePath(),
-			PeerAddr:  &addr,
-			TokenName: token.Name,
+			PeerAddr:  addr,
+			TokenName: token.GetTokenName(),
 			Data:      data,
 		})),
 		Err:       util.ErrorString(err),

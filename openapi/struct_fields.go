@@ -21,7 +21,7 @@ type field struct {
 }
 
 func (p field) String() string {
-	return fmt.Sprintf("key %s index %v type %s required %v param %s", p.key, p.index, p.typ, p.required, p.paramType)
+	return fmt.Sprintf("key %s index %v %s", p.key, p.index, p.tagOpt)
 }
 
 type tagOpt struct {
@@ -34,10 +34,23 @@ type tagOpt struct {
 	description string
 }
 
+func (p tagOpt) String() string {
+	return fmt.Sprintf("name %s key %v paramType %s skip %v required %v format %s description %s",
+		p.name, p.key, p.paramType, p.skip, p.required, p.format, p.description)
+}
+
 type structFields struct {
 	hasData   bool
 	list      []field
 	nameIndex map[string]int
+}
+
+func (p structFields) String() string {
+	ret := fmt.Sprintf("hasData %v\n", p.hasData)
+	for k, v := range p.list {
+		ret += fmt.Sprintf("%d %s\n", k, v)
+	}
+	return ret
 }
 
 // cachedTypeFields is like typeFields but uses a cache to avoid repeated work.

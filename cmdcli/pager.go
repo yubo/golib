@@ -17,8 +17,13 @@ import (
 	"github.com/yubo/golib/util"
 )
 
+type Pagination struct {
+	api.Pagination
+	Dump *bool `param:"-" flags:"dump" description:"dump size"`
+}
+
 type TermPager struct {
-	pagination *api.Pagination
+	pagination *Pagination
 	disable    bool
 	buff       []byte
 	out        io.Writer
@@ -202,7 +207,7 @@ func TermPaging(pageSize int, disablePage bool, out io.Writer, uri string, input
 		return errors.New("expected a pointer to a struct")
 	}
 
-	if p.pagination, ok = rv.FieldByName("Pagination").Addr().Interface().(*api.Pagination); !ok {
+	if p.pagination, ok = rv.FieldByName("Pagination").Addr().Interface().(*Pagination); !ok {
 		return errors.New("expected Pagination field with input struct")
 	}
 

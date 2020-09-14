@@ -9,7 +9,6 @@ import (
 
 	restful "github.com/emicklei/go-restful"
 	"github.com/gorilla/websocket"
-	"github.com/yubo/golib/openapi/api"
 	"github.com/yubo/golib/util"
 )
 
@@ -20,6 +19,11 @@ const (
 	MsgPing
 	MsgCtl
 	MsgAction // custom Action
+)
+
+const (
+	rshDataKey = "req-rsh-data"
+	rshConnKey = "req-rsh-conn"
 )
 
 const (
@@ -83,21 +87,21 @@ func NewRsh(cf *RshConfig, action func([]byte) ([]byte, error)) (*Rsh, error) {
 }
 
 func WithRshData(r *restful.Request, data []byte) *restful.Request {
-	r.SetAttribute(api.RshDataKey, data)
+	r.SetAttribute(rshDataKey, data)
 	return r
 }
 
 func RshDataFrom(r *restful.Request) ([]byte, bool) {
-	data, ok := r.Attribute(api.RshDataKey).([]byte)
+	data, ok := r.Attribute(rshDataKey).([]byte)
 	return data, ok
 }
 
 func WithRshConn(r *restful.Request, conn *RshConn) *restful.Request {
-	r.SetAttribute(api.RshConnKey, conn)
+	r.SetAttribute(rshConnKey, conn)
 	return r
 }
 
 func RshConnFrom(r *restful.Request) (*RshConn, bool) {
-	conn, ok := r.Attribute(api.RshConnKey).(*RshConn)
+	conn, ok := r.Attribute(rshConnKey).(*RshConn)
 	return conn, ok
 }

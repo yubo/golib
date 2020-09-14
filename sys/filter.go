@@ -8,7 +8,6 @@ import (
 
 	"github.com/emicklei/go-restful"
 	"github.com/yubo/golib/openapi"
-	"github.com/yubo/golib/openapi/api"
 	"github.com/yubo/golib/status"
 	"k8s.io/klog/v2"
 )
@@ -51,19 +50,19 @@ func DbgFilter(req *restful.Request, resp *restful.Response, chain *restful.Filt
 	}
 }
 
-type LogEntity interface {
+type logEntity interface {
 	Log() (action, target string, data interface{})
 }
 
 func (p *Module) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	chain.ProcessFilter(req, resp)
 
-	in, ok := api.ReqEntityFrom(req)
+	in, ok := openapi.ReqEntityFrom(req)
 	if !ok {
 		return
 	}
 
-	entity, ok := in.(LogEntity)
+	entity, ok := in.(logEntity)
 	if !ok {
 		return
 	}

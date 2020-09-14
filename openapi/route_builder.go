@@ -86,9 +86,8 @@ func (p *RouteBuilder) Build(v *WsRoute) error {
 	}
 
 	if v.Input != nil {
-		data := false
 		sample := util.NewStructPtr(v.Input)
-		if err := p.buildParam(sample, v.Consume, &data); err != nil {
+		if err := p.buildParam(sample, v.Consume); err != nil {
 			panic(err)
 		}
 	}
@@ -106,7 +105,7 @@ func (p *RouteBuilder) Build(v *WsRoute) error {
 	return nil
 }
 
-func (p *RouteBuilder) buildParam(in interface{}, consume string, data *bool) error {
+func (p *RouteBuilder) buildParam(in interface{}, consume string) error {
 	rv := reflect.Indirect(reflect.ValueOf(in))
 	rt := rv.Type()
 
@@ -115,13 +114,16 @@ func (p *RouteBuilder) buildParam(in interface{}, consume string, data *bool) er
 	}
 
 	fields := cachedTypeFields(rt)
+	//if rt.String() == "api.CreateClientInput" {
+	//	klog.Infof("%s", fields)
+	//}
 	if fields.hasData {
 		if consume == MIME_URL_ENCODED {
 			if err := urlencoded.RouteBuilderReads(p.b, rv); err != nil {
 				panic(err)
 			}
 		} else {
-			p.b.Reads(in)
+			p.b.Reads(rv.Interface())
 		}
 	}
 

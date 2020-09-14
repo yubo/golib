@@ -3,9 +3,10 @@ package model
 import (
 	"strings"
 
-	"github.com/yubo/golib/openapi/api"
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/util"
+
+	. "github.com/yubo/golib/sys/api"
 )
 
 func genLogSql(userName, action, target *string, start, end *int64) (where string, args []interface{}) {
@@ -44,17 +45,17 @@ func GetLogsCnt(db *orm.Db, userName, action, target *string, start, end *int64)
 	return
 }
 
-func GetLogs(db *orm.Db, userName, action, target *string, start, end *int64, sqlExtra string) (logs []api.Log, err error) {
+func GetLogs(db *orm.Db, userName, action, target *string, start, end *int64, sqlExtra string) (logs []Log, err error) {
 	sql, args := genLogSql(userName, action, target, start, end)
 	err = db.Query(`select * from log`+sql+sqlExtra, args...).Rows(&logs)
 	return
 }
 
-func GetLog(db *orm.Db, id *int64) (ret *api.Log, err error) {
+func GetLog(db *orm.Db, id *int64) (ret *Log, err error) {
 	err = db.Query("select * from log where id = ?", util.Int64Value(id)).Row(&ret)
 	return
 }
 
-func CreateLog(db *orm.Db, in *api.CreateLogInput) error {
+func CreateLog(db *orm.Db, in *CreateLogInput) error {
 	return db.Insert("log", in)
 }

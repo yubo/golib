@@ -1,10 +1,7 @@
 package openapi
 
 const (
-	AuthTokenKey = "authToken"
-	RshDataKey   = "rshData"
-	RshConnKey   = "rshConn"
-	ReqEntityKey = "reqEntity"
+	//AuthTokenKey = "authToken"
 
 	SecurityDefinitionKey = "OAPI_SECURITY_DEFINITION"
 	OauthSecurityName     = "OAuth"

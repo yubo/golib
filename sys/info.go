@@ -1,15 +1,16 @@
 package sys
 
 import (
-	"github.com/yubo/golib/openapi/api"
 	"github.com/yubo/golib/util"
+
+	sys "github.com/yubo/golib/sys/api"
 )
 
 var (
-	Metrics = map[string]api.MetricsInterface{}
+	Metrics = map[string]sys.MetricsInterface{}
 )
 
-func (p *Module) StatsRegister(name string, s api.MetricsInterface) error {
+func (p *Module) StatsRegister(name string, s sys.MetricsInterface) error {
 	if _, ok := Metrics[name]; ok {
 		return util.ErrExist
 	}

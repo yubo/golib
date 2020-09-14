@@ -5,9 +5,10 @@
 package consistent_test
 
 import (
-	"../consistent"
 	"fmt"
 	"log"
+
+	"github.com/yubo/golib/util/consistent"
 )
 
 func ExampleNew() {
@@ -31,7 +32,7 @@ func ExampleNew() {
 	// user_stringer => cacheC
 }
 
-func ExampleAdd() {
+func ExampleConsistent_Add() {
 	c := consistent.New()
 	c.Add("cacheA")
 	c.Add("cacheB")
@@ -71,7 +72,7 @@ func ExampleAdd() {
 	// user_stringer => cacheE
 }
 
-func ExampleRemove() {
+func ExampleConsistent_Remove() {
 	c := consistent.New()
 	c.Add("cacheA")
 	c.Add("cacheB")

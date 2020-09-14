@@ -32,7 +32,7 @@ func DebugNopCloser(r io.Reader) io.ReadCloser {
 }
 
 func DbgFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-	klog.Info("tracing filter entering")
+	klog.V(5).Info("tracing filter entering")
 	klog.Infof("[req] HTTP %s %s", req.Request.Method, req.SelectedRoutePath())
 
 	body, _ := ioutil.ReadAll(req.Request.Body)
@@ -54,8 +54,8 @@ func DbgFilter(req *restful.Request, resp *restful.Response, chain *restful.Filt
 	}
 }
 
-// Filter will record all REST API request info and response code
-func Filter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+// TraceFilter will record all REST API request info and response code
+func TraceFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	klog.Infof("filter entering")
 	gTracer := opentracing.GlobalTracer()
 	if gTracer == nil {
@@ -63,8 +63,7 @@ func Filter(req *restful.Request, resp *restful.Response, chain *restful.FilterC
 		return
 	}
 
-	spanName := fmt.Sprintf("HTTP %s %s",
-		req.Request.Method, req.SelectedRoutePath())
+	spanName := fmt.Sprintf("HTTP %s %s", req.Request.Method, req.SelectedRoutePath())
 	span := opentracing.StartSpan(spanName)
 	defer span.Finish()
 

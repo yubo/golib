@@ -10,7 +10,6 @@ const (
 
 // for req context
 const (
-	AuthTokenKey = "authToken"
 	RshDataKey   = "rshData"
 	RshConnKey   = "rshConn"
 	ReqEntityKey = "reqEntity"

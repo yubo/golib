@@ -14,6 +14,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
+const (
+	reqEntityKey = "req-entity"
+)
+
 type Validator interface {
 	Validate() error
 }
@@ -26,9 +30,14 @@ func ReadEntity(req *restful.Request, dst interface{}) (err error) {
 		}
 	}()
 
-	req.SetAttribute(ReqEntityKey, dst)
+	req.SetAttribute(reqEntityKey, dst)
 	err = NewDecoder().Decode(req, dst)
 	return
+}
+
+func ReqEntityFrom(r *restful.Request) (interface{}, bool) {
+	entity := r.Attribute(reqEntityKey)
+	return entity, entity != nil
 }
 
 // http.Request -> struct

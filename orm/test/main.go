@@ -36,12 +36,14 @@ func main() {
 	}
 	return
 
-	_, err = engine.Where("name = ?", user.Name).Update(user)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	out := User{}
-	engine.Where("name= ?", user.Name).Find(&out)
-	fmt.Printf("%v\n", out)
+	/*
+		_, err = engine.Where("name = ?", user.Name).Update(user)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		out := User{}
+		engine.Where("name= ?", user.Name).Find(&out)
+		fmt.Printf("%v\n", out)
+	*/
 }
