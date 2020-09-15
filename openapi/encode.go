@@ -32,11 +32,11 @@ func NewEncoder() *Encoder {
 }
 
 func (p *Encoder) Encode(url1 string, src interface{}) (url2 string, data interface{}, header http.Header, err error) {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		err = fmt.Errorf("openapi.Encode %s", r)
-	// 	}
-	// }()
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("openapi.Encode %s", r)
+		}
+	}()
 
 	header = p.header
 	data = p.data

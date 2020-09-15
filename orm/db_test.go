@@ -206,7 +206,7 @@ func TestQueryRowStruct(t *testing.T) {
 			private *int64
 		}
 
-		dbt.mustExec("CREATE TABLE test (point_x int, point_y, point_z int)")
+		dbt.mustExec("CREATE TABLE test (point_x int, point_y int, point_z int)")
 		dbt.mustExec("INSERT INTO test VALUES (?, ?, ?)", 1, 2, 3)
 
 		{
@@ -392,6 +392,7 @@ type User struct {
 	SQLModel `sql:",inline"`
 	Name     string `sql:"name" tname:"fn_group"`
 	Auth     int    `sql:"auth"`
+	age      int
 }
 
 type SQLModel struct {
@@ -467,7 +468,7 @@ func TestSqlArg(t *testing.T) {
 		}
 		pointX := 1
 
-		dbt.mustExec("CREATE TABLE test (point_x, point_y int);")
+		dbt.mustExec("CREATE TABLE test (point_x int, point_y int);")
 
 		dbt.mustExec("INSERT INTO test VALUES (?, ?);", &pointX, nil)
 

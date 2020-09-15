@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/yubo/golib/status"
-	"github.com/yubo/golib/util"
 	"google.golang.org/grpc/codes"
 	"k8s.io/klog/v2"
 )
@@ -152,6 +151,7 @@ func (p *Db) Query(query string, args ...interface{}) *Rows {
 
 type Rows struct {
 	rows *sql.Rows
+	b    *binder
 	err  error
 }
 
@@ -179,31 +179,21 @@ func (p *Rows) Row(dst ...interface{}) error {
 // scanRow scan row result into dst struct
 // dst must be struct, should be prechecked by isStructMode()
 func (p *Rows) scanRow(dst interface{}) error {
-	rv := reflect.Indirect(reflect.ValueOf(dst))
+	row := reflect.Indirect(reflect.ValueOf(dst))
 
-	if !rv.CanSet() {
+	if !row.CanSet() {
 		return status.Errorf(codes.InvalidArgument, "scan target can not be set")
 	}
 
-	b, err := p.genBinder()
+	b, err := p.genBinder(row.Type())
 	if err != nil {
 		return err
 	}
 
-	tran, err := b.bind(rv)
-	if err != nil {
-		return err
+	if err := b.scan(row); err != nil {
+		return status.Errorf(codes.Internal, "Scan() err: "+err.Error())
 	}
 
-	if err := p.rows.Scan(b.dest...); err != nil {
-		return err
-	}
-
-	for _, v := range tran {
-		if err := v.unmarshal(); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -225,63 +215,19 @@ func (p *Rows) Rows(dst interface{}, opts ...int) error {
 		limit = opts[0]
 	}
 
-	rv := reflect.Indirect(reflect.ValueOf(dst))
-
-	if !rv.CanSet() {
-		return status.Errorf(codes.InvalidArgument, "scan target can not be set")
+	rv, err := rowsInputValue(dst)
+	if err != nil {
+		return err
 	}
 
-	// for *[]struct{}
-	if rv.Kind() == reflect.Ptr {
-		if rv.IsNil() {
-			return status.Errorf(codes.Internal, "needs a pointer to a slice")
-		}
-		rv = rv.Elem()
-	}
-
-	if rv.Kind() != reflect.Slice {
-		return status.Errorf(codes.Internal, "needs a pointer to a slice")
-	}
-
-	et := rv.Type().Elem()
+	// sample is slice elem type
+	sample := rv.Type().Elem()
 	n := 0
 
-	// et is slice elem type
-	if isStructMode(reflect.New(et).Interface()) {
-
-		b, err := p.genBinder()
-		if err != nil {
-			return err
-		}
-
-		for p.rows.Next() {
-			row := reflect.New(et).Elem()
-
-			extra, err := b.bind(row)
-			if err != nil {
-				return err
-			}
-
-			if err := p.rows.Scan(b.dest...); err != nil {
-				return status.Errorf(codes.Internal, "Scan() err: "+err.Error())
-			}
-
-			for _, v := range extra {
-				if err := v.unmarshal(); err != nil {
-					return err
-				}
-			}
-
-			rv.Set(reflect.Append(rv, row))
-
-			if n += 1; n >= limit {
-				break
-			}
-		}
-	} else {
+	if !isStructMode(reflect.New(sample).Interface()) {
 		// e.g. []string or []*string
 		for p.rows.Next() {
-			row := reflect.New(et).Elem()
+			row := reflect.New(sample).Elem()
 
 			if err := p.rows.Scan(row.Addr().Interface()); err != nil {
 				return status.Errorf(codes.Internal, "Scan() err: "+err.Error())
@@ -293,9 +239,48 @@ func (p *Rows) Rows(dst interface{}, opts ...int) error {
 				break
 			}
 		}
+		return nil
+	}
+
+	// elem is struct
+	b, err := p.genBinder(reflect.New(sample).Elem().Type())
+	if err != nil {
+		return err
+	}
+
+	for p.rows.Next() {
+		row := reflect.New(sample).Elem()
+		b.scan(row)
+		rv.Set(reflect.Append(rv, row))
+
+		if n += 1; n >= limit {
+			break
+		}
 	}
 
 	return nil
+}
+
+func rowsInputValue(sample interface{}) (rv reflect.Value, err error) {
+	rv = reflect.Indirect(reflect.ValueOf(sample))
+
+	if !rv.CanSet() {
+		return rv, status.Errorf(codes.InvalidArgument, "scan target can not be set")
+	}
+
+	// for *[]struct{}
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return rv, status.Errorf(codes.Internal, "needs a pointer to a slice")
+		}
+		rv = rv.Elem()
+	}
+
+	if rv.Kind() != reflect.Slice {
+		return rv, status.Errorf(codes.Internal, "needs a pointer to a slice")
+	}
+
+	return rv, nil
 }
 
 func (p *Db) Exec(sql string, args ...interface{}) (sql.Result, error) {
@@ -321,10 +306,6 @@ func (p *Db) ExecErr(sql string, args ...interface{}) error {
 }
 
 func (p *Db) ExecLastId(sql string, args ...interface{}) (int64, error) {
-	// if p.Tx() {
-	// 	return 0, status.Errorf(codes.Internal, "In TX mode, reading data is not supported")
-	// }
-
 	dlogSql(sql, args...)
 
 	res, err := p.db.Exec(sql, args...)
@@ -447,7 +428,6 @@ func (p *Db) Update(table string, sample interface{}) error {
 	return err
 }
 
-// TODO: rename Insert
 func (p *Db) Insert(table string, sample interface{}) error {
 	sql, args, err := GenInsertSql(table, sample)
 	if err != nil {
@@ -464,10 +444,6 @@ func (p *Db) Insert(table string, sample interface{}) error {
 }
 
 func (p *Db) InsertLastId(table string, sample interface{}) (int64, error) {
-	//if p.Tx() {
-	//	return 0, status.Errorf(codes.Internal, "In TX mode, reading data is not supported")
-	//}
-
 	sql, args, err := GenInsertSql(table, sample)
 	if err != nil {
 		return 0, err
@@ -489,18 +465,6 @@ func (p *Db) InsertLastId(table string, sample interface{}) (int64, error) {
 }
 
 // utils
-
-func getTypeName(obj interface{}) (typestr string) {
-	typ := reflect.TypeOf(obj)
-	typestr = typ.String()
-
-	if lastDotIndex := strings.LastIndex(typestr, "."); lastDotIndex != -1 {
-		typestr = typestr[lastDotIndex+1:]
-	}
-
-	return
-}
-
 func snakeCasedName(name string) string {
 	newstr := make([]rune, 0)
 	firstTime := true
@@ -514,26 +478,6 @@ func snakeCasedName(name string) string {
 			}
 			chr -= ('A' - 'a')
 		}
-		newstr = append(newstr, chr)
-	}
-
-	return string(newstr)
-}
-
-func titleCasedName(name string) string {
-	newstr := make([]rune, 0)
-	upNextChar := true
-
-	for _, chr := range name {
-		switch {
-		case upNextChar:
-			upNextChar = false
-			chr -= ('a' - 'A')
-		case chr == '_':
-			upNextChar = true
-			continue
-		}
-
 		newstr = append(newstr, chr)
 	}
 
@@ -570,19 +514,7 @@ func Strings2sql(array []string) string {
 	return out.String()
 }
 
-func DsnSummary(dsn string) (string, error) {
-	return dsn, nil
-}
-
-func stringArrayContains(needle string, haystack []string) bool {
-	for _, v := range haystack {
-		if needle == v {
-			return true
-		}
-	}
-	return false
-}
-
+// struct{}, *struct{}, **struct{} return true
 func isStructMode(in interface{}) bool {
 	rt := reflect.TypeOf(in)
 
@@ -597,38 +529,6 @@ func isStructMode(in interface{}) bool {
 	return rt.Kind() == reflect.Struct && rt.String() != "time.Time"
 }
 
-// sql:"-"
-// sql:"foo_bar"
-// sql:",inline"
-func getTags(ff reflect.StructField) (name, extra string, skip, inline bool) {
-	tag, _ := ff.Tag.Lookup("sql")
-	if tag == "-" {
-		skip = true
-		return
-	}
-
-	if strings.HasSuffix(tag, ",inline") {
-		inline = true
-		return
-	}
-
-	tags := strings.Split(tag, ",")
-
-	if len(tags) > 1 {
-		extra = tags[1]
-	}
-
-	if len(tags) > 0 {
-		name = tags[0]
-	}
-
-	if name == "" {
-		name = util.SnakeCasedName(ff.Name)
-	}
-
-	return
-}
-
 type kv struct {
 	k string
 	v interface{}
@@ -639,9 +539,8 @@ func GenUpdateSql(table string, sample interface{}) (string, []interface{}, erro
 	where := []kv{}
 
 	rv := reflect.Indirect(reflect.ValueOf(sample))
-	rt := rv.Type()
 
-	if err := genUpdateSql(rv, rt, &set, &where); err != nil {
+	if err := genUpdateSql(rv, &set, &where); err != nil {
 		return "", nil, err
 	}
 
@@ -676,46 +575,29 @@ func GenUpdateSql(table string, sample interface{}) (string, []interface{}, erro
 	return buf.String(), args, nil
 }
 
-func genUpdateSql(rv reflect.Value, rt reflect.Type, set, where *[]kv) error {
-
-	for i := 0; i < rt.NumField(); i++ {
-		fv := rv.Field(i)
-		ff := rt.Field(i)
-		ft := fv.Type()
-
-		name, extra, skip, inline := getTags(ff)
-		if skip || !fv.CanInterface() {
-			continue
-		}
-
-		if isNil(fv) {
+func genUpdateSql(rv reflect.Value, set, where *[]kv) error {
+	fields := cachedTypeFields(rv.Type())
+	for _, f := range fields.list {
+		fv, err := getSubv(rv, f.index, false)
+		if err != nil || isNil(fv) {
 			continue
 		}
 
 		if fv.Kind() == reflect.Ptr {
 			fv = fv.Elem()
-			ft = fv.Type()
 		}
 
-		if inline {
-			if err := genUpdateSql(fv, ft, set, where); err != nil {
-				return err
-			}
+		if f.where {
+			*where = append(*where, kv{f.key, fv.Interface()})
 			continue
 		}
 
-		if extra == "where" {
-			*where = append(*where, kv{name, fv.Interface()})
-		} else {
-
-			v, err := sqlInterface(fv)
-			if err != nil {
-				return err
-			}
-			*set = append(*set, kv{name, v})
+		v, err := sqlInterface(fv)
+		if err != nil {
+			return err
 		}
+		*set = append(*set, kv{f.key, v})
 	}
-
 	return nil
 }
 
@@ -723,9 +605,8 @@ func GenInsertSql(table string, sample interface{}) (string, []interface{}, erro
 	values := []kv{}
 
 	rv := reflect.Indirect(reflect.ValueOf(sample))
-	rt := rv.Type()
 
-	if err := genInsertSql(rv, rt, &values); err != nil {
+	if err := genInsertSql(rv, &values); err != nil {
 		return "", nil, err
 	}
 
@@ -752,98 +633,28 @@ func GenInsertSql(table string, sample interface{}) (string, []interface{}, erro
 	return buf.String() + ") values (" + buf2.String() + ")", args, nil
 }
 
-func genInsertSql(rv reflect.Value, rt reflect.Type, values *[]kv) error {
-	for i := 0; i < rt.NumField(); i++ {
-		fv := rv.Field(i)
-		ff := rt.Field(i)
-		ft := fv.Type()
-
-		name, _, skip, inline := getTags(ff)
-		if skip || !fv.CanInterface() {
-			continue
-		}
-
-		if isNil(fv) {
+func genInsertSql(rv reflect.Value, values *[]kv) error {
+	fields := cachedTypeFields(rv.Type())
+	for _, f := range fields.list {
+		fv, err := getSubv(rv, f.index, false)
+		if err != nil || isNil(fv) {
 			continue
 		}
 
 		if fv.Kind() == reflect.Ptr {
 			fv = fv.Elem()
-			ft = fv.Type()
-		}
-
-		if inline {
-			if err := genInsertSql(fv, ft, values); err != nil {
-				return err
-			}
-			continue
 		}
 
 		v, err := sqlInterface(fv)
 		if err != nil {
 			return err
 		}
-
-		*values = append(*values, kv{name, v})
+		*values = append(*values, kv{f.key, v})
 	}
-
 	return nil
 }
 
-// bindDest bind struct{} or *struct{} fields to dest
-func bindDest(rv reflect.Value, dest []interface{},
-	fieldMap map[string]int, tran *[]*transfer) (err error) {
-	rt := rv.Type()
-
-	// for **struct{}
-	if rv.Kind() == reflect.Ptr {
-		if rv.IsNil() {
-			rv.Set(reflect.New(rt.Elem()))
-		}
-
-		rv = rv.Elem()
-		rt = rv.Type()
-	}
-
-	if rv.Kind() != reflect.Struct || rt.String() == "time.Time" {
-		return status.Errorf(codes.InvalidArgument, "orm: interface must be a pointer to struct, got %s", rv.Kind())
-	}
-
-	for i := 0; i < rt.NumField(); i++ {
-		fv := rv.Field(i)
-		ff := rt.Field(i)
-
-		if !fv.CanSet() {
-			dlog("can't addr name %s, continue", ff.Name)
-			continue
-		}
-
-		name, _, skip, inline := getTags(ff)
-		//klog.V(5).Infof("%s name %s skip %v inline %v", ff.Name, name, skip, inline)
-		if skip {
-			continue
-		}
-
-		if inline {
-			if err = bindDest(fv, dest, fieldMap, tran); err != nil {
-				return err
-			}
-			continue
-		}
-
-		if i, ok := fieldMap[name]; ok {
-			// rows.Scan() can malloc when ptr == nil
-			// do not need to malloc ptr mem at here
-			if dest[i], err = scanInterface(fv, tran); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func (p *Rows) genBinder() (*binder, error) {
+func (p *Rows) genBinder(rt reflect.Type) (*binder, error) {
 	if p.rows == nil {
 		return nil, status.Errorf(codes.Internal, "rows is nil")
 	}
@@ -865,17 +676,39 @@ func (p *Rows) genBinder() (*binder, error) {
 	}
 
 	// klog.V(5).Infof("dest len %d", len(dest))
-
 	return &binder{
+		fields:   cachedTypeFields(rt),
 		dest:     dest,
 		fieldMap: fieldMap,
+		rows:     p.rows,
 	}, nil
 
 }
 
 type binder struct {
+	fields   structFields
 	dest     []interface{}
 	fieldMap map[string]int
+	rows     *sql.Rows
+}
+
+func (p binder) scan(sample reflect.Value) error {
+	tran, err := p.bind(sample)
+	if err != nil {
+		return err
+	}
+
+	if err := p.rows.Scan(p.dest...); err != nil {
+		return status.Errorf(codes.Internal, "Scan() err: "+err.Error())
+	}
+
+	for _, v := range tran {
+		if err := v.unmarshal(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 type transfer struct {
@@ -912,9 +745,18 @@ func (p *transfer) unmarshal() error {
 
 func (p *binder) bind(rv reflect.Value) ([]*transfer, error) {
 	tran := []*transfer{}
-	if err := bindDest(rv, p.dest, p.fieldMap, &tran); err != nil {
-		return nil, err
+	for _, f := range p.fields.list {
+		if i, ok := p.fieldMap[f.key]; ok {
+			fv, err := getSubv(rv, f.index, true)
+			if err != nil {
+				return nil, err
+			}
+			if p.dest[i], err = scanInterface(fv, &tran); err != nil {
+				return nil, err
+			}
+		}
 	}
+
 	return tran, nil
 }
 
@@ -930,7 +772,7 @@ func sqlInterface(rv reflect.Value) (interface{}, error) {
 	}
 
 	// if rv.Kind() == reflect.Ptr {
-	// 	panic(fmt.Sprintf("rv %v rt %v", rv.Kind(), rv.Type().Name()))
+	// 	panicType(rv.Type(), "rv is ptr")
 	// }
 
 	return rv.Interface(), nil

@@ -70,7 +70,7 @@ func TestSession(t *testing.T) {
 	defer cancel()
 
 	mustExec(t, sess.db, "DROP TABLE IF EXISTS session;")
-	mustExec(t, sess.db, "CREATE TABLE `session` ( `session_key` char(64) NOT NULL, `session_data` blob, `time` int(11) unsigned NOT NULL, PRIMARY KEY (`session_key`)) ENGINE=MyISAM DEFAULT CHARSET=utf8; ")
+	mustExec(t, sess.db, CREATE_TABLE_SQL)
 	defer sess.db.Exec("DROP TABLE IF EXISTS session")
 
 	r, _ := http.NewRequest("GET", "", bytes.NewBuffer([]byte{}))
