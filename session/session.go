@@ -23,6 +23,7 @@ import (
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/util"
+	"google.golang.org/grpc/codes"
 	//_ "github.com/go-sql-driver/mysql"
 )
 
@@ -142,10 +143,10 @@ func (p *Session) Start(w http.ResponseWriter, r *http.Request) (store *SessionS
 	return
 }
 
-func (p *Session) Destroy(w http.ResponseWriter, r *http.Request) {
+func (p *Session) Destroy(w http.ResponseWriter, r *http.Request) error {
 	cookie, err := r.Cookie(p.config.CookieName)
 	if err != nil || cookie.Value == "" {
-		return
+		return status.Error(codes.Unauthenticated, "Have not login yet")
 	}
 
 	sid, _ := url.QueryUnescape(cookie.Value)
@@ -158,6 +159,7 @@ func (p *Session) Destroy(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1}
 
 	http.SetCookie(w, cookie)
+	return nil
 }
 
 func (p *Session) Get(sid string) (*SessionStore, error) {
