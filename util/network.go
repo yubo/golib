@@ -30,8 +30,8 @@ func IPContains(ip net.IP, network string) bool {
 
 // http
 
-// GetIPAdress "X-Forwarded-For", "X-Real-Ip", req.RemoteAddr
-func GetIPAdress(r *http.Request) string {
+// GetIPAddress "X-Forwarded-For", "X-Real-Ip", req.RemoteAddr
+func GetIPAddress(r *http.Request) string {
 	for _, h := range []string{"X-Forwarded-For", "X-Real-Ip"} {
 		for _, ip := range strings.Split(r.Header.Get(h), ",") {
 			// header can contain spaces too, strip those out.

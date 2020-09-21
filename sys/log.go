@@ -83,7 +83,7 @@ func (p *Module) Log5(req *restful.Request, action, target *string, data interfa
 		token = &openapi.BaseToken{}
 	}
 
-	addr := util.GetIPAdress(req.Request)
+	addr := util.GetIPAddress(req.Request)
 
 	// data maybe Marshal error
 	if _, e := json.Marshal(data); e != nil {
