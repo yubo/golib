@@ -108,6 +108,9 @@ func (p *Db) Tx() bool {
 }
 
 func (p *Db) BeginWithCtx(ctx context.Context) (*Db, error) {
+	if p.Tx() {
+		return nil, status.Errorf(codes.Internal, "Already beginning a transaction")
+	}
 	if tx, err := p.Db.BeginTx(ctx, nil); err != nil {
 		return nil, err
 	} else {

@@ -14,6 +14,7 @@ import (
 )
 
 type Config struct {
+	Enabled  bool     `json:"enabled"`
 	From     []string `json:"from"`
 	Host     string   `json:"host"`
 	Port     int      `json:"port"`
@@ -40,6 +41,9 @@ type MailContext struct {
 func NewMail(cf *Config, contentType string, tpl *template.Template, input interface{}) (*MailContext, error) {
 	if cf == nil {
 		return nil, status.Errorf(codes.Internal, "mail config is nil ptr")
+	}
+	if !cf.Enabled {
+		return nil, status.Errorf(codes.Internal, "mail is not enabled")
 	}
 	buff := &bytes.Buffer{}
 	if err := tpl.Execute(buff, input); err != nil {
