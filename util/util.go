@@ -19,8 +19,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/yubo/golib/status"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/peer"
 )
 
@@ -849,19 +847,19 @@ func SetValue(rv reflect.Value, data []string) error {
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		if v, err := strconv.ParseInt(data[0], 10, 64); err != nil {
-			return status.Errorf(codes.Internal, "arg %s as int: %s", rt.Name(), err.Error())
+			return fmt.Errorf("arg %s as int: %s", rt.Name(), err.Error())
 		} else {
 			rv.SetInt(v)
 		}
 	case reflect.Float32, reflect.Float64:
 		if v, err := strconv.ParseFloat(data[0], 64); err != nil {
-			return status.Errorf(codes.Internal, "arg %s as float: %s", rt.Name(), err.Error())
+			return fmt.Errorf("arg %s as float: %s", rt.Name(), err.Error())
 		} else {
 			rv.SetFloat(v)
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		if v, err := strconv.ParseUint(data[0], 10, 64); err != nil {
-			return status.Errorf(codes.Internal, "arg %s as uint: %s", rt.Name(), err.Error())
+			return fmt.Errorf("arg %s as uint: %s", rt.Name(), err.Error())
 		} else {
 			rv.SetUint(v)
 		}
@@ -872,10 +870,10 @@ func SetValue(rv reflect.Value, data []string) error {
 		} else if typeName == "*string" {
 			rv.Set(reflect.ValueOf(StringSlice(data)))
 		} else {
-			return status.Errorf(codes.Internal, "unsupported type scan %s slice", typeName)
+			return fmt.Errorf("unsupported type scan %s slice", typeName)
 		}
 	default:
-		return status.Errorf(codes.Internal, "unsupported type scan %s", rt.String())
+		return fmt.Errorf("unsupported type scan %s", rt.String())
 	}
 	return nil
 }
@@ -896,9 +894,9 @@ func GetValue(rv reflect.Value) (data []string, err error) {
 		} else if typeName == "*string" {
 			return StringValueSlice(rv.Interface().([]*string)), nil
 		}
-		return nil, status.Errorf(codes.Internal, "unsupported type: %s %s", rt, rv.Kind())
+		return nil, fmt.Errorf("unsupported type: %s %s", rt, rv.Kind())
 	default:
-		return nil, status.Errorf(codes.Internal, "unsupported type: %s %s", rt, rv.Kind())
+		return nil, fmt.Errorf("unsupported type: %s %s", rt, rv.Kind())
 	}
 }
 
@@ -912,10 +910,10 @@ func PrepareValue(rv reflect.Value, rt reflect.Type) {
 func GetPeerAddrFromCtx(ctx context.Context) (string, error) {
 	pr, ok := peer.FromContext(ctx)
 	if !ok {
-		return "", status.Errorf(codes.Internal, "[getClinetIP] invoke FromContext() failed")
+		return "", fmt.Errorf("[getClinetIP] invoke FromContext() failed")
 	}
 	if pr.Addr == net.Addr(nil) {
-		return "", status.Errorf(codes.Internal, "[getClientIP] peer.Addr is nil")
+		return "", fmt.Errorf("[getClientIP] peer.Addr is nil")
 	}
 	ip, _, err := net.SplitHostPort(pr.Addr.String())
 	return ip, err

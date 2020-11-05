@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/yubo/golib/util"
 	"k8s.io/klog/v2"
 )
@@ -140,6 +141,38 @@ ctrl:
 		} else {
 			klog.V(3).Infof("%s %s got value %v", c.path1, c.path2, cf.GetRaw(c.path2))
 		}
-
 	}
+}
+
+func TestToConfigerAsYaml(t *testing.T) {
+	yml := `
+ctrl:
+  auth:
+    google:
+      client_id: "781171109477-10tu51e8bs1s677na46oct6hdefpntpu.apps.googleusercontent.com"
+      client_secret: xpEoBFqkmI3KVN9pHt2VW-eN
+      redirect_url: http://auth.dev.pt.xiaomi.com/v1.0/auth/callback/google
+`
+
+	type auth struct {
+		ClientId     string `yaml:"client_id"`
+		ClientSecret string `yaml:"client_secret"`
+		RedirectUrl  string `yaml:"redirect_url"`
+	}
+
+	want := auth{
+		ClientId:     "781171109477-10tu51e8bs1s677na46oct6hdefpntpu.apps.googleusercontent.com",
+		ClientSecret: "xpEoBFqkmI3KVN9pHt2VW-eN",
+		RedirectUrl:  "http://auth.dev.pt.xiaomi.com/v1.0/auth/callback/google",
+	}
+
+	var got auth
+
+	conf, _ := newConfiger([]byte(yml))
+	cf := ToConfiger(conf.GetRaw("ctrl.auth"))
+	err := cf.ReadYaml("google", &got)
+	if err != nil {
+		t.Fatalf("error %s", err)
+	}
+	require.Equalf(t, want, got, "configer read yaml")
 }

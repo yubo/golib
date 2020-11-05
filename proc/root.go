@@ -5,98 +5,88 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yubo/golib/util"
 	"k8s.io/klog/v2"
 )
 
-func NewRootCmd(settings *Settings, args []string) *cobra.Command {
+func NewRootCmd(args []string) *cobra.Command {
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
+	if _module.options == nil {
+		panic(errNotSetted)
+	}
+
+	appName := _module.options.Name()
+
 	cmd := &cobra.Command{
-		Use:          settings.Name,
-		Short:        fmt.Sprintf("%s service", settings.Name),
+		Use:          appName,
+		Short:        fmt.Sprintf("%s service", appName),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return startCmd(settings)
+			return startCmd()
 		},
 	}
 
-	flags := cmd.PersistentFlags()
-	settings.AddFlags(flags)
+	fs := cmd.PersistentFlags()
 
-	flags.ParseErrorsWhitelist.UnknownFlags = true
-	flags.Parse(args)
+	fs.StringVarP(&_module.config, "config", "c",
+		os.Getenv(strings.ToUpper(appName)+"_CONFIG"),
+		fmt.Sprintf("config file path of your %s server.", appName))
+	fs.BoolVarP(&_module.test, "test", "t", false,
+		fmt.Sprintf("test config file path of your %s server.", appName))
+
+	fs.ParseErrorsWhitelist.UnknownFlags = true
+	fs.Parse(args)
 
 	cmd.AddCommand(
-		newStartCmd(settings),
-		newVersionCmd(settings),
+		newStartCmd(),
+		newVersionCmd(),
 	)
-
-	if settings.Changelog != "" {
-		cmd.AddCommand(newChangelogCmd(settings))
-	}
-
-	if settings.Asset != nil {
-		cmd.AddCommand(newResetDbCmd(settings))
-	}
 
 	return cmd
 }
 
 // handle
-func newStartCmd(settings *Settings) *cobra.Command {
+func newStartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
-		Short: fmt.Sprintf("start %s service", settings.Name),
+		Short: fmt.Sprintf("start %s service", _module.options.Name()),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return startCmd(settings)
+			return startCmd()
 		},
 	}
 	return cmd
 }
 
-func startCmd(settings *Settings) error {
-	klog.Infof("config file %s\n", settings.Config)
-	if settings.TestConfig {
-		return ConfigTest(settings.Config)
+func startCmd() error {
+	klog.Infof("config file %s\n", _module.config)
+
+	if _module.test {
+		return _module.testConfig()
 	}
-	return MainLoop(settings.Config)
+
+	return _module.start()
 }
 
-func newVersionCmd(settings *Settings) *cobra.Command {
+func newVersionCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
 		Short: "show version, git commit",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			os.Stdout.Write(util.Table(settings.Version))
+			fmt.Printf("Go Runtime version: %s\n", goVersion)
+			fmt.Printf("OS:                 %s\n", goOs)
+			fmt.Printf("Arch:               %s\n", goArch)
+			fmt.Printf("Build Version:      %s\n", Version)
+			fmt.Printf("Build Revision:     %s\n", Revision)
+			fmt.Printf("Build Branch:       %s\n", Branch)
+			fmt.Printf("Build User:         %s\n", Builder)
+			fmt.Printf("Build Date:         %s\n", BuildDate)
+			fmt.Printf("Build TimeUnix:     %s\n", BuildTimeUnix)
 			return nil
-		},
-	}
-	return cmd
-}
-
-func newChangelogCmd(settings *Settings) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "changelog",
-		Short: "list changelog",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println(settings.Changelog)
-			return nil
-		},
-	}
-	return cmd
-}
-
-func newResetDbCmd(settings *Settings) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "resetdb",
-		Short: "drop table if exist and initialize it",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return resetDb(settings)
 		},
 	}
 	return cmd

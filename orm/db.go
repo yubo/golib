@@ -25,10 +25,10 @@ type db interface {
 }
 
 type Db struct {
-	Greatest string
-	Db       *sql.DB
+	greatest string
 	tx       *sql.Tx
-	db       db
+	db       db      // cur db engine
+	Db       *sql.DB // origin db engine
 }
 
 func printString(b []byte) string {
@@ -74,10 +74,10 @@ func DbOpen(driverName, dataSourceName string) (*Db, error) {
 		return nil, err
 	}
 
-	ret := &Db{Db: db, db: db, Greatest: "greatest"}
+	ret := &Db{Db: db, db: db, greatest: "greatest"}
 
 	if driverName == "sqlite3" {
-		ret.Greatest = "max"
+		ret.greatest = "max"
 	}
 
 	return ret, nil
@@ -114,7 +114,7 @@ func (p *Db) BeginWithCtx(ctx context.Context) (*Db, error) {
 	if tx, err := p.Db.BeginTx(ctx, nil); err != nil {
 		return nil, err
 	} else {
-		return &Db{tx: tx, db: tx, Greatest: p.Greatest}, nil
+		return &Db{tx: tx, db: tx, greatest: p.greatest}, nil
 	}
 }
 

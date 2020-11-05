@@ -88,10 +88,7 @@ func (p *WsBuilder) Build(in *WsOption) (err error) {
 
 		v.SubPath = in.PrefixPath + v.SubPath
 
-		if v.Acl != "" && v.Filter == nil {
-			if in.Acl == nil {
-				panic("acl handle is empty")
-			}
+		if v.Acl != "" && v.Filter == nil && in.Acl != nil {
 			if v.Filter, v.Scope, err = in.Acl(v.Acl); err != nil {
 				panic(err)
 			}

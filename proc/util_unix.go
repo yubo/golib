@@ -8,13 +8,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/yubo/golib/orm"
 	"k8s.io/klog/v2"
 )
 
 // for general startCmd
-func ConfigTest(configFile string) error {
-	cf, err := procInit(configFile)
+func (p *Module) testConfig() error {
+	configFile := p.config
+	cf, err := p.procInit(configFile)
 	if err != nil {
 		klog.Error(err)
 		return err
@@ -23,7 +23,7 @@ func ConfigTest(configFile string) error {
 	klog.V(3).Infof("#### %s\n", configFile)
 	klog.V(3).Infof("%s\n", cf)
 
-	if err := procTest(); err != nil {
+	if err := p.procTest(); err != nil {
 		return err
 	}
 
@@ -32,13 +32,17 @@ func ConfigTest(configFile string) error {
 	return nil
 }
 
-func MainLoop(configFile string) error {
-	if _, err := procInit(configFile); err != nil {
+func (p *Module) start() error {
+	if LogBuildInfoAtStartup != "" {
+		LogBuildInfo()
+	}
+
+	if _, err := p.procInit(p.config); err != nil {
 		klog.Error(err)
 		panic(err)
 	}
 
-	if err := procStart(); err != nil {
+	if err := p.procStart(); err != nil {
 		klog.Error(err)
 		panic(err)
 	}
@@ -52,57 +56,16 @@ func MainLoop(configFile string) error {
 
 		switch s {
 		case syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT:
-			procStop()
+			p.procStop()
 			klog.Info("exit 0")
 			return nil
 		case syscall.SIGUSR1:
 			klog.Infof("reload")
-			if err := procReload(); err != nil {
+			if err := p.procReload(); err != nil {
 				return err
 			}
 		default:
 			klog.Infof("undefined signal %v", s)
 		}
 	}
-}
-
-// resetDb just for mysql
-func resetDb(settings *Settings) error {
-	appName := settings.Name
-	configFile := settings.Config
-	asset := settings.Asset
-	cf, err := procInit(configFile)
-	if err != nil {
-		return err
-	}
-
-	driver := cf.GetStr("sys.dbDriver")
-	dsn := cf.GetStr("sys.dsn")
-	db, err := orm.DbOpen(driver, dsn)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	buf, err := asset(fmt.Sprintf("%s.%s.sql", appName, driver))
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("db", dsn)
-	fmt.Println("Reset database, all datatbase tables will be drop, are you sure?")
-	fmt.Print("Enter 'Yes' to continue: ")
-
-	var in string
-	fmt.Fscanf(os.Stdin, "%s", &in)
-	if in != "Yes" {
-		fmt.Println("cancel")
-		return nil
-	}
-
-	if err = db.ExecRows(buf); err != nil {
-		return err
-	}
-	fmt.Println("reset database successfully")
-	return nil
 }

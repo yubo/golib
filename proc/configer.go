@@ -9,9 +9,8 @@ import (
 	"path/filepath"
 
 	"github.com/ghodss/yaml"
-	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/template"
-	"google.golang.org/grpc/codes"
+	yaml2 "gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
 )
 
@@ -186,13 +185,17 @@ func (p *Configer) GetIntDef(path string, def int) int {
 	return v
 }
 
-func (p *Configer) Read(path string, o interface{}) error {
+type validator interface {
+	Validate() error
+}
+
+func (p *Configer) Read(path string, dst interface{}) error {
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "read config err %s", err)
+		return fmt.Errorf("read config err %s", err)
 	}
 
-	if o == nil {
+	if dst == nil {
 		return nil
 	}
 
@@ -201,16 +204,56 @@ func (p *Configer) Read(path string, o interface{}) error {
 		return err
 	}
 
-	return json.Unmarshal(data, o)
+	if err := json.Unmarshal(data, dst); err != nil {
+		return err
+	}
+
+	if v, ok := dst.(validator); ok {
+		return v.Validate()
+	}
+	return nil
 }
 
-func (p *Configer) Unmarshal(o interface{}) error {
+// ReadYaml use for yaml tags `yaml:"key"`
+func (p *Configer) ReadYaml(path string, dst interface{}) error {
+	v, err := Values(p.data).PathValue(path)
+	if err != nil {
+		return fmt.Errorf("read config err %s", err)
+	}
+
+	if dst == nil {
+		return nil
+	}
+
+	data, err := yaml2.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	if err := yaml2.Unmarshal(data, dst); err != nil {
+		return err
+	}
+
+	if v, ok := dst.(validator); ok {
+		return v.Validate()
+	}
+	return nil
+}
+
+func (p *Configer) Unmarshal(dst interface{}) error {
 	data, err := json.Marshal(p.data)
 	if err != nil {
 		return err
 	}
 
-	return json.Unmarshal(data, o)
+	if err := json.Unmarshal(data, dst); err != nil {
+		return err
+	}
+
+	if v, ok := dst.(validator); ok {
+		return v.Validate()
+	}
+	return nil
 }
 
 // just for dump

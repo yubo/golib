@@ -182,3 +182,72 @@ func printStr(in string) string {
 		return '.'
 	}, in)
 }
+
+type Tx interface {
+	Tx() bool
+	Commit() error
+	Rollback() error
+}
+
+func HttpWriteData(resp *restful.Response, data interface{}, err error, tx ...Tx) {
+	var eMsg string
+	code := 200
+
+	if len(tx) > 0 && tx != nil {
+		txClose(tx[0], err)
+	}
+
+	if err != nil {
+		eMsg = err.Error()
+		code = http.StatusBadRequest
+
+		if s, ok := status.FromError(err); ok {
+			code = status.HTTPStatusFromCode(s.Code())
+		}
+		if klog.V(3).Enabled() {
+			klog.ErrorDepth(1, fmt.Sprintf("httpReturn %d %s", code, eMsg))
+		}
+	}
+
+	resp.WriteEntity(map[string]interface{}{
+		"dat":  data,
+		"err":  eMsg,
+		"code": code,
+	})
+}
+
+func HttpWriteList(resp *restful.Response, total int64, list interface{}, err error) {
+	var eMsg string
+	code := 200
+
+	if err != nil {
+		eMsg = err.Error()
+		code = http.StatusBadRequest
+
+		if s, ok := status.FromError(err); ok {
+			code = status.HTTPStatusFromCode(s.Code())
+		}
+	} else if list == nil {
+		list = []string{}
+	}
+
+	resp.WriteEntity(map[string]interface{}{
+		"dat": map[string]interface{}{
+			"total": total,
+			"list":  list,
+		},
+		"err":  eMsg,
+		"code": code,
+	})
+}
+
+func txClose(tx Tx, err error) error {
+	if tx == nil || !tx.Tx() {
+		return nil
+	}
+
+	if err == nil {
+		return tx.Commit()
+	}
+	return tx.Rollback()
+}

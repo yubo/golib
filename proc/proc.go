@@ -7,44 +7,13 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
-	"strings"
 	"sync/atomic"
 
-	"github.com/spf13/pflag"
-	"github.com/yubo/golib/openapi/api"
 	"k8s.io/klog/v2"
 )
 
 // type {{{
 type HookFn func(ops *HookOps, cf *Configer) error
-
-func New(env *Settings) *Settings {
-	if env.Debug == false {
-		env.Debug = getenvBool(strings.ToUpper(env.Name) + "_DEBUG")
-	}
-	if env.Config == "" {
-		env.Config = os.Getenv(strings.ToUpper(env.Name) + "_CONFIG")
-	}
-	return env
-}
-
-type Settings struct {
-	Name       string
-	Config     string
-	Changelog  string
-	Debug      bool
-	TestConfig bool
-	Version    api.Version
-	Asset      func(string) ([]byte, error)
-}
-
-func (s *Settings) AddFlags(fs *pflag.FlagSet) {
-	fs.StringVarP(&s.Config, "config", "c", s.Config,
-		fmt.Sprintf("config file path of your %s server.", s.Name))
-	fs.BoolVarP(&s.TestConfig, "test", "t", s.TestConfig,
-		fmt.Sprintf("test config file path of your %s server.", s.Name))
-	fs.BoolVar(&s.Debug, "debug", s.Debug, "enable verbose output")
-}
 
 type HookOps struct {
 	Hook     HookFn
@@ -66,6 +35,14 @@ func (p HookOpsBucket) Swap(i, j int) {
 
 func (p HookOpsBucket) Less(i, j int) bool {
 	return p[i].Priority < p[j].Priority
+}
+
+func (p HookOps) SetOptions(opts Options) {
+	_module.options = opts
+}
+
+func (p HookOps) Options() Options {
+	return _module.options
 }
 
 // }}}
@@ -99,15 +76,29 @@ const (
 
 // }}}
 
-var (
+const (
+	moduleName = "proc"
+)
+
+type Module struct {
+	name     string
+	status   uint32
 	hookOps  [ACTION_SIZE]HookOpsBucket
 	configer *Configer
-	Status   uint32
+	options  Options
+	config   string
+	test     bool
+}
+
+var (
+	_module = &Module{
+		name: moduleName,
+	}
 )
 
 func init() {
 	for i := 0; i < ACTION_SIZE; i++ {
-		hookOps[i] = HookOpsBucket([]*HookOps{})
+		_module.hookOps[i] = HookOpsBucket([]*HookOps{})
 	}
 }
 
@@ -117,8 +108,23 @@ func RegisterHooks(in []HookOps) error {
 		if v.HookNum < 0 || v.HookNum >= ACTION_SIZE {
 			return fmt.Errorf("invalid HookNum %d", v.HookNum)
 		}
-		hookOps[v.HookNum] = append(hookOps[v.HookNum], v)
+		_module.hookOps[v.HookNum] = append(_module.hookOps[v.HookNum], v)
 	}
+	return nil
+}
+
+func RegisterHooksWithOptions(in []HookOps, opts Options) error {
+	if _module.options != nil {
+		return errAlreadySetted
+	}
+	for i, _ := range in {
+		v := &in[i]
+		if v.HookNum < 0 || v.HookNum >= ACTION_SIZE {
+			return fmt.Errorf("invalid HookNum %d [0,%d]", v.HookNum, ACTION_SIZE)
+		}
+		_module.hookOps[v.HookNum] = append(_module.hookOps[v.HookNum], v)
+	}
+	_module.options = opts
 	return nil
 }
 
@@ -127,7 +133,7 @@ func RegisterHooks(in []HookOps) error {
 // parse configfile
 // validate config each module
 // sort hook options
-func procInit(configFile string) (cf *Configer, err error) {
+func (p *Module) procInit(configFile string) (cf *Configer, err error) {
 	if cf, err = NewConfiger(configFile); err != nil {
 		return nil, err
 	}
@@ -136,13 +142,13 @@ func procInit(configFile string) (cf *Configer, err error) {
 		return nil, err
 	}
 
-	Status = STATUS_PENDING
+	p.status = STATUS_PENDING
 
 	for i := 0; i < ACTION_SIZE; i++ {
-		sort.Sort(hookOps[i])
+		sort.Sort(p.hookOps[i])
 	}
 
-	configer = cf
+	p.configer = cf
 	return
 }
 
@@ -171,56 +177,56 @@ func dbgOps(ops *HookOps) {
 }
 
 // only be called once
-func procStart() error {
-	for _, ops := range hookOps[ACTION_START] {
+func (p *Module) procStart() error {
+	for _, ops := range p.hookOps[ACTION_START] {
 		dbgOps(ops)
-		if err := ops.Hook(ops, configer); err != nil {
+		if err := ops.Hook(ops, p.configer); err != nil {
 			return err
 		}
 	}
-	atomic.StoreUint32(&Status, STATUS_RUNNING)
+	atomic.StoreUint32(&p.status, STATUS_RUNNING)
 	return nil
 }
 
 // reverse order
-func procStop() error {
-	ss := hookOps[ACTION_STOP]
+func (p *Module) procStop() error {
+	ss := p.hookOps[ACTION_STOP]
 	for i := len(ss) - 1; i >= 0; i-- {
 		ops := ss[i]
 
 		dbgOps(ops)
-		if err := ops.Hook(ops, configer); err != nil {
+		if err := ops.Hook(ops, p.configer); err != nil {
 			return err
 		}
 	}
-	atomic.StoreUint32(&Status, STATUS_EXIT)
+	atomic.StoreUint32(&p.status, STATUS_EXIT)
 	return nil
 }
 
-func procTest() error {
-	for _, ops := range hookOps[ACTION_TEST] {
+func (p *Module) procTest() error {
+	for _, ops := range p.hookOps[ACTION_TEST] {
 		dbgOps(ops)
-		if err := ops.Hook(ops, configer); err != nil {
+		if err := ops.Hook(ops, p.configer); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func procReload() error {
-	atomic.StoreUint32(&Status, STATUS_RELOADING)
+func (p *Module) procReload() error {
+	atomic.StoreUint32(&p.status, STATUS_RELOADING)
 
-	if err := configer.Prepare(); err != nil {
+	if err := p.configer.Prepare(); err != nil {
 		return err
 	}
 
-	for _, ops := range hookOps[ACTION_RELOAD] {
+	for _, ops := range p.hookOps[ACTION_RELOAD] {
 		dbgOps(ops)
-		if err := ops.Hook(ops, configer); err != nil {
+		if err := ops.Hook(ops, p.configer); err != nil {
 			return err
 		}
 	}
-	atomic.StoreUint32(&Status, STATUS_RUNNING)
+	atomic.StoreUint32(&p.status, STATUS_RUNNING)
 	return nil
 }
 
