@@ -1,0 +1,49 @@
+sys:
+  http:
+    addr: ":1080"
+    httpCross: true
+    profile: true
+    maxLimitPage: 100
+    defLimitPage: 10
+    apidocs:
+      enabled: true
+      description: "description"
+      title: "title"
+      contact:
+        name: "yubo"
+        url: "http://github.com/yubo"
+        email: "yubo@yubo.org"
+    swagger:
+      enabled: true
+      clientId: "1234"
+      clientSecret: "1234"
+      name: "helo"
+      url: "/apidocs.json"
+  grpc:
+    addr: ":1081"
+    maxRecvMsgSize: 1024000
+  db:
+    driver: "mysql"
+    dsn: "root:1234@tcp(localhost:3306)/test?loc=Local&parseTime=true"
+  logLevel: 8
+  logFlushFrequency: 5
+  watchdogSec: 10
+  mail:
+    from: ["norelay-sso@example.com", "SSO"]
+    host: "smtp.example.com"
+    port: 25
+    username: ""
+    password: ""
+    tmpDir: "/tmp"
+
+auth:
+  ssoAddr: "http://localhost:8071"
+  serviceName: "sso"  # for api-key verify
+  otpExpiration: 30   # for oauth accessToken otp verify
+  nativeSso: true
+  gcInterval: 60
+  tokenCacheTime: {{timeOf "5m"}}
+
+
+
+

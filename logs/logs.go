@@ -68,7 +68,6 @@ func InitLogs() {
 	log.SetFlags(0)
 	// The default glog flush interval is 5 seconds.
 	go wait.Forever(klog.Flush, *logFlushFreq)
-
 }
 
 // FlushLogs flushes logs immediately.

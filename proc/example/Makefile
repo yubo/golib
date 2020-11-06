@@ -1,0 +1,28 @@
+.PHONY: clean devrun dev
+
+VERSION=0.0.1
+RELEASE=1
+APP_NAME=helo
+FILE_NAME=$(APP_NAME)-$(VERSION)-$(RELEASE).$(shell uname -s).$(shell uname -m)
+DEP_OBJS=$(shell find ../.. -name "*.go" -type f)
+TARGETS=$(APP_NAME)
+CGO_ENABLED?=0
+
+GO_BUILD_LDFLAGS_CMD      := $(abspath ./scripts/go-build-ldflags.sh)
+GO_BUILD_LDFLAGS          := $(shell $(GO_BUILD_LDFLAGS_CMD) LDFLAG)
+
+all: $(APP_NAME)
+
+$(APP_NAME): $(DEP_OBJS)
+	GO111MODULE=on CGO_ENABLED=$(CGO_ENABLED) GOARCH=amd64 \
+		    go build -ldflags '$(GO_BUILD_LDFLAGS)' -o $@  .
+
+
+devrun:
+	@echo "./$(APP_NAME) start --config ./$(APP_NAME).yml --logtostderr"
+
+dev: $(DEP_OBJS)
+	APP_NAME=$(APP_NAME) watcher --logtostderr -v 3 -e build -e .git -e docs -e vendor -f .go -f .sql -d 1000 -i ..
+
+clean:
+	rm -f $(APP_NAME)
