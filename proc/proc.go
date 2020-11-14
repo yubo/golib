@@ -18,8 +18,8 @@ type HookFn func(ops *HookOps, cf *Configer) error
 type HookOps struct {
 	Hook     HookFn
 	Owner    string
-	HookNum  int
-	Priority int
+	HookNum  ProcessAction
+	Priority ProcessPriority
 	Data     interface{}
 }
 
@@ -49,23 +49,34 @@ func (p HookOps) Options() Options {
 
 // const {{{
 
+type ProcessAction uint32
+
 const (
-	ACTION_START = iota
+	ACTION_START ProcessAction = iota
 	ACTION_RELOAD
 	ACTION_STOP
 	ACTION_TEST
 	ACTION_SIZE
 )
+
+type ProcessStatus uint32
+
 const (
-	STATUS_INIT = iota
+	STATUS_INIT ProcessStatus = iota
 	STATUS_PENDING
 	STATUS_RUNNING
 	STATUS_RELOADING
 	STATUS_EXIT
 )
 
+func (p *ProcessStatus) Set(v ProcessStatus) {
+	atomic.StoreUint32((*uint32)(p), uint32(STATUS_RUNNING))
+}
+
+type ProcessPriority uint32
+
 const (
-	_ = iota
+	_ ProcessPriority = iota
 	PRI_PRE_SYS
 	PRI_PRE_MODULE
 	PRI_MODULE
@@ -82,7 +93,7 @@ const (
 
 type Module struct {
 	name     string
-	status   uint32
+	status   ProcessStatus
 	hookOps  [ACTION_SIZE]HookOpsBucket
 	configer *Configer
 	options  Options
@@ -97,7 +108,7 @@ var (
 )
 
 func init() {
-	for i := 0; i < ACTION_SIZE; i++ {
+	for i := ACTION_START; i < ACTION_SIZE; i++ {
 		_module.hookOps[i] = HookOpsBucket([]*HookOps{})
 	}
 }
@@ -105,9 +116,6 @@ func init() {
 func RegisterHooks(in []HookOps) error {
 	for i, _ := range in {
 		v := &in[i]
-		if v.HookNum < 0 || v.HookNum >= ACTION_SIZE {
-			return fmt.Errorf("invalid HookNum %d", v.HookNum)
-		}
 		_module.hookOps[v.HookNum] = append(_module.hookOps[v.HookNum], v)
 	}
 	return nil
@@ -144,7 +152,7 @@ func (p *Module) procInit(configFile string) (cf *Configer, err error) {
 
 	p.status = STATUS_PENDING
 
-	for i := 0; i < ACTION_SIZE; i++ {
+	for i := ACTION_START; i < ACTION_SIZE; i++ {
 		sort.Sort(p.hookOps[i])
 	}
 
@@ -152,7 +160,7 @@ func (p *Module) procInit(configFile string) (cf *Configer, err error) {
 	return
 }
 
-func hookNumName(n int) string {
+func hookNumName(n ProcessAction) string {
 	switch n {
 	case ACTION_START:
 		return "start"
@@ -184,7 +192,7 @@ func (p *Module) procStart() error {
 			return err
 		}
 	}
-	atomic.StoreUint32(&p.status, STATUS_RUNNING)
+	p.status.Set(STATUS_RUNNING)
 	return nil
 }
 
@@ -199,7 +207,7 @@ func (p *Module) procStop() error {
 			return err
 		}
 	}
-	atomic.StoreUint32(&p.status, STATUS_EXIT)
+	p.status.Set(STATUS_EXIT)
 	return nil
 }
 
@@ -214,7 +222,7 @@ func (p *Module) procTest() error {
 }
 
 func (p *Module) procReload() error {
-	atomic.StoreUint32(&p.status, STATUS_RELOADING)
+	p.status.Set(STATUS_RELOADING)
 
 	if err := p.configer.Prepare(); err != nil {
 		return err
@@ -226,7 +234,7 @@ func (p *Module) procReload() error {
 			return err
 		}
 	}
-	atomic.StoreUint32(&p.status, STATUS_RUNNING)
+	p.status.Set(STATUS_RUNNING)
 	return nil
 }
 

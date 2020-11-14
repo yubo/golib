@@ -12,12 +12,14 @@ import (
 
 	//_ "github.com/yubo/golib/auth"
 	_ "github.com/yubo/golib/orm/mysql"
+	_ "github.com/yubo/golib/proc/aclfilter"
+	_ "github.com/yubo/golib/proc/audit"
+	_ "github.com/yubo/golib/proc/db"
+	_ "github.com/yubo/golib/proc/grpc"
+	_ "github.com/yubo/golib/proc/http"
+	_ "github.com/yubo/golib/proc/logging"
+	_ "github.com/yubo/golib/proc/metrics"
 	_ "github.com/yubo/golib/proc/sys"
-	_ "github.com/yubo/golib/proc/sys/aclfilter"
-	_ "github.com/yubo/golib/proc/sys/audit"
-	_ "github.com/yubo/golib/proc/sys/db"
-	_ "github.com/yubo/golib/proc/sys/grpc"
-	_ "github.com/yubo/golib/proc/sys/http"
 )
 
 const (

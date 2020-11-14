@@ -99,6 +99,7 @@ var (
 	}}
 )
 
+// must include logging
 func init() {
 	restful.RegisterEntityAccessor(openapi.MIME_URL_ENCODED, urlencoded.NewEntityAccessor())
 	proc.RegisterHooks(hookOps)

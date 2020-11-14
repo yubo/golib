@@ -149,13 +149,13 @@ func (p *Module) install() error {
 		return errHttpServer
 	}
 
-	server.SwaggerTagRegister("audit", "get audit log")
+	server.SwaggerTagRegister("Audit Log", "get audit log")
 
 	ws := new(restful.WebService)
 	opt := &openapi.WsOption{
 		Ws:          ws.Path("/api/v1/audit").Produces(restful.MIME_JSON).Consumes("*/*"),
-		Kind:        "audit",
-		Tags:        []string{"audit"},
+		Kind:        "audit log",
+		Tags:        []string{"Audit Log"},
 		Acl:         p.acl.GetAclFilter,
 		Obj:         Log{},
 		ResourceKey: "id",

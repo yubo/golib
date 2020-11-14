@@ -1,4 +1,18 @@
 sys:
+  logging:
+    level: info
+  metrics:
+    extended: "detailed" # none|simple|moderate|detailed
+    prometheus:       
+      handlerPath: "/metrics"
+    samplingRate: 1   
+    sanitization: "prometheus"
+    scope:            
+      prefix: "helo"
+      reportingInterval: "1s"
+      tags:
+        region: "bj"
+        zone: "test-1"
   http:
     addr: ":1080"
     httpCross: true

@@ -10,7 +10,7 @@ import (
 	restful "github.com/emicklei/go-restful"
 	"github.com/go-openapi/spec"
 	"github.com/yubo/golib/proc"
-	"github.com/yubo/golib/proc/sys/http/tracing"
+	"github.com/yubo/golib/proc/http/tracing"
 	"github.com/yubo/golib/util"
 	"github.com/yubo/goswagger"
 	"k8s.io/klog/v2"
@@ -108,6 +108,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err e
 	p.Config = cf
 
 	p.Container = restful.NewContainer()
+	http.DefaultServeMux = p.Container.ServeMux
 	p.swaggerTags = []spec.Tag{}
 	p.securitySchemes = map[string]*spec.SecurityScheme{}
 

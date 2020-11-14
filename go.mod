@@ -24,12 +24,17 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/grpc-ecosystem/grpc-gateway v1.14.5
 	github.com/json-iterator/go v1.1.10 // indirect
+	github.com/m3db/prometheus_client_golang v0.8.1
+	github.com/m3db/prometheus_client_model v0.1.0
+	github.com/m3db/prometheus_common v0.1.0 // indirect
+	github.com/m3db/prometheus_procfs v0.8.1
 	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/mitchellh/go-wordwrap v1.0.0
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/prometheus/client_golang v0.9.3
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
@@ -52,5 +57,6 @@ require (
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gopkg.in/yaml.v2 v2.3.0
 	gotest.tools v2.2.0+incompatible
+	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.3.0
 )
