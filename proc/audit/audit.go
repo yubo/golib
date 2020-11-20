@@ -19,10 +19,10 @@ const (
 )
 
 type Module struct {
-	name   string
-	db     *orm.Db
-	server proc.HttpServer
-	acl    proc.AclFilterGetter
+	name      string
+	db        *orm.Db
+	server    proc.HttpServer
+	getFilter func(acl string) (restful.FilterFunction, string, error)
 }
 
 var (
@@ -49,7 +49,10 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) error 
 
 	p.db = popts.Get(proc.OrmDbName).(*orm.Db)
 	p.server = popts.Get(proc.HttpServerName).(proc.HttpServer)
-	p.acl = popts.Get(proc.AclFilterGetterName).(proc.AclFilterGetter)
+
+	if auth, ok := popts.Get(proc.AuthName).(proc.Auth); ok {
+		p.getFilter = auth.GetFilter
+	}
 
 	// /api/v1/audit
 	if err := p.install(); err != nil {
@@ -65,7 +68,6 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) error 
 type dblogger struct {
 	db     *orm.Db
 	server proc.HttpServer
-	acl    proc.AclFilterGetter
 }
 
 /*
@@ -156,7 +158,7 @@ func (p *Module) install() error {
 		Ws:          ws.Path("/api/v1/audit").Produces(restful.MIME_JSON).Consumes("*/*"),
 		Kind:        "audit log",
 		Tags:        []string{"Audit Log"},
-		Acl:         p.acl.GetAclFilter,
+		Acl:         p.getFilter,
 		Obj:         Log{},
 		ResourceKey: "id",
 	}

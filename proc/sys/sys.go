@@ -28,7 +28,6 @@ type DbConfig struct {
 
 type Config struct {
 	GrpcMaxRecvMsgSize int         `json:"grpcMaxRecvMsgSize"`
-	PidFile            string      `json:"pidFile"`
 	LogLevel           int         `json:"logLevel"`
 	WatchdogSec        int         `json:"watchdogSec" description:"The time to feed the dog"`
 	Mail               mail.Config `json:"mail"`

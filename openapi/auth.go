@@ -6,6 +6,14 @@ const (
 	reqToken = "req-openapi-token"
 )
 
+var (
+	Scopes = map[string]string{}
+)
+
+func AddScope(scope, description string) {
+	Scopes[scope] = description
+}
+
 type Token interface {
 	GetTokenName() string
 	GetUserName() string

@@ -23,6 +23,7 @@
 package proc
 
 import (
+	"io"
 	"net/http"
 	"time"
 
@@ -30,15 +31,18 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber-go/tally"
+	"github.com/yubo/golib/mail"
 	"go.uber.org/zap"
+	"icee.io/sso/pkg/sso/api"
 )
 
 const (
-	HttpServerName      = "http.server"
-	GrpcServerName      = "grpc.server"
-	OrmDbName           = "db"
-	AuditName           = "db.audit"
-	AclFilterGetterName = "http.aclfilter.getter"
+	HttpServerName = "http.server"
+	GrpcServerName = "grpc.server"
+	OrmDbName      = "db"
+	AuditName      = "db.audit"
+	MailName       = "sys.mail"
+	AuthName       = "auth"
 )
 
 // Reporter reports metrics about a component.
@@ -122,6 +126,17 @@ type Dblogger interface {
 	Log(UserName, Target, Action, PeerAddr, Extra, Err string, CreatedAt int64) error
 }
 
-type AclFilterGetter interface {
-	GetAclFilter(aclName string) (restful.FilterFunction, string, error)
+type Executer interface {
+	Execute(wr io.Writer, data interface{}) error
+}
+
+type Mail interface {
+	NewMail(tpl Executer, data interface{}) (*mail.MailContext, error)
+	SendMail(subject, to []string, tpl Executer, data interface{}) error
+}
+
+type Auth interface {
+	GetFilter(acl string) (restful.FilterFunction, string, error)
+	IsAdmin(token *api.AuthToken) bool
+	SsoClient() *api.Client
 }

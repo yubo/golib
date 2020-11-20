@@ -94,10 +94,6 @@ func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) reload(ops *proc.HookOps, cf *proc.Configer) (err error) {
-	return
-}
-
 // Because some configuration may be stored in the database,
 // set the db.connect into sys.db.prestart
 func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) {

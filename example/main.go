@@ -12,7 +12,6 @@ import (
 
 	//_ "github.com/yubo/golib/auth"
 	_ "github.com/yubo/golib/orm/mysql"
-	_ "github.com/yubo/golib/proc/aclfilter"
 	_ "github.com/yubo/golib/proc/audit"
 	_ "github.com/yubo/golib/proc/db"
 	_ "github.com/yubo/golib/proc/grpc"
@@ -66,8 +65,7 @@ func startHook(ops *proc.HookOps, cf *proc.Configer) error {
 		return err
 	}
 
-	installWs(popts.Get(proc.HttpServerName).(proc.HttpServer),
-		popts.Get(proc.AclFilterGetterName).(proc.AclFilterGetter))
+	installWs(popts.Get(proc.HttpServerName).(proc.HttpServer))
 
 	// dblogger
 	return nil
@@ -79,14 +77,13 @@ func stopHook(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func installWs(server proc.HttpServer, acl proc.AclFilterGetter) error {
+func installWs(server proc.HttpServer) error {
 	server.SwaggerTagRegister("helo", "helo demo")
 
 	ws := new(restful.WebService)
 	opt := &openapi.WsOption{
 		Ws:   ws.Path("/helo").Produces(openapi.MIME_JSON),
 		Tags: []string{"helo"},
-		Acl:  acl.GetAclFilter,
 	}
 
 	openapi.WsRouteBuild(opt, []openapi.WsRoute{{

@@ -2,10 +2,11 @@ package mail
 
 import (
 	"bytes"
+	"io"
 	"io/ioutil"
 	"os"
 
-	"text/template"
+	ht "html/template"
 
 	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/util"
@@ -38,30 +39,46 @@ type MailContext struct {
 	tmpFile []string
 }
 
-func NewMail(cf *Config, contentType string, tpl *template.Template, input interface{}) (*MailContext, error) {
-	if cf == nil {
+type Executer interface {
+	Execute(wr io.Writer, data interface{}) error
+}
+
+func (p *Config) NewMail(tpl Executer, input interface{}) (*MailContext, error) {
+	if p == nil {
 		return nil, status.Errorf(codes.Internal, "mail config is nil ptr")
 	}
-	if !cf.Enabled {
+	if !p.Enabled {
 		return nil, status.Errorf(codes.Internal, "mail is not enabled")
 	}
+
 	buff := &bytes.Buffer{}
-	if err := tpl.Execute(buff, input); err != nil {
-		return nil, err
+	var contentType string
+
+	if tpl_, ok := tpl.(*ht.Template); ok {
+		if err := tpl_.Execute(buff, input); err != nil {
+			return nil, err
+		}
+		contentType = "text/html"
+	} else {
+		if err := tpl.Execute(buff, input); err != nil {
+			return nil, err
+		}
+		contentType = "text/plain"
 	}
 
 	m := gomail.NewMessage()
-	if len(cf.From) == 2 {
-		m.SetHeader("From", m.FormatAddress(cf.From[0], cf.From[1]))
+
+	if len(p.From) == 2 {
+		m.SetHeader("From", m.FormatAddress(p.From[0], p.From[1]))
 	} else {
-		m.SetHeader("From", cf.From[0])
+		m.SetHeader("From", p.From[0])
 	}
 
 	m.SetBody(contentType, buff.String())
-	d := gomail.NewDialer(cf.Host, cf.Port, cf.Username, cf.Password)
+	d := gomail.NewDialer(p.Host, p.Port, p.Username, p.Password)
 
 	return &MailContext{
-		Config:  cf,
+		Config:  p,
 		Dialer:  d,
 		Message: m,
 	}, nil

@@ -9,6 +9,7 @@ import (
 
 	restful "github.com/emicklei/go-restful"
 	"github.com/go-openapi/spec"
+	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/proc/http/tracing"
 	"github.com/yubo/golib/util"
@@ -28,6 +29,10 @@ type Config struct {
 	DefLimitPage int              `json:"defLimitPage"`
 	Apidocs      Apidocs          `json:"apidocs"`
 	Swagger      goswagger.Config `json:"swagger"`
+}
+
+func (p Config) String() string {
+	return util.Prettify(p)
 }
 
 type Apidocs struct {
@@ -135,8 +140,9 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
 	}
 
 	// /api
-	p.installApidocs()
+	p.installPing()
 	p.installSwagger()
+	p.installApidocs()
 
 	if err := p.start(p.ctx); err != nil {
 		return err
@@ -151,10 +157,12 @@ func (p *Module) stopHook(ops *proc.HookOps, cf *proc.Configer) error {
 }
 
 func (p *Module) start(ctx context.Context) error {
+
 	container := p.Container
 	cf := p.Config
 
 	if util.AddrIsDisable(cf.Addr) {
+		klog.Warningf("httpServer is disabled sys.http.addr %s", cf.Addr)
 		return nil
 	}
 
@@ -230,6 +238,26 @@ func httpCross(container *restful.Container) {
 
 	// Add container filter to respond to OPTIONS
 	container.Filter(container.OPTIONSFilter)
+}
+
+func (p *Module) installPing() {
+	p.SwaggerTagRegister("general", "general information")
+
+	ws := new(restful.WebService)
+	opt := &openapi.WsOption{
+		Ws:   ws.Path("/ping").Produces("text/plain"),
+		Tags: []string{"general"},
+	}
+
+	openapi.WsRouteBuild(opt, []openapi.WsRoute{{
+		Desc:   "ping/pong",
+		Method: "GET", SubPath: "/",
+		Handle: func(req *restful.Request, resp *restful.Response) {
+			resp.Write([]byte("OK"))
+		},
+	}})
+
+	p.Add(ws)
 }
 
 func init() {
