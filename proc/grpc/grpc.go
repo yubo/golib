@@ -93,7 +93,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err e
 
 	// grpc api
 	p.Server = newServer(cf)
-	popts = popts.Set(proc.GrpcServerName, p)
+	popts = popts.SetGrpc(p)
 
 	ops.SetOptions(popts)
 	return nil

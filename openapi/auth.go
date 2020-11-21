@@ -17,6 +17,7 @@ func AddScope(scope, description string) {
 type Token interface {
 	GetTokenName() string
 	GetUserName() string
+	HasScope(scope string) bool
 }
 
 func TokenFrom(r *restful.Request) (Token, bool) {
@@ -29,7 +30,8 @@ func WithToken(r *restful.Request, token Token) *restful.Request {
 	return r
 }
 
-type BaseToken struct{}
+type AnonymousToken struct{}
 
-func (p BaseToken) GetTokenName() string { return "null" }
-func (p BaseToken) GetUserName() string  { return "anonymous" }
+func (p AnonymousToken) GetTokenName() string       { return "null" }
+func (p AnonymousToken) GetUserName() string        { return "anonymous" }
+func (p AnonymousToken) HasScope(scope string) bool { return false }

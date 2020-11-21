@@ -27,6 +27,8 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber-go/tally"
+	"github.com/yubo/golib/orm"
+	"github.com/yubo/golib/session"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"k8s.io/klog/v2"
@@ -49,6 +51,14 @@ type options struct {
 	reportInterval  time.Duration
 	customBuildTags map[string]string
 
+	auth    Auth
+	mail    Mail
+	db      *orm.Db
+	grpc    GrpcServer
+	http    HttpServer
+	audit   Audit
+	session *session.Session
+
 	extra map[string]interface{}
 }
 
@@ -66,6 +76,16 @@ func NewOptions() Options {
 		customBuildTags: map[string]string{},
 		extra:           map[string]interface{}{},
 	}
+}
+
+func (o *options) SetName(name string) Options {
+	opts := *o
+	opts.name = name
+	return &opts
+}
+
+func (o *options) Name() string {
+	return o.name
 }
 
 func (o *options) SetLogger(value *zap.Logger) Options {
@@ -128,14 +148,73 @@ func (o *options) CustomBuildTags() map[string]string {
 	return o.customBuildTags
 }
 
-func (o *options) SetName(name string) Options {
+func (o *options) Auth() Auth {
+	return o.auth
+}
+
+func (o *options) SetAuth(auth Auth) Options {
 	opts := *o
-	opts.name = name
+	opts.auth = auth
 	return &opts
 }
 
-func (o *options) Name() string {
-	return o.name
+func (o *options) Mail() Mail {
+	return o.mail
+}
+
+func (o *options) SetMail(mail Mail) Options {
+	opts := *o
+	opts.mail = mail
+	return &opts
+}
+
+func (o *options) Db() *orm.Db {
+	return o.db
+}
+
+func (o *options) SetDb(db *orm.Db) Options {
+	opts := *o
+	opts.db = db
+	return &opts
+}
+
+func (o *options) Grpc() GrpcServer {
+	return o.grpc
+}
+
+func (o *options) SetGrpc(grpc GrpcServer) Options {
+	opts := *o
+	opts.grpc = grpc
+	return &opts
+}
+
+func (o *options) Http() HttpServer {
+	return o.http
+}
+
+func (o *options) SetHttp(http HttpServer) Options {
+	opts := *o
+	opts.http = http
+	return &opts
+}
+
+func (o *options) Audit() Audit {
+	return o.audit
+}
+
+func (o *options) SetAudit(audit Audit) Options {
+	opts := *o
+	opts.audit = audit
+	return &opts
+}
+func (o *options) Session() *session.Session {
+	return o.session
+}
+
+func (o *options) SetSession(session *session.Session) Options {
+	opts := *o
+	opts.session = session
+	return &opts
 }
 
 func (o *options) Set(name string, data interface{}) Options {

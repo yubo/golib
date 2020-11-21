@@ -15,7 +15,7 @@ all: $(APP_NAME)
 
 $(APP_NAME): $(DEP_OBJS)
 	GO111MODULE=on CGO_ENABLED=$(CGO_ENABLED) GOARCH=amd64 \
-		    go build -ldflags '$(GO_BUILD_LDFLAGS)' -o $@  .
+		    go build -ldflags '$(GO_BUILD_LDFLAGS)' -o $@  *.go
 
 
 devrun:

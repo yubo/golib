@@ -10,7 +10,6 @@ import (
 	"github.com/yubo/golib/proc"
 	"k8s.io/klog/v2"
 
-	//_ "github.com/yubo/golib/auth"
 	_ "github.com/yubo/golib/orm/mysql"
 	_ "github.com/yubo/golib/proc/audit"
 	_ "github.com/yubo/golib/proc/db"
@@ -65,7 +64,7 @@ func startHook(ops *proc.HookOps, cf *proc.Configer) error {
 		return err
 	}
 
-	installWs(popts.Get(proc.HttpServerName).(proc.HttpServer))
+	installWs(popts.Http())
 
 	// dblogger
 	return nil
@@ -87,7 +86,7 @@ func installWs(server proc.HttpServer) error {
 	}
 
 	openapi.WsRouteBuild(opt, []openapi.WsRoute{{
-		Desc:   "hello",
+		Desc: "hello", Acl: "a",
 		Method: "GET", SubPath: "/info",
 		Handle: helo,
 		Input:  heloInput{},

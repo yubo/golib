@@ -94,7 +94,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err e
 func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
 	popts := ops.Options()
 
-	mux := popts.Get(proc.HttpServerName).(proc.HttpServer)
+	mux := popts.Http()
 
 	p.metrics.Start(p.ctx, mux)
 	return nil

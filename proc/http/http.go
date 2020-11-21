@@ -121,7 +121,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err e
 		httpCross(p.Container)
 	}
 
-	popts = popts.Set(proc.HttpServerName, p)
+	popts = popts.SetHttp(p)
 	ops.SetOptions(popts)
 
 	return nil

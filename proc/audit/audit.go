@@ -47,10 +47,10 @@ var (
 func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) error {
 	popts := ops.Options()
 
-	p.db = popts.Get(proc.OrmDbName).(*orm.Db)
-	p.server = popts.Get(proc.HttpServerName).(proc.HttpServer)
+	p.db = popts.Db()
+	p.server = popts.Http()
 
-	if auth, ok := popts.Get(proc.AuthName).(proc.Auth); ok {
+	if auth := popts.Auth(); auth != nil {
 		p.getFilter = auth.GetFilter
 	}
 
@@ -59,7 +59,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) error 
 		return err
 	}
 
-	popts = popts.Set(proc.AuditName, p)
+	popts = popts.SetAudit(p)
 
 	ops.SetOptions(popts)
 	return nil
@@ -258,7 +258,7 @@ func (p *Module) Log(UserName, Target, Action, PeerAddr, Extra, Err string, Crea
 func (p *Module) log(req *restful.Request, action, target *string, data interface{}, err error) (e error) {
 	token, ok := openapi.TokenFrom(req)
 	if !ok {
-		token = &openapi.BaseToken{}
+		token = &openapi.AnonymousToken{}
 	}
 
 	addr := util.GetIPAddress(req.Request)

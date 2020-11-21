@@ -51,13 +51,4 @@ sys:
     tmpDir: "/tmp"
 
 auth:
-  ssoAddr: "http://localhost:8071"
-  serviceName: "sso"  # for api-key verify
-  otpExpiration: 30   # for oauth accessToken otp verify
-  nativeSso: true
-  gcInterval: 60
-  tokenCacheTime: {{timeOf "5m"}}
-
-
-
-
+  name: "helo.auth"

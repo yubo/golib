@@ -47,11 +47,11 @@ var (
 )
 
 type Session struct {
-	config SessionConfig
+	config Config
 	db     *orm.Db
 }
 
-type SessionConfig struct {
+type Config struct {
 	CookieName     string `json:"cookieName"`
 	SidLength      int    `json:"sidLength"`
 	HttpOnly       bool   `json:"httpOnly"`
@@ -62,7 +62,7 @@ type SessionConfig struct {
 	CookieLifetime int64  `json:"cookieLifetime"`
 }
 
-func StartSession(cf SessionConfig, ctx context.Context) (*Session, error) {
+func StartSession(cf Config, ctx context.Context) (*Session, error) {
 	if cf.CookieLifetime == 0 {
 		cf.CookieLifetime = cf.GcInterval
 	}
@@ -88,7 +88,7 @@ func StartSession(cf SessionConfig, ctx context.Context) (*Session, error) {
 	return &Session{config: cf, db: db}, nil
 }
 
-func StartSessionWithDb(cf SessionConfig, ctx context.Context, db *orm.Db) (*Session, error) {
+func StartSessionWithDb(cf Config, ctx context.Context, db *orm.Db) (*Session, error) {
 	if cf.CookieLifetime == 0 {
 		cf.CookieLifetime = cf.GcInterval
 	}

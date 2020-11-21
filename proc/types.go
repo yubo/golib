@@ -32,26 +32,11 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber-go/tally"
 	"github.com/yubo/golib/mail"
+	"github.com/yubo/golib/openapi"
+	"github.com/yubo/golib/orm"
+	"github.com/yubo/golib/session"
 	"go.uber.org/zap"
-	"icee.io/sso/pkg/sso/api"
 )
-
-const (
-	HttpServerName = "http.server"
-	GrpcServerName = "grpc.server"
-	OrmDbName      = "db"
-	AuditName      = "db.audit"
-	MailName       = "sys.mail"
-	AuthName       = "auth"
-)
-
-// Reporter reports metrics about a component.
-type Reporter interface {
-	// Start starts the reporter.
-	Start() error
-	// Stop stops the reporter.
-	Stop() error
-}
 
 // Options represents the options for instrumentation.
 type Options interface {
@@ -100,9 +85,65 @@ type Options interface {
 	// CustomBuildTags returns the custom build tags.
 	CustomBuildTags() map[string]string
 
+	Auth() Auth
+	SetAuth(Auth) Options
+
+	Mail() Mail
+	SetMail(Mail) Options
+
+	Db() *orm.Db
+	SetDb(*orm.Db) Options
+
+	Grpc() GrpcServer
+	SetGrpc(GrpcServer) Options
+
+	Http() HttpServer
+	SetHttp(HttpServer) Options
+
+	Audit() Audit
+	SetAudit(Audit) Options
+
+	Session() *session.Session
+	SetSession(*session.Session) Options
+
 	// extra
 	Set(name string, data interface{}) Options
 	Get(name string) interface{}
+}
+
+// Reporter reports metrics about a component.
+type Reporter interface {
+	// Start starts the reporter.
+	Start() error
+	// Stop stops the reporter.
+	Stop() error
+}
+
+type Client interface {
+	GetId() string
+	GetSecret() string
+	GetRedirectUri() string
+}
+type Auth interface {
+	GetFilter(acl string) (restful.FilterFunction, string, error)
+	IsAdmin(token openapi.Token) bool
+	SsoClient() Client
+
+	WsAccess(req *restful.Request, resp *restful.Response, mustLogin bool, chain *restful.FilterChain, handles ...func(openapi.Token) error)
+	Access(req *restful.Request, resp *restful.Response, mustLogin bool, chain *restful.FilterChain, handles ...func(openapi.Token) error)
+	GetAndVerifyTokenInfoByApiKey(code *string, peerAddr string) (openapi.Token, error)
+	GetAndVerifyTokenInfoByBearer(code *string) (openapi.Token, error)
+
+	// apidoc
+	AddScope(scope, description string)
+}
+
+type Mail interface {
+	NewMail(tpl Executer, data interface{}) (*mail.MailContext, error)
+	SendMail(subject, to []string, tpl Executer, data interface{}) error
+}
+
+type GrpcServer interface {
 }
 
 type HttpServer interface {
@@ -119,24 +160,10 @@ type HttpServer interface {
 	SecuritySchemeRegister(name string, s *spec.SecurityScheme) error
 }
 
-type GrpcServer interface {
-}
-
-type Dblogger interface {
+type Audit interface {
 	Log(UserName, Target, Action, PeerAddr, Extra, Err string, CreatedAt int64) error
 }
 
 type Executer interface {
 	Execute(wr io.Writer, data interface{}) error
-}
-
-type Mail interface {
-	NewMail(tpl Executer, data interface{}) (*mail.MailContext, error)
-	SendMail(subject, to []string, tpl Executer, data interface{}) error
-}
-
-type Auth interface {
-	GetFilter(acl string) (restful.FilterFunction, string, error)
-	IsAdmin(token *api.AuthToken) bool
-	SsoClient() *api.Client
 }

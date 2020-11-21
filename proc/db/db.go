@@ -116,7 +116,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 		if p.db, err = orm.DbOpenWithCtx(p.Driver, p.Dsn, p.ctx); err != nil {
 			return err
 		}
-		popts = popts.Set(proc.OrmDbName, p.db)
+		popts = popts.SetDb(p.db)
 	}
 
 	ops.SetOptions(popts)

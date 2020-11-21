@@ -53,7 +53,7 @@ func TestSession(t *testing.T) {
 		t.Skipf("MySQL server not running on %s", dsn)
 	}
 
-	cf := SessionConfig{
+	cf := Config{
 		CookieName:     "test_sid",
 		SidLength:      24,
 		HttpOnly:       true,
@@ -141,7 +141,7 @@ func TestSessionGC(t *testing.T) {
 		t.Skipf("MySQL server not running on %s", dsn)
 	}
 
-	cf := SessionConfig{
+	cf := Config{
 		CookieName:     "test_sid",
 		SidLength:      24,
 		HttpOnly:       true,

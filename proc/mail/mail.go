@@ -62,7 +62,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 		return nil
 	}
 
-	popts = popts.Set(proc.MailName, p)
+	popts = popts.SetMail(p)
 
 	ops.SetOptions(popts)
 	return nil
