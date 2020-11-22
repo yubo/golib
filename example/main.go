@@ -10,6 +10,7 @@ import (
 	"github.com/yubo/golib/proc"
 	"k8s.io/klog/v2"
 
+	_ "github.com/yubo/golib/example/auth"
 	_ "github.com/yubo/golib/orm/mysql"
 	_ "github.com/yubo/golib/proc/audit"
 	_ "github.com/yubo/golib/proc/db"

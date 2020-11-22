@@ -14,7 +14,7 @@ sys:
         region: "bj"
         zone: "test-1"
   http:
-    addr: ":1080"
+    addr: ":8080"
     httpCross: true
     profile: true
     maxLimitPage: 100
@@ -34,7 +34,7 @@ sys:
       name: "helo"
       url: "/apidocs.json"
   grpc:
-    addr: ":1081"
+    addr: ":8081"
     maxRecvMsgSize: 1024000
   db:
     driver: "mysql"

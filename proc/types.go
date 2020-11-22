@@ -124,18 +124,16 @@ type Client interface {
 	GetSecret() string
 	GetRedirectUri() string
 }
+
 type Auth interface {
 	GetFilter(acl string) (restful.FilterFunction, string, error)
 	IsAdmin(token openapi.Token) bool
 	SsoClient() Client
 
-	WsAccess(req *restful.Request, resp *restful.Response, mustLogin bool, chain *restful.FilterChain, handles ...func(openapi.Token) error)
 	Access(req *restful.Request, resp *restful.Response, mustLogin bool, chain *restful.FilterChain, handles ...func(openapi.Token) error)
+	WsAccess(req *restful.Request, resp *restful.Response, mustLogin bool, chain *restful.FilterChain, handles ...func(openapi.Token) error)
 	GetAndVerifyTokenInfoByApiKey(code *string, peerAddr string) (openapi.Token, error)
 	GetAndVerifyTokenInfoByBearer(code *string) (openapi.Token, error)
-
-	// apidoc
-	AddScope(scope, description string)
 }
 
 type Mail interface {
