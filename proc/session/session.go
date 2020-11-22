@@ -1,12 +1,12 @@
 package session
 
 import (
+	"context"
 	"fmt"
-	"io"
 
+	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/session"
-	"k8s.io/klog"
 )
 
 const (
@@ -16,6 +16,9 @@ const (
 type Module struct {
 	config  *session.Config
 	name    string
+	db      *orm.Db
+	ctx     context.Context
+	cancel  context.CancelFunc
 	session *session.Session
 }
 
@@ -60,7 +63,7 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 	popts := ops.Options()
 
-	c := &mail.Config{}
+	c := &session.Config{}
 	if err := cf.Read(p.name, c); err != nil {
 		return err
 	}
@@ -70,7 +73,7 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
 		return fmt.Errorf("%s start err: unable get db from options", p.name)
 	}
 
-	if p.session, err = session.StartSessionWithDb(p.Session, p.ctx, p.db); err != nil {
+	if p.session, err = session.StartSessionWithDb(*p.config, p.ctx, p.db); err != nil {
 		return fmt.Errorf("%s start err: %s", p.name, err)
 	}
 

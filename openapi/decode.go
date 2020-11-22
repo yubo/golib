@@ -7,7 +7,6 @@ import (
 	"reflect"
 
 	"github.com/emicklei/go-restful"
-	"github.com/yubo/golib/openapi/api"
 	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/util"
 	"google.golang.org/grpc/codes"
@@ -82,7 +81,7 @@ func (p *Decoder) Decode(r *restful.Request, dst interface{}) error {
 
 	fields := cachedTypeFields(rt)
 	if fields.hasData {
-		if data, ok := r.Attribute(api.RshDataKey).([]byte); ok && len(data) > 0 {
+		if data, ok := r.Attribute(RshDataKey).([]byte); ok && len(data) > 0 {
 			//klog.V(3).Infof(">>>> %s", string(data))
 			if err := json.Unmarshal(data, dst); err != nil {
 				klog.V(5).Infof("rsh data json.Unmarshal() error %s", err)

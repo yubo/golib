@@ -49,6 +49,13 @@ sys:
     username: ""
     password: ""
     tmpDir: "/tmp"
+  session:
+    cookieName: "golib-example-sid"
+    sidLength: 24
+    httpOnly: true
+    domain:
+    gcInterval: 60
+    cookieLifetime:  {{timeOf "16h"}}
 
 auth:
   name: "helo.auth"

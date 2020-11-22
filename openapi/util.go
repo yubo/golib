@@ -139,16 +139,6 @@ func HttpWriteErr(resp *restful.Response, err error) {
 
 }
 
-func Metadata(scopes ...string) (string, interface{}) {
-	if len(scopes) == 1 && scopes[0] == OauthScopeNil {
-		scopes = []string{}
-	}
-	return SecurityDefinitionKey, OAISecurity{
-		Name:   OauthSecurityName,
-		Scopes: scopes,
-	}
-}
-
 // isVowel returns true if the rune is a vowel (case insensitive).
 func isVowel(c rune) bool {
 	vowels := []rune{'a', 'e', 'i', 'o', 'u'}

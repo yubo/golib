@@ -3,11 +3,11 @@ package audit
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 
 	restful "github.com/emicklei/go-restful"
 	"github.com/yubo/golib/openapi"
-	"github.com/yubo/golib/openapi/api"
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/util"
@@ -21,7 +21,7 @@ const (
 type Module struct {
 	name      string
 	db        *orm.Db
-	server    proc.HttpServer
+	http      proc.HttpServer
 	getFilter func(acl string) (restful.FilterFunction, string, error)
 }
 
@@ -47,8 +47,13 @@ var (
 func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) error {
 	popts := ops.Options()
 
-	p.db = popts.Db()
-	p.server = popts.Http()
+	if p.db = popts.Db(); p.db == nil {
+		return fmt.Errorf("unable to get db from options")
+	}
+
+	if p.http = popts.Http(); p.http == nil {
+		return fmt.Errorf("unable to get httpServer from options")
+	}
 
 	if auth := popts.Auth(); auth != nil {
 		p.getFilter = auth.GetFilter
@@ -63,11 +68,6 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) error 
 
 	ops.SetOptions(popts)
 	return nil
-}
-
-type dblogger struct {
-	db     *orm.Db
-	server proc.HttpServer
 }
 
 /*
@@ -124,12 +124,12 @@ type GetLogsCntInput struct {
 }
 
 type GetLogsInput struct {
-	GetLogsCntInput `param:",inline" flags:",inline"`
-	api.Pagination  `param:",inline" flags:",inline"`
+	GetLogsCntInput    `param:",inline" flags:",inline"`
+	openapi.Pagination `param:",inline" flags:",inline"`
 }
 
 type GetLogsOutput struct {
-	api.Resp
+	openapi.Resp
 	Data struct {
 		Total int64 `json: "total"`
 		List  []Log `json: "list"`
@@ -141,17 +141,12 @@ type GetLogInput struct {
 }
 
 type GetLogOutput struct {
-	api.Resp
+	openapi.Resp
 	Data Log `json:"dat"`
 }
 
 func (p *Module) install() error {
-	server := p.server
-	if server == nil {
-		return errHttpServer
-	}
-
-	server.SwaggerTagRegister("Audit Log", "get audit log")
+	openapi.SwaggerTagRegister("Audit Log", "get audit log")
 
 	ws := new(restful.WebService)
 	opt := &openapi.WsOption{
@@ -176,9 +171,9 @@ func (p *Module) install() error {
 		Output: GetLogOutput{},
 	}})
 
-	server.Add(ws)
+	p.http.Add(ws)
 
-	server.Filter(p.logFilter)
+	p.http.Filter(p.logFilter)
 
 	return nil
 }

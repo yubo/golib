@@ -1,27 +1,23 @@
 package openapi
 
 const (
-	//AuthTokenKey = "authToken"
+	MODULE_SSO_BASE = 1 << 6 << iota
+	MODULE_GATHER_BASE
+)
 
-	SecurityDefinitionKey = "OAPI_SECURITY_DEFINITION"
-	OauthSecurityName     = "OAuth"
+// for req context
+const (
+	RshDataKey   = "rshData"
+	RshConnKey   = "rshConn"
+	ReqEntityKey = "reqEntity"
+)
 
-	// scope
-	OauthScopeNil           = "nil"
-	OauthScopeRead          = "read"
-	OauthScopeWrite         = "write"
-	OauthScopeExec          = "exec"
-	OauthScopeWork          = "work"
-	OauthScopeRoot          = "root"
-	OauthScopeUpload        = "upload"
-	OauthScopeOverwrite     = "overwrite"
-	OauthScopeEdit          = "edit"
-	OauthScopeAdmin         = "admin"
-	OauthScopeReadSecret    = "read:secret"
-	OauthScopeWriteSecret   = "write:secret"
-	OauthScopeWriteRegistry = "write:registry"
-	OauthScopeReadSso       = "read:sso"
-	OauthScopeWriteSso      = "write:sso"
+const (
+	_               = 8000 + 10*iota
+	MODULE_SSO_PORT // 8010
+)
+
+const (
 
 	// action
 	ActionInstall  = "install"

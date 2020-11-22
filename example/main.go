@@ -1,16 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
-	"github.com/emicklei/go-restful"
 	"github.com/yubo/golib/logs"
-	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
 	"k8s.io/klog/v2"
 
 	_ "github.com/yubo/golib/example/auth"
+	_ "github.com/yubo/golib/example/echo"
 	_ "github.com/yubo/golib/orm/mysql"
 	_ "github.com/yubo/golib/proc/audit"
 	_ "github.com/yubo/golib/proc/db"
@@ -18,6 +16,7 @@ import (
 	_ "github.com/yubo/golib/proc/http"
 	_ "github.com/yubo/golib/proc/logging"
 	_ "github.com/yubo/golib/proc/metrics"
+	_ "github.com/yubo/golib/proc/session"
 	_ "github.com/yubo/golib/proc/sys"
 )
 
@@ -65,9 +64,6 @@ func startHook(ops *proc.HookOps, cf *proc.Configer) error {
 		return err
 	}
 
-	installWs(popts.Http())
-
-	// dblogger
 	return nil
 }
 
@@ -75,46 +71,4 @@ func stopHook(ops *proc.HookOps, cf *proc.Configer) error {
 	klog.Info("stop")
 	buildReporter.Stop()
 	return nil
-}
-
-func installWs(server proc.HttpServer) error {
-	server.SwaggerTagRegister("helo", "helo demo")
-
-	ws := new(restful.WebService)
-	opt := &openapi.WsOption{
-		Ws:   ws.Path("/helo").Produces(openapi.MIME_JSON),
-		Tags: []string{"helo"},
-	}
-
-	openapi.WsRouteBuild(opt, []openapi.WsRoute{{
-		Desc: "hello", Acl: "a",
-		Method: "GET", SubPath: "/info",
-		Handle: helo,
-		Input:  heloInput{},
-		Output: heloOutput{},
-	}})
-
-	server.Add(ws)
-	return nil
-}
-
-func helo(req *restful.Request, resp *restful.Response) {
-	in := &heloInput{}
-
-	if err := openapi.ReadEntity(req, in); err != nil {
-		openapi.HttpWriteData(resp, nil, err)
-		return
-	}
-
-	openapi.HttpWriteData(resp,
-		fmt.Sprintf("hello, %s", in.Name), nil)
-}
-
-type heloInput struct {
-	Name string `param:"query" json:"name"`
-}
-
-type heloOutput struct {
-	Error string `json:"err" description:"error msg"`
-	Data  string `json:"data"`
 }

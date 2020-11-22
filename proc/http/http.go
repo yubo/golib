@@ -35,6 +35,18 @@ func (p Config) String() string {
 	return util.Prettify(p)
 }
 
+func (p *Config) Validate() error {
+	if p.Swagger.ClientId == "" {
+		p.Swagger.ClientId = openapi.NativeClientID
+		p.Swagger.ClientSecret = openapi.NativeClientSecret
+	}
+	if p.Swagger.Url == "" && len(p.Swagger.Urls) == 0 {
+		p.Swagger.Name = "Embedded"
+		p.Swagger.Url = "/apidocs.json"
+	}
+	return nil
+}
+
 type Apidocs struct {
 	Enabled bool `json:"enabled"`
 	spec.InfoProps
@@ -45,10 +57,8 @@ type Module struct {
 	name string
 
 	*restful.Container
-	ctx             context.Context
-	cancel          context.CancelFunc
-	swaggerTags     []spec.Tag
-	securitySchemes map[string]*spec.SecurityScheme
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 var (
@@ -114,8 +124,6 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err e
 
 	p.Container = restful.NewContainer()
 	http.DefaultServeMux = p.Container.ServeMux
-	p.swaggerTags = []spec.Tag{}
-	p.securitySchemes = map[string]*spec.SecurityScheme{}
 
 	if p.HttpCross {
 		httpCross(p.Container)
@@ -141,8 +149,14 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
 
 	// /api
 	p.installPing()
-	p.installSwagger()
-	p.installApidocs()
+
+	if p.Apidocs.Enabled {
+		openapi.InstallApiDocs(p, p.Apidocs.InfoProps)
+	}
+
+	if p.Swagger.Enabled {
+		goswagger.New(&p.Config.Swagger).Install(p)
+	}
 
 	if err := p.start(p.ctx); err != nil {
 		return err
@@ -241,7 +255,7 @@ func httpCross(container *restful.Container) {
 }
 
 func (p *Module) installPing() {
-	p.SwaggerTagRegister("general", "general information")
+	openapi.SwaggerTagRegister("general", "general information")
 
 	ws := new(restful.WebService)
 	opt := &openapi.WsOption{

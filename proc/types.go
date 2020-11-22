@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful"
-	"github.com/go-openapi/spec"
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber-go/tally"
 	"github.com/yubo/golib/mail"
@@ -152,10 +151,6 @@ type HttpServer interface {
 	// restful.Container
 	Add(service *restful.WebService) *restful.Container
 	Filter(filter restful.FilterFunction)
-	RegisteredWebServices() []*restful.WebService
-	SwaggerTagsRegister(tags ...spec.Tag)
-	SwaggerTagRegister(name, desc string)
-	SecuritySchemeRegister(name string, s *spec.SecurityScheme) error
 }
 
 type Audit interface {

@@ -63,7 +63,7 @@ func (p *RouteBuilder) Build(v *WsRoute) error {
 	p.b = b
 
 	if v.Scope != "" {
-		b.Metadata(Metadata(v.Scope))
+		b.Metadata(SecurityDefinitionKey, v.Scope)
 	}
 
 	if v.Consume != "" {

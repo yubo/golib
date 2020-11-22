@@ -5,9 +5,7 @@ import (
 	"github.com/emicklei/go-restful"
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
-	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/util"
-	"google.golang.org/grpc/codes"
 	"k8s.io/klog"
 )
 
@@ -26,7 +24,6 @@ func (p Config) String() string {
 type Module struct {
 	*Config
 	Name string
-	http proc.HttpServer
 }
 
 var (
@@ -62,17 +59,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 }
 
 func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
-	popts := ops.Options()
-
-	p.http = popts.Http()
-
-	p.installWs()
-
 	return nil
-}
-
-func init() {
-	proc.RegisterHooks(hookOps)
 }
 
 func (p *Module) GetFilter(acl string) (restful.FilterFunction, string, error) {
@@ -92,17 +79,11 @@ type BaseClient struct{}
 func (p BaseClient) GetId() string          { return "" }
 func (p BaseClient) GetSecret() string      { return "" }
 func (p BaseClient) GetRedirectUri() string { return "" }
-
-func (p *Module) SsoClient() proc.Client {
-	return &BaseClient{}
-}
-
+func (p *Module) SsoClient() proc.Client    { return &BaseClient{} }
 func (p *Module) Access(req *restful.Request, resp *restful.Response, mustLogin bool, chain *restful.FilterChain, handles ...func(openapi.Token) error) {
 }
-
 func (p *Module) WsAccess(req *restful.Request, resp *restful.Response, mustLogin bool, chain *restful.FilterChain, handles ...func(openapi.Token) error) {
 }
-
 func (p *Module) GetAndVerifyTokenInfoByApiKey(code *string, peerAddr string) (openapi.Token, error) {
 	return &openapi.AnonymousToken{}, nil
 }
@@ -110,48 +91,6 @@ func (p *Module) GetAndVerifyTokenInfoByBearer(code *string) (openapi.Token, err
 	return &openapi.AnonymousToken{}, nil
 }
 
-func (p *Module) installWs() {
-	p.http.SwaggerTagRegister("Auth", "Auth Api")
-	ws := new(restful.WebService)
-
-	openapi.WsRouteBuild(&openapi.WsOption{
-		Ws:   ws.Path("/api/v1/auth").Produces(openapi.MIME_JSON).Consumes("*/*"),
-		Acl:  p.GetFilter,
-		Tags: []string{"auth"},
-	}, []openapi.WsRoute{{
-		Method: "GET", SubPath: "/echo",
-		Desc: "ping", Acl: "echo",
-		Handle: p.echo,
-		Input:  echoInput{},
-		Output: echoOutput{},
-	}})
-
-	p.http.Add(ws)
-}
-
-type echoInput struct {
-	Msg *string `param:"query" name:"msg" description:"message"`
-}
-
-func (p *echoInput) Validate() error {
-	if p.Msg == nil {
-		return status.Errorf(codes.InvalidArgument, "msg must be set")
-	}
-	return nil
-}
-
-type echoOutput struct {
-	Msg string `json:"msg" description:"message"`
-}
-
-func (p *Module) echo(req *restful.Request, resp *restful.Response) {
-	in := &echoInput{}
-	ret, err := func() (ret *echoOutput, err error) {
-		if err = openapi.ReadEntity(req, in); err != nil {
-			return
-		}
-		ret = &echoOutput{Msg: *in.Msg}
-		return
-	}()
-	openapi.HttpWriteEntity(resp, ret, err)
+func init() {
+	proc.RegisterHooks(hookOps)
 }
