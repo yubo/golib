@@ -45,6 +45,28 @@ func Until(f func(), interval time.Duration, stopCh <-chan struct{}) {
 	}()
 }
 
+func UntilWithTick(f func(), c <-chan time.Time, stopCh <-chan struct{}) {
+	go func() {
+
+		// first call
+		select {
+		case <-stopCh:
+			return
+		default:
+			f()
+		}
+
+		for {
+			select {
+			case <-stopCh:
+				return
+			case <-c:
+				f()
+			}
+		}
+	}()
+}
+
 func ParseDate(value *string, hour, min, sec int) (*int64, error) {
 	var t time.Time
 	var err error

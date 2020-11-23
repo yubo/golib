@@ -10,19 +10,23 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/clock"
 )
 
 var (
 	dsn       string
 	available bool
+	db        *orm.Db
 )
 
 // See https://github.com/go-sql-driver/mysql/wiki/Testing
 func init() {
-	dsn = util.EnvDef("MYSQL_TEST_DSN", "root:12341234@tcp(localhost:3306)/test?parseTime=true&timeout=30s")
-	if db, err := orm.DbOpen("mysql", dsn); err == nil {
+	dsn = util.EnvDef("MYSQL_TEST_DSN", "root:1234@tcp(localhost:3306)/test?parseTime=true&timeout=30s")
+	var err error
+	if db, err = orm.DbOpen("mysql", dsn); err == nil {
 		if err = db.Db.Ping(); err == nil {
 			available = true
 		}
@@ -41,11 +45,11 @@ func mustExec(t *testing.T, db *orm.Db, query string, args ...interface{}) (res 
 	return res
 }
 
-func TestSession(t *testing.T) {
+func TestDbSession(t *testing.T) {
 	var (
-		sess  *Session
+		sess  Session
+		store SessionStore
 		err   error
-		store *SessionStore
 		sid   string
 	)
 
@@ -53,7 +57,7 @@ func TestSession(t *testing.T) {
 		t.Skipf("MySQL server not running on %s", dsn)
 	}
 
-	cf := Config{
+	cf := &Config{
 		CookieName:     "test_sid",
 		SidLength:      24,
 		HttpOnly:       true,
@@ -64,14 +68,16 @@ func TestSession(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	if sess, err = StartSession(cf, ctx); err != nil {
+	db, _ := orm.DbOpenWithCtx("mysql", dsn, ctx)
+
+	if sess, err = StartSession(cf, WithCtx(ctx), WithDb(db)); err != nil {
 		t.Fatalf("error NewSession: %s", err.Error())
 	}
 	defer cancel()
 
-	mustExec(t, sess.db, "DROP TABLE IF EXISTS session;")
-	mustExec(t, sess.db, CREATE_TABLE_SQL)
-	defer sess.db.Exec("DROP TABLE IF EXISTS session")
+	mustExec(t, db, "DROP TABLE IF EXISTS session;")
+	mustExec(t, db, CREATE_TABLE_SQL)
+	defer db.Exec("DROP TABLE IF EXISTS session")
 
 	r, _ := http.NewRequest("GET", "", bytes.NewBuffer([]byte{}))
 	w := httptest.NewRecorder()
@@ -131,9 +137,9 @@ func TestSession(t *testing.T) {
 
 }
 
-func TestSessionGC(t *testing.T) {
+func TestDbSessionGC(t *testing.T) {
 	var (
-		sess *Session
+		sess Session
 		err  error
 	)
 
@@ -141,7 +147,7 @@ func TestSessionGC(t *testing.T) {
 		t.Skipf("MySQL server not running on %s", dsn)
 	}
 
-	cf := Config{
+	cf := &Config{
 		CookieName:     "test_sid",
 		SidLength:      24,
 		HttpOnly:       true,
@@ -152,14 +158,18 @@ func TestSessionGC(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	if sess, err = StartSession(cf, ctx); err != nil {
+	db, _ := orm.DbOpenWithCtx("mysql", dsn, ctx)
+	clock := &clock.FakeClock{}
+	clock.SetTime(time.Now())
+
+	if sess, err = StartSession(cf, WithCtx(ctx), WithDb(db), WithClock(clock)); err != nil {
 		t.Fatalf("error NewSession: %s", err.Error())
 	}
 	defer cancel()
 
-	mustExec(t, sess.db, "DROP TABLE IF EXISTS session;")
-	mustExec(t, sess.db, "CREATE TABLE `session` ( `session_key` char(64) NOT NULL, `session_data` blob, `time` int(11) unsigned NOT NULL, PRIMARY KEY (`session_key`)) ENGINE=MyISAM DEFAULT CHARSET=utf8; ")
-	//defer sess.db.Exec("DROP TABLE IF EXISTS session")
+	mustExec(t, db, "DROP TABLE IF EXISTS session;")
+	mustExec(t, db, CREATE_TABLE_SQL)
+	defer db.Exec("DROP TABLE IF EXISTS session")
 
 	r, _ := http.NewRequest("GET", "", bytes.NewBuffer([]byte{}))
 	w := httptest.NewRecorder()
@@ -171,7 +181,9 @@ func TestSessionGC(t *testing.T) {
 		t.Fatalf("sess.All() got %d want %d", n, 1)
 	}
 
-	time.Sleep(time.Millisecond * 3000)
+	clock.SetTime(clock.Now().Add(time.Hour * 25))
+	time.Sleep(100 * time.Millisecond)
+
 	if n := sess.All(); n != 0 {
 		t.Fatalf("sess.All() got %d want %d", n, 0)
 	}
