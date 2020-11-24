@@ -50,6 +50,7 @@ sys:
     password: ""
     tmpDir: "/tmp"
   session:
+    storage: "mem"
     cookieName: "golib-example-sid"
     sidLength: 24
     httpOnly: true
