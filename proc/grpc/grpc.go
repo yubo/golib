@@ -33,39 +33,39 @@ type Module struct {
 var (
 	_module = &Module{name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.testHook,
+		Hook:     _module.test,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_SYS,
 	}, {
-		Hook:     _module.stopHook,
+		Hook:     _module.stop,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_STOP,
 		Priority: proc.PRI_SYS,
 	}, {
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_SYS,
 	}}
 )
 
-func (p *Module) testHook(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
 	cf := &Config{}
 	if err := configer.Read(p.name, cf); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
@@ -77,7 +77,7 @@ func (p *Module) testHook(ops *proc.HookOps, configer *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err error) {
+func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -99,32 +99,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err e
 	return nil
 }
 
-func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
-	if err := p.start(p.ctx); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p *Module) stopHook(ops *proc.HookOps, cf *proc.Configer) error {
-	p.cancel()
-	return nil
-}
-
-func newServer(cf *Config) *grpc.Server {
-	var opt []grpc.ServerOption
-
-	if cf.MaxRecvMsgSize > 0 {
-		klog.V(5).Infof("set grpc server max recv msg size %s",
-			util.ByteSize(cf.MaxRecvMsgSize).HumanReadable())
-		opt = append(opt, grpc.MaxRecvMsgSize(cf.MaxRecvMsgSize))
-	}
-
-	return grpc.NewServer(opt...)
-}
-
-func (p *Module) start(ctx context.Context) error {
+func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 	cf := p.Config
 	server := p.Server
 
@@ -147,11 +122,29 @@ func (p *Module) start(ctx context.Context) error {
 	}()
 
 	go func() {
-		<-ctx.Done()
+		<-p.ctx.Done()
 		server.GracefulStop()
 	}()
 
 	return nil
+
+}
+
+func (p *Module) stop(ops *proc.HookOps, cf *proc.Configer) error {
+	p.cancel()
+	return nil
+}
+
+func newServer(cf *Config) *grpc.Server {
+	var opt []grpc.ServerOption
+
+	if cf.MaxRecvMsgSize > 0 {
+		klog.V(5).Infof("set grpc server max recv msg size %s",
+			util.ByteSize(cf.MaxRecvMsgSize).HumanReadable())
+		opt = append(opt, grpc.MaxRecvMsgSize(cf.MaxRecvMsgSize))
+	}
+
+	return grpc.NewServer(opt...)
 }
 
 func init() {

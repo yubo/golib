@@ -74,6 +74,7 @@ var (
 		"last":       last,
 		"repeat":     repeat,
 		"include":    include,
+		"includeI":   includeI,
 	}
 )
 
@@ -449,4 +450,45 @@ func include(path string) string {
 	}
 
 	return ret
+}
+
+func includeI(indent int, path string) string {
+	buf := bytes.Buffer{}
+	bufLine := bytes.Buffer{}
+	prefix := bytes.Repeat([]byte{' '}, indent)
+
+	files, err := filepath.Glob(path)
+	if err != nil {
+		return err.Error()
+	}
+
+	for _, file := range files {
+		fd, err := os.Open(file)
+		if err != nil {
+			return err.Error()
+		}
+
+		reader := bufio.NewReader(fd)
+
+		var line []byte
+		var isPrefix bool
+		for {
+			if line, isPrefix, err = reader.ReadLine(); err != nil {
+				break
+			}
+			bufLine.Write(line)
+			if !isPrefix {
+				buf.Write(prefix)
+				buf.Write(bufLine.Bytes())
+				buf.Write([]byte{'\n'})
+				bufLine.Reset()
+			}
+		}
+
+		if err != nil && err != io.EOF {
+			return err.Error()
+		}
+	}
+
+	return buf.String()
 }

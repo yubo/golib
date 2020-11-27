@@ -1,4 +1,4 @@
-package logging
+package kv
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	moduleName = "sys.logging"
+	moduleName = "sys.kv"
 )
 
 // Configuration defines configuration for logging.
@@ -91,20 +91,20 @@ var (
 	}}
 )
 
-func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) test(ops *proc.HookOps, cf *proc.Configer) error {
 	c := &Config{}
-	if err := configer.Read(p.name, c); err != nil {
+	if err := cf.Read(p.name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
 	}
 
 	return nil
 }
 
-func (p *Module) reload(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) reload(ops *proc.HookOps, cf *proc.Configer) error {
 	popts := ops.Options()
 
 	c := &Config{}
-	if err := configer.Read(p.name, c); err != nil {
+	if err := cf.Read(p.name, c); err != nil {
 		return err
 	}
 

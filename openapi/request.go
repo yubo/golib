@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
@@ -14,6 +15,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/opentracing-contrib/go-stdlib/nethttp"
+	"github.com/opentracing/opentracing-go"
 	"github.com/yubo/golib/openapi/urlencoded"
 	"github.com/yubo/golib/util"
 	"k8s.io/klog/v2"
@@ -46,6 +49,7 @@ type RequestOption struct {
 	Output       interface{}
 	Mime         string
 	Header       map[string]string
+	Ctx          context.Context
 }
 
 func (p RequestOption) String() string {
@@ -206,9 +210,8 @@ func (p *Request) HeaderSet(key, value string) {
 }
 
 func (p *Request) Do() (resp *http.Response, err error) {
-	var (
-		respBody []byte
-	)
+	var respBody []byte
+	r := p.Request
 
 	defer func() {
 		if !klog.V(5).Enabled() {
@@ -219,7 +222,7 @@ func (p *Request) Do() (resp *http.Response, err error) {
 		if len(body) > 1024 {
 			body = body[:1024]
 		}
-		klog.Infof("[req] %s\n", Req2curl(p.Request,
+		klog.Infof("[req] %s\n", Req2curl(r,
 			body, p.InputFile, p.OutputFile))
 
 		buf := &bytes.Buffer{}
@@ -229,7 +232,18 @@ func (p *Request) Do() (resp *http.Response, err error) {
 		}
 	}()
 
-	if resp, err = p.Client.Do(p.Request); err != nil {
+	// tracer
+	// ctx
+	if sp := opentracing.SpanFromContext(p.Ctx); sp != nil {
+		p.Client.Transport = &nethttp.Transport{}
+
+		r = r.WithContext(p.Ctx)
+		var ht *nethttp.Tracer
+		r, ht = nethttp.TraceRequest(sp.Tracer(), r)
+		defer ht.Finish()
+	}
+
+	if resp, err = p.Client.Do(r); err != nil {
 		return
 	}
 

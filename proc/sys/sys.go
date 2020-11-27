@@ -66,32 +66,32 @@ var (
 	EEXIST  = errors.New("Process exists")
 	_module = &Module{Name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.testHook,
+		Hook:     _module.test,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_SYS,
 	}, {
-		Hook:     _module.stopHook,
+		Hook:     _module.stop,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_STOP,
 		Priority: proc.PRI_SYS,
 	}, {
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_SYS,
@@ -104,15 +104,15 @@ func init() {
 	proc.RegisterHooks(hookOps)
 }
 
-func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
+func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	c := &Config{}
-	if err := cf.Read(p.Name, c); err != nil {
+	if err := configer.Read(p.Name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.Name, err)
 	}
 	return c.Validate()
 }
 
-func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
+func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -120,7 +120,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 	p.ctx, p.cancel = context.WithCancel(context.Background())
 
 	c := &Config{}
-	if err := cf.Read(p.Name, c); err != nil {
+	if err := configer.Read(p.Name, c); err != nil {
 		return err
 	}
 
@@ -132,7 +132,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 	return nil
 }
 
-func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 	// watch dog
 	if t := p.WatchdogSec; t > 0 {
 		daemon.SdNotify(false, "READY=1")
@@ -148,7 +148,7 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) stopHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, configer *proc.Configer) error {
 	p.cancel()
 	return nil
 }

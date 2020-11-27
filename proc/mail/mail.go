@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/yubo/golib/mail"
 	"github.com/yubo/golib/proc"
@@ -21,26 +20,26 @@ type Module struct {
 var (
 	_module = &Module{name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.testHook,
+		Hook:     _module.test,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_SYS,
 	}}
 )
 
-func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
 	c := &mail.Config{}
-	if err := cf.Read(p.name, c); err != nil {
+	if err := configer.Read(p.name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
 	}
 
@@ -49,11 +48,11 @@ func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) error {
 
 // Because some configuration may be stored in the database,
 // set the db.connect into sys.db.prestart
-func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
+func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	popts := ops.Options()
 
 	c := &mail.Config{}
-	if err := cf.Read(p.name, c); err != nil {
+	if err := configer.Read(p.name, c); err != nil {
 		return err
 	}
 	p.config = c
@@ -68,18 +67,14 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 	return nil
 }
 
-type Executer interface {
-	Execute(wr io.Writer, data interface{}) error
-}
-
 /*
 * emailmail.NewMail()
  */
-func (p *Module) NewMail(tpl Executer, data interface{}) (*mail.MailContext, error) {
+func (p *Module) NewMail(tpl proc.Executer, data interface{}) (*mail.MailContext, error) {
 	return p.config.NewMail(tpl, data)
 }
 
-func (p *Module) SendMail(subject, to []string, tpl Executer, data interface{}) error {
+func (p *Module) SendMail(subject, to []string, tpl proc.Executer, data interface{}) error {
 	eml, err := p.config.NewMail(tpl, data)
 	if err != nil {
 		return err

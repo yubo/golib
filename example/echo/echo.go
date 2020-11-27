@@ -7,7 +7,6 @@ import (
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/status"
 	"google.golang.org/grpc/codes"
-	"k8s.io/klog"
 )
 
 const (
@@ -38,23 +37,15 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) GetFilter(acl string) (restful.FilterFunction, string, error) {
-	return func(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-		klog.Infof("before %s filter", acl)
-		chain.ProcessFilter(req, resp)
-		klog.Infof("after %s filter", acl)
-	}, acl, nil
-}
-
 func (p *Module) installWs() {
-	openapi.SwaggerTagRegister("Echo", "Echo Api")
+	openapi.SwaggerTagRegister("echo", "echo Api")
 
 	ws := new(restful.WebService)
 
 	openapi.WsRouteBuild(&openapi.WsOption{
-		Ws:   ws.Path("/api/v1/echo").Produces(openapi.MIME_JSON).Consumes("*/*"),
+		Ws:   ws.Path("/echo").Produces(openapi.MIME_JSON).Consumes("*/*"),
 		Acl:  p.auth.GetFilter,
-		Tags: []string{"Echo"},
+		Tags: []string{"echo"},
 	}, []openapi.WsRoute{{
 		Method: "GET", SubPath: "/msg",
 		Desc: "msg", Acl: "echo.msg",

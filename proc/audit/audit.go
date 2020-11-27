@@ -146,13 +146,13 @@ type GetLogOutput struct {
 }
 
 func (p *Module) install() error {
-	openapi.SwaggerTagRegister("Audit Log", "get audit log")
+	openapi.SwaggerTagRegister("audit log", "get audit log")
 
 	ws := new(restful.WebService)
 	opt := &openapi.WsOption{
 		Ws:          ws.Path("/api/v1/audit").Produces(restful.MIME_JSON).Consumes("*/*"),
 		Kind:        "audit log",
-		Tags:        []string{"Audit Log"},
+		Tags:        []string{"audit log"},
 		Acl:         p.getFilter,
 		Obj:         Log{},
 		ResourceKey: "id",

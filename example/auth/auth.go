@@ -2,6 +2,8 @@
 package auth
 
 import (
+	"context"
+
 	"github.com/emicklei/go-restful"
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
@@ -64,6 +66,9 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
 
 func (p *Module) GetFilter(acl string) (restful.FilterFunction, string, error) {
 	return func(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+		ctx := NewContext(req.Request.Context(), p)
+		req.Request = req.Request.WithContext(ctx)
+
 		klog.Infof("before %s filter", acl)
 		chain.ProcessFilter(req, resp)
 		klog.Infof("after %s filter", acl)
@@ -89,6 +94,22 @@ func (p *Module) GetAndVerifyTokenInfoByApiKey(code *string, peerAddr string) (o
 }
 func (p *Module) GetAndVerifyTokenInfoByBearer(code *string) (openapi.Token, error) {
 	return &openapi.AnonymousToken{}, nil
+}
+
+type contextKeyT string
+
+var contextKey = contextKeyT("auth")
+
+// NewContext returns a copy of the parent context
+// and associates it with an Auth.
+func NewContext(ctx context.Context, auth proc.Auth) context.Context {
+	return context.WithValue(ctx, contextKey, auth)
+}
+
+// FromContext returns the Auth bound to the context, if any.
+func FromContext(ctx context.Context) (auth proc.Auth, ok bool) {
+	auth, ok = ctx.Value(contextKey).(proc.Auth)
+	return
 }
 
 func init() {

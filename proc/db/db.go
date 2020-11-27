@@ -44,43 +44,32 @@ type Module struct {
 var (
 	_module = &Module{name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.preStartHook,
-		Owner:    moduleName,
-		HookNum:  proc.ACTION_START,
-		Priority: proc.PRI_PRE_SYS,
-	}, {
-		Hook:     _module.testHook,
+		Hook:     _module.test,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
-		Priority: proc.PRI_SYS,
+		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.stopHook,
+		Hook:     _module.stop,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_STOP,
-		Priority: proc.PRI_SYS,
-	}, {
-		// reload.represtart
-		Hook:     _module.preStartHook,
-		Owner:    moduleName,
-		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
 		// reload.start
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
-		Priority: proc.PRI_SYS,
+		Priority: proc.PRI_PRE_SYS,
 	}}
 )
 
-func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
 	c := &Config{}
-	if err := cf.Read(p.name, c); err != nil {
+	if err := configer.Read(p.name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
 	}
 
@@ -96,7 +85,7 @@ func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) error {
 
 // Because some configuration may be stored in the database,
 // set the db.connect into sys.db.prestart
-func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
+func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -105,7 +94,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 	popts := ops.Options()
 
 	c := &Config{}
-	if err := cf.Read(p.name, c); err != nil {
+	if err := configer.Read(p.name, c); err != nil {
 		return err
 	}
 
@@ -123,11 +112,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 	return nil
 }
 
-func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
-	return nil
-}
-
-func (p *Module) stopHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, configer *proc.Configer) error {
 	p.cancel()
 	return nil
 }

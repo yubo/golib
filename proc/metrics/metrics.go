@@ -24,39 +24,39 @@ type Module struct {
 var (
 	_module = &Module{name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_PRE_MODULE,
 	}, {
-		Hook:     _module.testHook,
+		Hook:     _module.test,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_MODULE,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
-		Priority: proc.PRI_SYS,
+		Priority: proc.PRI_MODULE,
 	}, {
-		Hook:     _module.stopHook,
+		Hook:     _module.stop,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_STOP,
-		Priority: proc.PRI_SYS,
+		Priority: proc.PRI_MODULE,
 	}, {
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_PRE_MODULE,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
-		Priority: proc.PRI_SYS,
+		Priority: proc.PRI_MODULE,
 	}}
 )
 
-func (p *Module) testHook(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
 	cf := &metrics.Config{}
 	if err := configer.ReadYaml(p.name, cf); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
@@ -68,7 +68,7 @@ func (p *Module) testHook(ops *proc.HookOps, configer *proc.Configer) error {
 }
 
 // TODO: should after http server register
-func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err error) {
+func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -91,7 +91,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err e
 	return nil
 }
 
-func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 	popts := ops.Options()
 
 	mux := popts.Http()
@@ -100,7 +100,7 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) stopHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, configer *proc.Configer) error {
 	p.cancel()
 	return nil
 }

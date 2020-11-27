@@ -8,7 +8,6 @@ import (
 	"k8s.io/klog/v2"
 
 	_ "github.com/yubo/golib/example/auth"
-	_ "github.com/yubo/golib/example/echo"
 	_ "github.com/yubo/golib/orm/mysql"
 	_ "github.com/yubo/golib/proc/audit"
 	_ "github.com/yubo/golib/proc/db"
@@ -18,6 +17,10 @@ import (
 	_ "github.com/yubo/golib/proc/metrics"
 	_ "github.com/yubo/golib/proc/session"
 	_ "github.com/yubo/golib/proc/sys"
+	_ "github.com/yubo/golib/proc/tracing"
+
+	_ "github.com/yubo/golib/example/echo"
+	_ "github.com/yubo/golib/example/tracing"
 )
 
 const (

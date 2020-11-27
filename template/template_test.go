@@ -62,7 +62,10 @@ func TestFuncs(t *testing.T) {
 		`{{repeat 3 "FOO" | join ","}}`:                              `FOO,FOO,FOO`,
 		`{{$s := list 1 2 3 }}{{ if last 2 $s}}1{{end}}`:             "1",
 		`{{include "test/1.conf"}}`:                                  "1\n",
-		`{{include "test/*.conf"}}`:                                  "1\n2\n",
+		`  {{include "test/1.conf"}}`:                                "  1\n",
+		`{{include "test/*.conf"}}`:                                  "1\n2\n2\n",
+		`{{includeI 2 "test/2.conf"}}`:                               "  2\n  2\n",
+		`  {{- includeI 2 "test/2.conf"}}`:                           "  2\n  2\n",
 	}
 	for tpl, want := range cases {
 		if err := runt(tpl, want); err != nil {

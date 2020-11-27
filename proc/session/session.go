@@ -30,17 +30,17 @@ var (
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_MODULE,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_PRE_MODULE,
 	}, {
-		Hook:     _module.stopHook,
+		Hook:     _module.stop,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_STOP,
 		Priority: proc.PRI_PRE_MODULE,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_PRE_MODULE,
@@ -56,7 +56,7 @@ func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
+func (p *Module) start(ops *proc.HookOps, cf *proc.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -73,7 +73,8 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
 		return fmt.Errorf("%s start err: unable get db from options", p.name)
 	}
 
-	if p.session, err = session.StartSessionWithDb(*p.config, p.ctx, p.db); err != nil {
+	if p.session, err = session.StartSession(p.config,
+		session.WithCtx(p.ctx), session.WithDb(p.db)); err != nil {
 		return fmt.Errorf("%s start err: %s", p.name, err)
 	}
 
@@ -83,7 +84,7 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
 	return nil
 }
 
-func (p *Module) stopHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, cf *proc.Configer) error {
 	p.cancel()
 	return nil
 }

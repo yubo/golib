@@ -64,7 +64,7 @@ type Module struct {
 var (
 	_module = &Module{name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_PRE_SYS,
@@ -74,7 +74,7 @@ var (
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_SYS,
@@ -84,12 +84,12 @@ var (
 		HookNum:  proc.ACTION_STOP,
 		Priority: proc.PRI_SYS,
 	}, {
-		Hook:     _module.preStartHook,
+		Hook:     _module.preStart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_SYS,
@@ -108,7 +108,7 @@ func (p *Module) testHook(ops *proc.HookOps, configer *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err error) {
+func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -135,7 +135,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) (err e
 	return nil
 }
 
-func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 
 	// /debug
 	if p.Profile {
@@ -158,19 +158,19 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
 		goswagger.New(&p.Config.Swagger).Install(p)
 	}
 
-	if err := p.start(p.ctx); err != nil {
+	if err := p.startServer(p.ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (p *Module) stopHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) stopHook(ops *proc.HookOps, configer *proc.Configer) error {
 	p.cancel()
 	return nil
 }
 
-func (p *Module) start(ctx context.Context) error {
+func (p *Module) startServer(ctx context.Context) error {
 
 	container := p.Container
 	cf := p.Config
