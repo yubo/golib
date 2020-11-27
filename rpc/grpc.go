@@ -8,9 +8,13 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/log"
 	"github.com/yubo/golib/util"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/naming"
 )
 
@@ -168,6 +172,7 @@ func DialRr(ctx context.Context, target string, rand bool, opt ...grpc.DialOptio
 		grpc.WithDialer(util.Dialer),
 		grpc.WithBlock(),
 		grpc.WithBalancer(grpc.RoundRobin(r)),
+		grpc.WithUnaryInterceptor(interceptor(ctx)),
 	)
 
 	for i := 0; ; i++ {
@@ -183,4 +188,52 @@ func DialRr(ctx context.Context, target string, rand bool, opt ...grpc.DialOptio
 		default:
 		}
 	}
+}
+
+func interceptor(in context.Context) grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, resp interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		sp := opentracing.SpanFromContext(in)
+		if sp == nil {
+			return invoker(ctx, method, req, resp, cc, opts...)
+		}
+
+		md, ok := metadata.FromOutgoingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		} else {
+			md = md.Copy()
+		}
+
+		err := sp.Tracer().Inject(sp.Context(), opentracing.TextMap, TextMapCarrier{md})
+		if err != nil {
+			grpclog.Errorf("inject to metadata err %v", err)
+		}
+		ctx = metadata.NewOutgoingContext(ctx, md)
+		if err = invoker(ctx, method, req, resp, cc, opts...); err != nil {
+			sp.LogFields(log.Error(err))
+		}
+		return err
+	}
+}
+
+type TextMapCarrier struct {
+	metadata.MD
+}
+
+// ForeachKey conforms to the TextMapReader interface.
+func (c TextMapCarrier) ForeachKey(handler func(key, val string) error) error {
+	for k, v := range c.MD {
+		for _, v2 := range v {
+			if err := handler(k, v2); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// Set implements Set() of opentracing.TextMapWriter
+func (c TextMapCarrier) Set(key, val string) {
+	key = strings.ToLower(key)
+	c.MD[key] = append(c.MD[key], val)
 }

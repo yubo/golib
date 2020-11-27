@@ -35,6 +35,7 @@ import (
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/session"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 // Options represents the options for instrumentation.
@@ -93,8 +94,8 @@ type Options interface {
 	Db() *orm.Db
 	SetDb(*orm.Db) Options
 
-	Grpc() GrpcServer
-	SetGrpc(GrpcServer) Options
+	Grpc() *grpc.Server
+	SetGrpc(*grpc.Server) Options
 
 	Http() HttpServer
 	SetHttp(HttpServer) Options
@@ -138,9 +139,6 @@ type Auth interface {
 type Mail interface {
 	NewMail(tpl Executer, data interface{}) (*mail.MailContext, error)
 	SendMail(subject, to []string, tpl Executer, data interface{}) error
-}
-
-type GrpcServer interface {
 }
 
 type HttpServer interface {

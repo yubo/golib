@@ -54,10 +54,8 @@ func (p *Module) startSpanWithHttp(req *restful.Request, resp *restful.Response)
 	tr := opentracing.GlobalTracer()
 
 	opts := []opentracing.StartSpanOption{}
-	ctx, _ := tr.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
-	if ctx != nil {
-		opts = append(opts, ext.RPCServerOption(ctx))
-	}
+	spanContext, _ := tr.Extract(opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(r.Header))
+	opts = append(opts, ext.RPCServerOption(spanContext))
 
 	sp := tr.StartSpan(fmt.Sprintf("HTTP %s %s", req.Request.Method, req.SelectedRoutePath()), opts...)
 	ext.HTTPUrl.Set(sp, r.URL.String())

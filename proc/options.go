@@ -31,6 +31,7 @@ import (
 	"github.com/yubo/golib/session"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
 )
 
@@ -54,7 +55,7 @@ type options struct {
 	auth    Auth
 	mail    Mail
 	db      *orm.Db
-	grpc    GrpcServer
+	grpc    *grpc.Server
 	http    HttpServer
 	audit   Audit
 	session *session.Session
@@ -178,13 +179,13 @@ func (o *options) SetDb(db *orm.Db) Options {
 	return &opts
 }
 
-func (o *options) Grpc() GrpcServer {
+func (o *options) Grpc() *grpc.Server {
 	return o.grpc
 }
 
-func (o *options) SetGrpc(grpc GrpcServer) Options {
+func (o *options) SetGrpc(server *grpc.Server) Options {
 	opts := *o
-	opts.grpc = grpc
+	opts.grpc = server
 	return &opts
 }
 

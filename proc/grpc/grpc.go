@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"github.com/yubo/golib/proc"
+	"github.com/yubo/golib/rpc"
 	"github.com/yubo/golib/util"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
 	"k8s.io/klog/v2"
 )
@@ -92,8 +96,8 @@ func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error
 	p.Config = cf
 
 	// grpc api
-	p.Server = newServer(cf)
-	popts = popts.SetGrpc(p)
+	p.Server = newServer(cf, grpc.UnaryInterceptor(interceptor))
+	popts = popts.SetGrpc(p.Server)
 
 	ops.SetOptions(popts)
 	return nil
@@ -135,9 +139,7 @@ func (p *Module) stop(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func newServer(cf *Config) *grpc.Server {
-	var opt []grpc.ServerOption
-
+func newServer(cf *Config, opt ...grpc.ServerOption) *grpc.Server {
 	if cf.MaxRecvMsgSize > 0 {
 		klog.V(5).Infof("set grpc server max recv msg size %s",
 			util.ByteSize(cf.MaxRecvMsgSize).HumanReadable())
@@ -145,6 +147,24 @@ func newServer(cf *Config) *grpc.Server {
 	}
 
 	return grpc.NewServer(opt...)
+}
+
+func interceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+
+	if opentracing.IsGlobalTracerRegistered() {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+		tr := opentracing.GlobalTracer()
+		spanContext, _ := tr.Extract(opentracing.TextMap, rpc.TextMapCarrier{md})
+		sp := tr.StartSpan(info.FullMethod,
+			ext.RPCServerOption(spanContext), ext.SpanKindRPCServer)
+		defer sp.Finish()
+		ctx = opentracing.ContextWithSpan(ctx, sp)
+	}
+
+	return handler(ctx, req)
 }
 
 func init() {
