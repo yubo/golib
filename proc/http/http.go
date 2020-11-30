@@ -11,7 +11,6 @@ import (
 	"github.com/go-openapi/spec"
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
-	"github.com/yubo/golib/proc/http/tracing"
 	"github.com/yubo/golib/util"
 	"github.com/yubo/goswagger"
 	"k8s.io/klog/v2"
@@ -44,6 +43,12 @@ func (p *Config) Validate() error {
 		p.Swagger.Name = "Embedded"
 		p.Swagger.Url = "/apidocs.json"
 	}
+	for _, v := range p.Swagger.Schemes {
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("schemes %s", err)
+		}
+	}
+
 	return nil
 }
 
@@ -144,18 +149,18 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 
 	// filter
 	if klog.V(8).Enabled() {
-		p.Filter(tracing.DbgFilter)
+		p.Filter(DbgFilter)
 	}
 
 	// /api
 	p.installPing()
 
-	if p.Apidocs.Enabled {
-		openapi.InstallApiDocs(p, p.Apidocs.InfoProps)
-	}
-
 	if p.Swagger.Enabled {
 		goswagger.New(&p.Config.Swagger).Install(p)
+	}
+
+	if p.Apidocs.Enabled {
+		openapi.InstallApiDocs(p, p.Apidocs.InfoProps)
 	}
 
 	if err := p.startServer(p.ctx); err != nil {

@@ -11,9 +11,9 @@ sys:
       reporter:
         localAgentHostPort: 127.0.0.1:6831
         logSpans: false
-    httpBody: true
-    httpHeader: true
-    respTraceId: true
+    httpBody: true       # log http request body
+    httpHeader: true     # log http request header
+    respTraceId: true    # inject trace id into response header
   metrics:
     extended: "detailed" # none|simple|moderate|detailed
     prometheus:       
@@ -46,6 +46,17 @@ sys:
       clientSecret: "1234"
       name: "helo"
       url: "/apidocs.json"
+      schemes:
+        - name: "oauth2"
+          type: "accessCode"
+          authorizationURL: "http://localhost/o/oauth2/authorize"
+          tokenURL: "http://localhost/o/oauth2/token"
+        - name: "apiKey"
+          type: "apiKey"
+          fieldName: "X-API-KEY"
+          valueSource: "header" # can be "header", "query" or "cookie"
+        - name: "base"
+          type: "base"
   grpc:
     addr: ":8081"
     maxRecvMsgSize: 1024000

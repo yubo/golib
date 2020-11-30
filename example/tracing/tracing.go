@@ -11,7 +11,6 @@ import (
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/rpc"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"k8s.io/klog"
 )
 
@@ -39,7 +38,7 @@ func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
 	p.http = popts.Http()
 
 	if server := popts.Grpc(); server != nil {
-		pb.RegisterGreeterServer(server, &grpcserver{})
+		RegisterServiceServer(server, &grpcserver{})
 	}
 
 	p.installWs()
@@ -68,7 +67,7 @@ func (p *Module) installWs() {
 		Handle: p.b1,
 	}, {
 		Method: "GET", SubPath: "/c",
-		Desc:   "c->SayHello(grpc)",
+		Desc:   "c -> C1(grpc)",
 		Handle: p.c,
 	}})
 
@@ -153,24 +152,23 @@ func (p *Module) c(req *restful.Request, resp *restful.Response) {
 	}
 	defer conn.Close()
 
-	c := pb.NewGreeterClient(conn)
-	ret, err := c.SayHello(ctx, &pb.HelloRequest{Name: "tom"})
+	c := NewServiceClient(conn)
+	ret, err := c.C1(ctx, &Request{Name: "tom"})
 
 	openapi.HttpWriteEntity(resp, ret, err)
 }
 
 type grpcserver struct{}
 
-//SayHello implements helloworld.GreeterServer
-func (s *grpcserver) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
+func (s *grpcserver) C1(ctx context.Context, in *Request) (*Response, error) {
 	klog.Infof("receive req : %v \n", *in)
 
-	sp, _ := opentracing.StartSpanFromContext(ctx, "helo.tracing.SayHello")
+	sp, _ := opentracing.StartSpanFromContext(ctx, "helo.tracing.C1")
 	defer sp.Finish()
 
-	sp.LogFields(log.String("msg", "from SayHello"))
+	sp.LogFields(log.String("msg", "from C1"))
 
-	return &pb.HelloReply{Message: "Hello " + in.Name}, nil
+	return &Response{Message: "Hello " + in.Name}, nil
 }
 
 func init() {

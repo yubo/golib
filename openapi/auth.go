@@ -39,11 +39,10 @@ type SecurityType string
 const (
 	SecurityTypeBase        SecurityType = "base"
 	SecurityTypeApiKey      SecurityType = "apiKey"
-	SecurityTypeOAuth2      SecurityType = "oauth2"
 	SecurityTypeImplicit    SecurityType = "implicity"
 	SecurityTypePassword    SecurityType = "password"
 	SecurityTypeApplication SecurityType = "application"
-	SecurityTypeAccessCode  SecurityType = "accessCode"
+	SecurityTypeAccessCode  SecurityType = "accessCode" // same as oauth2
 )
 
 var (
@@ -82,17 +81,47 @@ func SecurityScheme(ssoAddr string) *spec.SecurityScheme {
 	return spec.OAuth2AccessToken(ssoAddr+"/o/oauth2/authorize", ssoAddr+"/o/oauth2/token")
 }
 
-func SecuritySchemeRegister(sType SecurityType, s *spec.SecurityScheme) error {
-	if securitySchemes[string(sType)] != nil {
-		return fmt.Errorf("SecuritySchemeRegister %s exists", sType)
+func SecuritySchemeRegister(name string, s *spec.SecurityScheme) error {
+	if securitySchemes[name] != nil {
+		return fmt.Errorf("SecuritySchemeRegister name %s exists", name)
 	}
 
 	for scope, desc := range Scopes {
+		klog.Infof("scope %s %s", scope, desc)
 		s.AddScope(scope, desc)
 	}
 
-	securitySchemes[string(sType)] = s
+	klog.Infof("add scheme %s", name)
+	securitySchemes[name] = s
 	return nil
+}
+
+func SchemeRegisterBasicAuth() error {
+	return SecuritySchemeRegister(string(SecurityTypeBase), spec.BasicAuth())
+}
+
+func SchemeRegisterApiKey(fieldName, valueSource string) error {
+	return SecuritySchemeRegister(string(SecurityTypeApiKey),
+		spec.APIKeyAuth(fieldName, valueSource))
+}
+
+func SchemeRegisterOAuth2Implicit(authorizationURL string) error {
+	return SecuritySchemeRegister(string(SecurityTypeImplicit),
+		spec.OAuth2Implicit(authorizationURL))
+}
+
+func SchemeRegisterOAuth2Password(tokenURL string) error {
+	return SecuritySchemeRegister(string(SecurityTypePassword),
+		spec.OAuth2Password(tokenURL))
+}
+func SchemeRegisterOAuth2Application(tokenURL string) error {
+	return SecuritySchemeRegister(string(SecurityTypeApplication),
+		spec.OAuth2Application(tokenURL))
+}
+
+func SchemeRegisterOAuth2AccessToken(authorizationURL, tokenURL string) error {
+	return SecuritySchemeRegister(string(SecurityTypeAccessCode),
+		spec.OAuth2AccessToken(authorizationURL, tokenURL))
 }
 
 func SwaggerTagsRegister(tags ...spec.Tag) {
@@ -142,7 +171,6 @@ func getSwaggerHandler(wss []*restful.WebService, infoProps spec.InfoProps) func
 		// loop through all registerd web services
 		for _, ws := range wss {
 			for _, route := range ws.Routes() {
-
 				// route metadata for a SecurityDefinition
 				secdefn, ok := route.Metadata[SecurityDefinitionKey]
 				if !ok {
@@ -190,8 +218,8 @@ func getSwaggerHandler(wss []*restful.WebService, infoProps spec.InfoProps) func
 				}
 
 				// update the pOption with security entry
-				for key, _ := range s.SecurityDefinitions {
-					pOption.SecuredWith(key, scope)
+				for k, _ := range s.SecurityDefinitions {
+					pOption.SecuredWith(k, scope)
 				}
 			}
 		}

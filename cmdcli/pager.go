@@ -11,14 +11,14 @@ import (
 	"strings"
 
 	"github.com/buger/goterm"
-	"github.com/yubo/golib/openapi/api"
+	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/term"
 	"github.com/yubo/golib/util"
 )
 
 type Pagination struct {
-	api.Pagination
+	openapi.Pagination
 	Dump *bool `param:"-" flags:"dump" description:"dump size"`
 }
 

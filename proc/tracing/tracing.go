@@ -10,7 +10,6 @@ import (
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/util"
 	"go.uber.org/zap"
-	"k8s.io/klog/v2"
 )
 
 const (
@@ -89,7 +88,7 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) (err error) {
 		return err
 	}
 	p.Config = c
-	klog.Infof("config %s", c)
+	// klog.Infof("config %s", c)
 
 	if c.TracingConfiguration.Backend == "" {
 		return

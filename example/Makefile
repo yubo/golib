@@ -4,7 +4,8 @@ VERSION=0.0.1
 RELEASE=1
 APP_NAME=helo
 FILE_NAME=$(APP_NAME)-$(VERSION)-$(RELEASE).$(shell uname -s).$(shell uname -m)
-DEP_OBJS=$(shell find . -name "*.go" -type f)
+DEP_OBJS=$(shell find . -name "*.go" -type f) \
+	 ./tracing/tracing.pb.go
 TARGETS=$(APP_NAME)
 CGO_ENABLED?=0
 
@@ -26,3 +27,12 @@ dev: $(DEP_OBJS)
 
 clean:
 	rm -f $(APP_NAME)
+
+tools:
+	go get -u google.golang.org/grpc && \
+	go get -u github.com/golang/protobuf/protoc-gen-go
+	# https://grpc.io/docs/quickstart/go/
+
+
+%.pb.go: %.proto
+	protoc -I/usr/local/include -I. --go_out=plugins=grpc:$(GOPATH)/src $<

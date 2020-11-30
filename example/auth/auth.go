@@ -16,7 +16,8 @@ const (
 )
 
 type Config struct {
-	Name string `json:"name"`
+	Name        string `json:"name"`
+	AuthSchemes string `json:"authSchemes"`
 }
 
 func (p Config) String() string {

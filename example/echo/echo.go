@@ -48,7 +48,7 @@ func (p *Module) installWs() {
 		Tags: []string{"echo"},
 	}, []openapi.WsRoute{{
 		Method: "GET", SubPath: "/msg",
-		Desc: "msg", Acl: "echo.msg",
+		Desc: "msg", Acl: "echo:msg",
 		Handle: p.echo,
 		Input:  echoInput{},
 		Output: echoOutput{},
@@ -86,4 +86,9 @@ func (p *Module) echo(req *restful.Request, resp *restful.Response) {
 
 func init() {
 	proc.RegisterHooks(hookOps)
+	addAuthScope()
+}
+
+func addAuthScope() {
+	openapi.ScopeRegister("echo:write", "echo msg")
 }
