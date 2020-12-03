@@ -26,6 +26,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/emicklei/go-restful"
@@ -160,4 +161,73 @@ type Audit interface {
 
 type Executer interface {
 	Execute(wr io.Writer, data interface{}) error
+}
+
+type HookFn func(ops *HookOps, cf *Configer) error
+
+type HookOps struct {
+	Hook     HookFn
+	Owner    string
+	HookNum  ProcessAction
+	Priority ProcessPriority
+	Data     interface{}
+	module   *Module
+}
+
+type HookOpsBucket []*HookOps
+
+func (p HookOpsBucket) Len() int {
+	return len(p)
+}
+
+func (p HookOpsBucket) Swap(i, j int) {
+	p[i], p[j] = p[j], p[i]
+}
+
+func (p HookOpsBucket) Less(i, j int) bool {
+	return p[i].Priority < p[j].Priority
+}
+
+func (p HookOps) SetOptions(opts Options) {
+	p.module.options = opts
+}
+
+func (p HookOps) Options() Options {
+	return p.module.options
+}
+
+type ProcessPriority uint32
+
+const (
+	_ ProcessPriority = iota
+	PRI_PRE_SYS
+	PRI_PRE_MODULE
+	PRI_MODULE
+	PRI_POST_MODULE
+	PRI_SYS
+	PRI_POST_SYS
+)
+
+type ProcessAction uint32
+
+const (
+	ACTION_START ProcessAction = iota
+	ACTION_RELOAD
+	ACTION_STOP
+	ACTION_TEST
+	ACTION_SIZE
+)
+
+type ProcessStatus uint32
+
+const (
+	STATUS_INIT ProcessStatus = iota
+	STATUS_PENDING
+	STATUS_RUNNING
+	STATUS_RELOADING
+	STATUS_EXIT
+)
+
+func (p *ProcessStatus) Set(v ProcessStatus) {
+	atomic.StoreUint32((*uint32)(p), uint32(STATUS_RUNNING))
 }

@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
-	"sync/atomic"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -16,81 +15,6 @@ import (
 const (
 	serverGracefulCloseTimeout = 12 * time.Second
 )
-
-// type {{{
-type HookFn func(ops *HookOps, cf *Configer) error
-
-type HookOps struct {
-	Hook     HookFn
-	Owner    string
-	HookNum  ProcessAction
-	Priority ProcessPriority
-	Data     interface{}
-}
-
-type HookOpsBucket []*HookOps
-
-func (p HookOpsBucket) Len() int {
-	return len(p)
-}
-
-func (p HookOpsBucket) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
-}
-
-func (p HookOpsBucket) Less(i, j int) bool {
-	return p[i].Priority < p[j].Priority
-}
-
-func (p HookOps) SetOptions(opts Options) {
-	_module.options = opts
-}
-
-func (p HookOps) Options() Options {
-	return _module.options
-}
-
-// }}}
-
-// const {{{
-
-type ProcessAction uint32
-
-const (
-	ACTION_START ProcessAction = iota
-	ACTION_RELOAD
-	ACTION_STOP
-	ACTION_TEST
-	ACTION_SIZE
-)
-
-type ProcessStatus uint32
-
-const (
-	STATUS_INIT ProcessStatus = iota
-	STATUS_PENDING
-	STATUS_RUNNING
-	STATUS_RELOADING
-	STATUS_EXIT
-)
-
-func (p *ProcessStatus) Set(v ProcessStatus) {
-	atomic.StoreUint32((*uint32)(p), uint32(STATUS_RUNNING))
-}
-
-type ProcessPriority uint32
-
-const (
-	_ ProcessPriority = iota
-	PRI_PRE_SYS
-	PRI_PRE_MODULE
-	PRI_MODULE
-	PRI_POST_MODULE
-	PRI_SYS
-	PRI_POST_SYS
-)
-
-// }}}
 
 const (
 	moduleName = "proc"
@@ -107,20 +31,14 @@ type Module struct {
 }
 
 var (
-	_module = &Module{
-		name: moduleName,
-	}
+	_module = &Module{name: moduleName}
 )
-
-func init() {
-	for i := ACTION_START; i < ACTION_SIZE; i++ {
-		_module.hookOps[i] = HookOpsBucket([]*HookOps{})
-	}
-}
 
 func RegisterHooks(in []HookOps) error {
 	for i, _ := range in {
 		v := &in[i]
+		v.module = _module
+
 		_module.hookOps[v.HookNum] = append(_module.hookOps[v.HookNum], v)
 	}
 	return nil
@@ -132,6 +50,7 @@ func RegisterHooksWithOptions(in []HookOps, opts Options) error {
 	}
 	for i, _ := range in {
 		v := &in[i]
+		v.module = _module
 		if v.HookNum < 0 || v.HookNum >= ACTION_SIZE {
 			return fmt.Errorf("invalid HookNum %d [0,%d]", v.HookNum, ACTION_SIZE)
 		}
@@ -275,4 +194,10 @@ func envOr(name string, defs ...string) string {
 func getenvBool(str string) bool {
 	b, _ := strconv.ParseBool(os.Getenv(str))
 	return b
+}
+
+func init() {
+	for i := ACTION_START; i < ACTION_SIZE; i++ {
+		_module.hookOps[i] = HookOpsBucket([]*HookOps{})
+	}
 }
