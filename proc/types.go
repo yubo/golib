@@ -25,6 +25,7 @@ package proc
 import (
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/emicklei/go-restful"
@@ -105,6 +106,8 @@ type Options interface {
 
 	Session() *session.Session
 	SetSession(*session.Session) Options
+
+	Wg() sync.WaitGroup
 
 	// extra
 	Set(name string, data interface{}) Options

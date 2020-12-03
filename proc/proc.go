@@ -8,8 +8,13 @@ import (
 	"sort"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"k8s.io/klog/v2"
+)
+
+const (
+	serverGracefulCloseTimeout = 12 * time.Second
 )
 
 // type {{{
@@ -197,7 +202,14 @@ func (p *Module) procStart() error {
 }
 
 // reverse order
-func (p *Module) procStop() error {
+func (p *Module) procStop() (err error) {
+	wgCh := make(chan struct{})
+	wg := p.options.Wg()
+	go func() {
+		wg.Wait()
+		wgCh <- struct{}{}
+	}()
+
 	ss := p.hookOps[ACTION_STOP]
 	for i := len(ss) - 1; i >= 0; i-- {
 		ops := ss[i]
@@ -208,7 +220,17 @@ func (p *Module) procStop() error {
 		}
 	}
 	p.status.Set(STATUS_EXIT)
-	return nil
+
+	// Wait then close or hard close.
+	closeTimeout := serverGracefulCloseTimeout
+	select {
+	case <-wgCh:
+		klog.Info("server closed")
+	case <-time.After(closeTimeout):
+		err = fmt.Errorf("server closed after timeout %ds", closeTimeout/time.Second)
+
+	}
+	return err
 }
 
 func (p *Module) procTest() error {

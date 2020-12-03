@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
 	restful "github.com/emicklei/go-restful"
@@ -17,7 +18,8 @@ import (
 )
 
 const (
-	moduleName = "sys.http"
+	moduleName                 = "sys.http"
+	serverGracefulCloseTimeout = 10 * time.Second
 )
 
 type Config struct {
@@ -84,7 +86,7 @@ var (
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_SYS,
 	}, {
-		Hook:     _module.stopHook,
+		Hook:     _module.stop,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_STOP,
 		Priority: proc.PRI_SYS,
@@ -141,6 +143,7 @@ func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error
 }
 
 func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
+	popts := ops.Options()
 
 	// /debug
 	if p.Profile {
@@ -163,20 +166,19 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 		openapi.InstallApiDocs(p, p.Apidocs.InfoProps)
 	}
 
-	if err := p.startServer(p.ctx); err != nil {
+	if err := p.startServer(p.ctx, popts.Wg()); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (p *Module) stopHook(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, configer *proc.Configer) error {
 	p.cancel()
 	return nil
 }
 
-func (p *Module) startServer(ctx context.Context) error {
-
+func (p *Module) startServer(ctx context.Context, wg sync.WaitGroup) error {
 	container := p.Container
 	cf := p.Config
 
@@ -199,13 +201,15 @@ func (p *Module) startServer(ctx context.Context) error {
 	}
 
 	go func() {
+		wg.Add(1)
+		defer wg.Add(-1)
+
 		server.Serve(tcpKeepAliveListener{ln.(*net.TCPListener)})
 	}()
 
 	go func() {
 		<-ctx.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
-		defer cancel()
+		ctx, _ := context.WithTimeout(context.Background(), serverGracefulCloseTimeout)
 		err := server.Shutdown(ctx)
 		klog.V(5).Infof("httpServer %s exit %v", cf.Addr, err)
 	}()

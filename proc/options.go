@@ -23,6 +23,7 @@ package proc
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/opentracing/opentracing-go"
@@ -59,6 +60,7 @@ type options struct {
 	http    HttpServer
 	audit   Audit
 	session *session.Session
+	wg      sync.WaitGroup // for start/stop
 
 	extra map[string]interface{}
 }
@@ -216,6 +218,10 @@ func (o *options) SetSession(session *session.Session) Options {
 	opts := *o
 	opts.session = session
 	return &opts
+}
+
+func (o *options) Wg() sync.WaitGroup {
+	return o.wg
 }
 
 func (o *options) Set(name string, data interface{}) Options {

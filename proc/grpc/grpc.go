@@ -104,6 +104,7 @@ func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error
 }
 
 func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
+	popts := ops.Options()
 	cf := p.Config
 	server := p.Server
 
@@ -120,6 +121,10 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 	reflection.Register(server)
 
 	go func() {
+		wg := popts.Wg()
+		wg.Add(1)
+		defer wg.Add(-1)
+
 		if err := server.Serve(ln); err != nil {
 			return
 		}

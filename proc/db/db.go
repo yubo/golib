@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/proc"
@@ -114,6 +115,7 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) (err error) {
 
 func (p *Module) stop(ops *proc.HookOps, configer *proc.Configer) error {
 	p.cancel()
+	time.Sleep(500 * time.Millisecond) // wait for db.Close()
 	return nil
 }
 
