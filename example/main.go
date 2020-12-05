@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/logs"
 	"github.com/yubo/golib/proc"
 	"k8s.io/klog/v2"
@@ -57,7 +58,7 @@ func main() {
 	}
 }
 
-func startHook(ops *proc.HookOps, cf *proc.Configer) error {
+func startHook(ops *proc.HookOps, cf *configer.Configer) error {
 	klog.Info("start")
 
 	popts := ops.Options()
@@ -70,7 +71,7 @@ func startHook(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func stopHook(ops *proc.HookOps, cf *proc.Configer) error {
+func stopHook(ops *proc.HookOps, cf *configer.Configer) error {
 	klog.Info("stop")
 	buildReporter.Stop()
 	return nil

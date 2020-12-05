@@ -3,6 +3,7 @@ package logging
 import (
 	"fmt"
 
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/util"
 	"go.uber.org/zap"
@@ -91,7 +92,7 @@ var (
 	}}
 )
 
-func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) test(ops *proc.HookOps, configer *configer.Configer) error {
 	c := &Config{}
 	if err := configer.Read(p.name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
@@ -100,7 +101,7 @@ func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) reload(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) reload(ops *proc.HookOps, configer *configer.Configer) error {
 	popts := ops.Options()
 
 	c := &Config{}

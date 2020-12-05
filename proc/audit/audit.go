@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	restful "github.com/emicklei/go-restful"
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/proc"
@@ -44,7 +45,7 @@ var (
 	}}
 )
 
-func (p *Module) preStartHook(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) preStartHook(ops *proc.HookOps, configer *configer.Configer) error {
 	popts := ops.Options()
 
 	if p.db = popts.Db(); p.db == nil {

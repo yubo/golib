@@ -8,6 +8,7 @@ import (
 	"github.com/emicklei/go-restful"
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/rpc"
@@ -33,7 +34,7 @@ var (
 	}}
 )
 
-func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) startHook(ops *proc.HookOps, cf *configer.Configer) error {
 	popts := ops.Options()
 	p.http = popts.Http()
 

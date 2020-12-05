@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/emicklei/go-restful"
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/util"
@@ -44,7 +45,7 @@ var (
 	}}
 )
 
-func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
+func (p *Module) preStartHook(ops *proc.HookOps, cf *configer.Configer) (err error) {
 	popts := ops.Options()
 
 	c := &Config{}
@@ -61,7 +62,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *proc.Configer) (err error) 
 	return
 }
 
-func (p *Module) startHook(ops *proc.HookOps, cf *proc.Configer) (err error) {
+func (p *Module) startHook(ops *proc.HookOps, cf *configer.Configer) (err error) {
 	return nil
 }
 

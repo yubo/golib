@@ -1,24 +1,25 @@
 // the configer is not thread safe,
 // make sure not use it after call process.Start()
 
-package proc
+package configer
 
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
 
 	"github.com/ghodss/yaml"
+	"github.com/yubo/golib/configer/strvals"
 	"github.com/yubo/golib/template"
 	yaml2 "gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
 )
 
 type Configer struct {
-	configFile string
-	valueFiles []string
-	base       map[string]interface{}
-	data       map[string]interface{}
+	*options
+
+	data map[string]interface{}
 }
 
 func newConfiger(yml []byte) (*Configer, error) {
@@ -37,17 +38,25 @@ func ToConfiger(in interface{}) *Configer {
 	return &Configer{data: map[string]interface{}{}}
 }
 
-func NewConfiger(configFile string) (conf *Configer, err error) {
-
-	configFile, err = filepath.Abs(configFile)
-	if err != nil {
-		return
+func NewConfiger(configFile string, opts_ ...Option) (configer *Configer, err error) {
+	opts := &options{}
+	for _, opt := range opts_ {
+		opt.apply(opts)
 	}
 
-	conf = &Configer{
-		base:       map[string]interface{}{},
-		data:       map[string]interface{}{},
-		configFile: configFile,
+	if configFile, err = filepath.Abs(configFile); err != nil {
+		return nil, err
+	}
+
+	opts.valueFiles = append([]string{configFile}, opts.valueFiles...)
+
+	if err = opts.Validate(); err != nil {
+		return nil, err
+	}
+
+	configer = &Configer{
+		data:    map[string]interface{}{},
+		options: opts,
 	}
 
 	return
@@ -57,32 +66,65 @@ func (p *Configer) GetConfiger(path string) *Configer {
 	return ToConfiger(p.GetRaw(path))
 }
 
+// base < config < valueFile < value
 func (p *Configer) Prepare() error {
-	values := map[string]interface{}{}
+	base := map[string]interface{}{}
 
-	// parse values file to values
-	for _, file := range p.valueFiles {
-		b, err := template.ParseTemplateFile(values, file)
-		if err != nil {
-			return fmt.Errorf("failed to parse %s: %s", file, err)
-		}
-
-		values, err = yaml2Values(values, b)
-		if err != nil {
-			return fmt.Errorf("failed to parse %s: %s", file, err)
+	// base
+	if len(p.base) > 0 {
+		if err := yaml.Unmarshal(p.base, &base); err != nil {
+			return err
 		}
 	}
 
-	// parse config file with values
-	b, err := template.ParseTemplateFile(
-		map[string]interface{}{"values": values},
-		p.configFile)
+	base, err := yaml2Values(p.data, p.base)
 	if err != nil {
 		return err
 	}
 
-	p.data, err = yaml2Values(p.base, b)
-	return err
+	// configFile & valueFile
+	for _, filePath := range p.valueFiles {
+		currentMap := map[string]interface{}{}
+
+		bytes, err := template.ParseTemplateFile(nil, filePath)
+		if err != nil {
+			return err
+		}
+
+		if err := yaml.Unmarshal(bytes, &currentMap); err != nil {
+			return fmt.Errorf("failed to parse %s: %s", filePath, err)
+		}
+		// Merge with the previous map
+		base = mergeValues(base, currentMap)
+	}
+
+	// User specified a value via --set
+	for _, value := range p.values {
+		if err := strvals.ParseInto(value, base); err != nil {
+			return fmt.Errorf("failed parsing --set data: %s", err)
+		}
+	}
+
+	// User specified a value via --set-string
+	for _, value := range p.stringValues {
+		if err := strvals.ParseIntoString(value, base); err != nil {
+			return fmt.Errorf("failed parsing --set-string data: %s", err)
+		}
+	}
+
+	// User specified a value via --set-file
+	for _, value := range p.fileValues {
+		reader := func(rs []rune) (interface{}, error) {
+			bytes, err := ioutil.ReadFile(string(rs))
+			return string(bytes), err
+		}
+		if err := strvals.ParseIntoFile(value, base, reader); err != nil {
+			return fmt.Errorf("failed parsing --set-file data: %s", err)
+		}
+	}
+
+	p.data = base
+	return nil
 }
 
 func (p *Configer) GetRaw(path string) interface{} {
@@ -258,11 +300,11 @@ func (p *Configer) Unmarshal(dst interface{}) error {
 
 // just for dump
 func _yaml(v map[string]interface{}) string {
-	data, err := yaml.Marshal(v)
+	buf, err := yaml.Marshal(v)
 	if err != nil {
 		return err.Error()
 	}
-	return string(data)
+	return string(buf)
 }
 
 func (p *Configer) String() string {

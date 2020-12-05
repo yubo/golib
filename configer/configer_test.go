@@ -1,7 +1,11 @@
-package proc
+package configer
 
 import (
+	"io"
 	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,20 +16,45 @@ import (
 // get config  ParseConfigFile(values, config.yml)
 // merge baseconf, config
 
-var (
-	testBaseYaml []byte
-)
+// templateFile defines the contents of a template to be stored in a file, for testing.
+type templateFile struct {
+	name     string
+	contents string
+}
 
-func init() {
-	var err error
-	testBaseYaml, err = ioutil.ReadFile("./test/base.yml")
+func createTestDir(files []templateFile) string {
+	dir, err := ioutil.TempDir("", "template")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
+	for _, file := range files {
+		f, err := os.Create(filepath.Join(dir, file.name))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer f.Close()
+		_, err = io.WriteString(f, file.contents)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	return dir
 }
 
 func TestConfig(t *testing.T) {
-	config, err := NewConfiger("./test/conf.yml")
+	dir := createTestDir([]templateFile{
+		{"conf.yml", `foo1: b_bar1
+foo2: v_bar2
+foo3: b_bar3
+fooo:
+  foo: bar
+  foos: ["1", "2"]`},
+	})
+	// Clean up after the test; another quirk of running as an example.
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	config, err := NewConfiger("conf.yml")
 	if err != nil {
 		t.Error(t)
 	}
@@ -39,7 +68,19 @@ func TestConfig(t *testing.T) {
 }
 
 func TestRaw(t *testing.T) {
-	config, _ := NewConfiger("./test/conf.yml")
+	dir := createTestDir([]templateFile{
+		{"conf.yml", `foo1: b_bar1
+foo2: v_bar2
+foo3: b_bar3
+fooo:
+  foo: bar
+  foos: ["1", "2"]`},
+	})
+	// Clean up after the test; another quirk of running as an example.
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	config, _ := NewConfiger("conf.yml")
 	config.Prepare()
 
 	var cases = []struct {
@@ -62,19 +103,32 @@ func TestRaw(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-	config, _ := NewConfiger("./test/conf.yml")
+	dir := createTestDir([]templateFile{
+		{"conf.yml", `foo1: b_bar1
+foo2: v_bar2
+foo3: b_bar3
+fooo:
+  foo: bar
+  foos: ["1", "2"]`},
+	})
+	// Clean up after the test; another quirk of running as an example.
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	config, _ := NewConfiger("conf.yml")
 	config.Prepare()
 
 	var (
 		got  []string
 		path = "fooo.foos"
+		want = []string{"1", "2"}
 	)
 
 	if err := config.Read(path, &got); err != nil {
 		t.Error(err)
-	} else {
-		t.Logf("config.Read(%s) got %#v", path, got)
 	}
+
+	require.Equalf(t, want, got, "configer read %s", path)
 }
 
 func TestRawType(t *testing.T) {
@@ -175,4 +229,97 @@ ctrl:
 		t.Fatalf("error %s", err)
 	}
 	require.Equalf(t, want, got, "configer read yaml")
+}
+
+func TestConfigWithBase(t *testing.T) {
+	dir := createTestDir([]templateFile{
+		{"base.yml", "foo1: base1\nfoo3: base3"},
+		{"conf.yml", "foo1: conf1\nfoo2: conf2"},
+	})
+	// Clean up after the test; another quirk of running as an example.
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	cf, _ := NewConfiger("conf.yml", WithBaseFile("base.yml"))
+	cf.Prepare()
+
+	var cases = []struct {
+		path string
+		want interface{}
+	}{
+		{"foo1", "conf1"},
+		{"foo2", "conf2"},
+		{"foo3", "base3"},
+	}
+
+	for _, c := range cases {
+		if got := cf.GetRaw(c.path); got != c.want {
+			t.Errorf("config.GetRaw(%s) expected %#v got %#v", c.path, c.want, got)
+		}
+	}
+}
+
+func TestConfigWithValueFile(t *testing.T) {
+	dir := createTestDir([]templateFile{
+		{"base.yml", `
+a: base_a
+b: base_b
+c: base_c
+d: base_d
+e: base_e
+`},
+		{"conf.yml", `
+b: conf_b
+c: conf_c
+d: conf_d
+e: conf_e
+`},
+		{"v1.yml", `
+c: v1_c 
+d: v1_d
+e: v1_e
+`},
+		{"v2.yml", `
+d: v2_d
+e: v2_e
+`},
+	})
+	// Clean up after the test; another quirk of running as an example.
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	cf, _ := NewConfiger("conf.yml",
+		WithBaseFile("base.yml"),
+		WithValueFile("v1.yml"),
+		WithValueFile("v2.yml"),
+		WithValues("e=v2_e"),
+		WithValues("f1=f1,f2=f2"),
+		WithStringValues("sv1=sv1,sv2=sv2"),
+	)
+	err := cf.Prepare()
+	if err != nil {
+		t.Errorf("prepare err %s", err)
+	}
+
+	var cases = []struct {
+		path string
+		want interface{}
+	}{
+		{"a", "base_a"},
+		{"b", "conf_b"},
+		{"c", "v1_c"},
+		{"d", "v2_d"},
+		{"e", "v2_e"},
+		{"f1", "f1"},
+		{"f2", "f2"},
+		{"sv1", "sv1"},
+		{"sv2", "sv2"},
+	}
+
+	for _, c := range cases {
+		if got := cf.GetRaw(c.path); got != c.want {
+			t.Errorf("config.GetRaw(%s) expected %#v got %#v",
+				c.path, c.want, got)
+		}
+	}
 }

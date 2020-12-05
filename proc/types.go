@@ -32,6 +32,7 @@ import (
 	"github.com/emicklei/go-restful"
 	"github.com/opentracing/opentracing-go"
 	"github.com/uber-go/tally"
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/mail"
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/orm"
@@ -163,7 +164,7 @@ type Executer interface {
 	Execute(wr io.Writer, data interface{}) error
 }
 
-type HookFn func(ops *HookOps, cf *Configer) error
+type HookFn func(ops *HookOps, cf *configer.Configer) error
 
 type HookOps struct {
 	Hook     HookFn

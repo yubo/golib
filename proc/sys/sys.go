@@ -9,6 +9,7 @@ import (
 
 	"github.com/coreos/go-systemd/daemon"
 	restful "github.com/emicklei/go-restful"
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/logs"
 	"github.com/yubo/golib/mail"
 	"github.com/yubo/golib/openapi"
@@ -104,7 +105,7 @@ func init() {
 	proc.RegisterHooks(hookOps)
 }
 
-func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) (err error) {
+func (p *Module) test(ops *proc.HookOps, configer *configer.Configer) (err error) {
 	c := &Config{}
 	if err := configer.Read(p.Name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.Name, err)
@@ -112,7 +113,7 @@ func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	return c.Validate()
 }
 
-func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error) {
+func (p *Module) preStart(ops *proc.HookOps, configer *configer.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -132,7 +133,7 @@ func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error
 	return nil
 }
 
-func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) start(ops *proc.HookOps, configer *configer.Configer) error {
 	// watch dog
 	if t := p.WatchdogSec; t > 0 {
 		daemon.SdNotify(false, "READY=1")
@@ -148,7 +149,7 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) stop(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, configer *configer.Configer) error {
 	p.cancel()
 	return nil
 }

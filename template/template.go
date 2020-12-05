@@ -73,8 +73,6 @@ var (
 		"sizeOf":     sizeOf, // bytesize to byte
 		"last":       last,
 		"repeat":     repeat,
-		"include":    include,
-		"includeI":   includeI,
 	}
 )
 
@@ -119,13 +117,13 @@ func ReadFileWithInclude(path string) (b []byte, err error) {
 	return buf.Bytes(), nil
 }
 
-func readFileWithInclude(w io.Writer, path string) error {
+func readFileWithInclude(w io.Writer, path string, prefixs ...string) error {
 	files, err := filepath.Glob(path)
 	if err != nil {
 		return err
 	}
 
-	re := regexp.MustCompile(`^\s*include\s+([^\s]+)\s*$`)
+	re := regexp.MustCompile(`^(\s*)include\s+([^\s]+)\s*$`)
 
 	for _, file := range files {
 		f, err := os.Open(file)
@@ -135,17 +133,20 @@ func readFileWithInclude(w io.Writer, path string) error {
 
 		scanner := bufio.NewScanner(f)
 
+		prefix := strings.Join(prefixs, "")
+
 		for scanner.Scan() {
 			line := scanner.Text()
 			match := re.FindStringSubmatch(line)
 
-			if len(match) != 2 {
-				w.Write([]byte(line + "\n"))
+			if len(match) != 3 {
+				w.Write([]byte(prefix + line + "\n"))
 				continue
 			}
 
 			if err := readFileWithInclude(w,
-				strings.Trim(match[1], "\"")); err != nil {
+				strings.Trim(match[2], "\""),
+				append(prefixs, match[1])...); err != nil {
 				return err
 			}
 		}
@@ -155,8 +156,12 @@ func readFileWithInclude(w io.Writer, path string) error {
 	return nil
 }
 
-func ParseTemplateFile(values interface{}, filename string) ([]byte, error) {
-	b, err := ReadFileWithInclude(filename)
+func ParseTemplateFile(values interface{}, filename string) (b []byte, err error) {
+	if filename = strings.TrimSpace(filename); filename == "-" {
+		b, err = ioutil.ReadAll(os.Stdin)
+	} else {
+		b, err = ReadFileWithInclude(filename)
+	}
 	if err != nil {
 		return []byte{}, err
 	}
@@ -431,64 +436,4 @@ func sizeOf(v string) string {
 
 func last(x int, a interface{}) bool {
 	return x == reflect.ValueOf(a).Len()-1
-}
-
-func include(path string) string {
-	var ret string
-
-	files, err := filepath.Glob(path)
-	if err != nil {
-		return err.Error()
-	}
-
-	for _, file := range files {
-		b, err := ioutil.ReadFile(file)
-		if err != nil {
-			return err.Error()
-		}
-		ret += string(b)
-	}
-
-	return ret
-}
-
-func includeI(indent int, path string) string {
-	buf := bytes.Buffer{}
-	bufLine := bytes.Buffer{}
-	prefix := bytes.Repeat([]byte{' '}, indent)
-
-	files, err := filepath.Glob(path)
-	if err != nil {
-		return err.Error()
-	}
-
-	for _, file := range files {
-		fd, err := os.Open(file)
-		if err != nil {
-			return err.Error()
-		}
-
-		reader := bufio.NewReader(fd)
-
-		var line []byte
-		var isPrefix bool
-		for {
-			if line, isPrefix, err = reader.ReadLine(); err != nil {
-				break
-			}
-			bufLine.Write(line)
-			if !isPrefix {
-				buf.Write(prefix)
-				buf.Write(bufLine.Bytes())
-				buf.Write([]byte{'\n'})
-				bufLine.Reset()
-			}
-		}
-
-		if err != nil && err != io.EOF {
-			return err.Error()
-		}
-	}
-
-	return buf.String()
 }

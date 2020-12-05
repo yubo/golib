@@ -61,11 +61,6 @@ func TestFuncs(t *testing.T) {
 		`{{if env "FOO" | eq "bar"}}1{{end}}`:                        "1",
 		`{{repeat 3 "FOO" | join ","}}`:                              `FOO,FOO,FOO`,
 		`{{$s := list 1 2 3 }}{{ if last 2 $s}}1{{end}}`:             "1",
-		`{{include "test/1.conf"}}`:                                  "1\n",
-		`  {{include "test/1.conf"}}`:                                "  1\n",
-		`{{include "test/*.conf"}}`:                                  "1\n2\n2\n",
-		`{{includeI 2 "test/2.conf"}}`:                               "  2\n  2\n",
-		`  {{- includeI 2 "test/2.conf"}}`:                           "  2\n  2\n",
 	}
 	for tpl, want := range cases {
 		if err := runt(tpl, want); err != nil {
@@ -126,15 +121,16 @@ func TestReadFileWithInclude(t *testing.T) {
 	// exist in some location known to the program.
 	dir := createTestDir([]templateFile{
 		{"1.conf", `include "2.conf"`},
-		{"2.conf", `2
-include 3.*.conf`},
+		{"2.conf", "2\n  include 3.*.conf"},
 		{"3.1.conf", "3.1"},
 		{"3.2.conf", "3.2\n"},
+		{"3.3.conf", "3.3\n  include 4.conf\n"},
+		{"4.conf", "4"},
 	})
 	// Clean up after the test; another quirk of running as an example.
 	defer os.RemoveAll(dir)
 
-	expect := "2\n3.1\n3.2\n"
+	expect := "2\n  3.1\n  3.2\n  3.3\n    4\n"
 
 	os.Chdir(dir)
 

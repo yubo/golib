@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/util"
@@ -68,7 +69,7 @@ var (
 	}}
 )
 
-func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) test(ops *proc.HookOps, configer *configer.Configer) error {
 	c := &Config{}
 	if err := configer.Read(p.name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
@@ -86,7 +87,7 @@ func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
 
 // Because some configuration may be stored in the database,
 // set the db.connect into sys.db.prestart
-func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) (err error) {
+func (p *Module) start(ops *proc.HookOps, configer *configer.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -113,7 +114,7 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) (err error) {
 	return nil
 }
 
-func (p *Module) stop(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, configer *configer.Configer) error {
 	p.cancel()
 	time.Sleep(500 * time.Millisecond) // wait for db.Close()
 	return nil

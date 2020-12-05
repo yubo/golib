@@ -7,6 +7,7 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/rpc"
 	"github.com/yubo/golib/util"
@@ -69,7 +70,7 @@ var (
 	}}
 )
 
-func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) test(ops *proc.HookOps, configer *configer.Configer) error {
 	cf := &Config{}
 	if err := configer.Read(p.name, cf); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
@@ -81,7 +82,7 @@ func (p *Module) test(ops *proc.HookOps, configer *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error) {
+func (p *Module) preStart(ops *proc.HookOps, configer *configer.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -103,7 +104,7 @@ func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error
 	return nil
 }
 
-func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) start(ops *proc.HookOps, configer *configer.Configer) error {
 	popts := ops.Options()
 	cf := p.Config
 	server := p.Server
@@ -139,7 +140,7 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 
 }
 
-func (p *Module) stop(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, cf *configer.Configer) error {
 	p.cancel()
 	return nil
 }

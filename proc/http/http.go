@@ -10,6 +10,7 @@ import (
 
 	restful "github.com/emicklei/go-restful"
 	"github.com/go-openapi/spec"
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/util"
@@ -103,7 +104,7 @@ var (
 	}}
 )
 
-func (p *Module) testHook(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) testHook(ops *proc.HookOps, configer *configer.Configer) error {
 	cf := &Config{}
 	if err := configer.Read(p.name, cf); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
@@ -115,7 +116,7 @@ func (p *Module) testHook(ops *proc.HookOps, configer *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error) {
+func (p *Module) preStart(ops *proc.HookOps, configer *configer.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -142,7 +143,7 @@ func (p *Module) preStart(ops *proc.HookOps, configer *proc.Configer) (err error
 	return nil
 }
 
-func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) start(ops *proc.HookOps, configer *configer.Configer) error {
 	popts := ops.Options()
 
 	// /debug
@@ -173,7 +174,7 @@ func (p *Module) start(ops *proc.HookOps, configer *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) stop(ops *proc.HookOps, configer *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, configer *configer.Configer) error {
 	p.cancel()
 	return nil
 }

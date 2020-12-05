@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/session"
@@ -47,7 +48,7 @@ var (
 	}}
 )
 
-func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) testHook(ops *proc.HookOps, cf *configer.Configer) error {
 	c := &session.Config{}
 	if err := cf.Read(p.name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)
@@ -56,7 +57,7 @@ func (p *Module) testHook(ops *proc.HookOps, cf *proc.Configer) error {
 	return nil
 }
 
-func (p *Module) start(ops *proc.HookOps, cf *proc.Configer) (err error) {
+func (p *Module) start(ops *proc.HookOps, cf *configer.Configer) (err error) {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -84,7 +85,7 @@ func (p *Module) start(ops *proc.HookOps, cf *proc.Configer) (err error) {
 	return nil
 }
 
-func (p *Module) stop(ops *proc.HookOps, cf *proc.Configer) error {
+func (p *Module) stop(ops *proc.HookOps, cf *configer.Configer) error {
 	p.cancel()
 	return nil
 }

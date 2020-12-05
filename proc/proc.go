@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/yubo/golib/configer"
 	"k8s.io/klog/v2"
 )
 
@@ -24,7 +25,7 @@ type Module struct {
 	name     string
 	status   ProcessStatus
 	hookOps  [ACTION_SIZE]HookOpsBucket
-	configer *Configer
+	configer *configer.Configer
 	options  Options
 	config   string
 	test     bool
@@ -65,8 +66,8 @@ func RegisterHooksWithOptions(in []HookOps, opts Options) error {
 // parse configfile
 // validate config each module
 // sort hook options
-func (p *Module) procInit(configFile string) (cf *Configer, err error) {
-	if cf, err = NewConfiger(configFile); err != nil {
+func (p *Module) procInit(configFile string) (cf *configer.Configer, err error) {
+	if cf, err = configer.NewConfiger(configFile); err != nil {
 		return nil, err
 	}
 
