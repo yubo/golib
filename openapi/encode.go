@@ -31,22 +31,20 @@ func NewEncoder() *Encoder {
 	}
 }
 
-func (p *Encoder) Encode(url1 string, src interface{}) (url2 string, data interface{}, header http.Header, err error) {
+// Encode return prepared url, http.body, http.header
+func (p *Encoder) Encode(urlIn string, src interface{}) (urlOut string, data interface{}, header http.Header, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("openapi.Encode %s", r)
 		}
 	}()
 
-	header = p.header
-	data = p.data
-
 	// precheck
 	if v, ok := src.(Validator); ok {
 		if err = v.Validate(); err != nil {
 			klog.V(1).Infof("%s.Validate() err: %s",
 				reflect.TypeOf(src), err)
-			return
+			return "", nil, nil, err
 		}
 	}
 
@@ -55,8 +53,7 @@ func (p *Encoder) Encode(url1 string, src interface{}) (url2 string, data interf
 		rt := rv.Type()
 
 		if rv.Kind() != reflect.Struct || rt.String() == "time.Time" {
-			err = errors.New(fmt.Sprintf("rest-encode: input must be a struct, got %v/%v", rv.Kind(), rt))
-			return
+			return "", nil, nil, errors.New(fmt.Sprintf("rest-encode: input must be a struct, got %v/%v", rv.Kind(), rt))
 		}
 
 		fields := cachedTypeFields(rt)
@@ -70,13 +67,13 @@ func (p *Encoder) Encode(url1 string, src interface{}) (url2 string, data interf
 		}
 	}
 
-	if url2, err = invokePathVariable(url1, p.path); err != nil {
-		return
+	if urlOut, err = invokePathVariable(urlIn, p.path); err != nil {
+		return "", nil, nil, err
 	}
 
 	var u *url.URL
-	if u, err = url.Parse(url2); err != nil {
-		return
+	if u, err = url.Parse(urlOut); err != nil {
+		return "", nil, nil, err
 	}
 
 	v := u.Query()
@@ -86,9 +83,8 @@ func (p *Encoder) Encode(url1 string, src interface{}) (url2 string, data interf
 		}
 	}
 	u.RawQuery = v.Encode()
-	url2 = u.String()
 
-	return url2, p.data, p.header, nil
+	return u.String(), p.data, p.header, nil
 }
 
 // struct -> request's path, query, header, data

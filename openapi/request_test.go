@@ -29,7 +29,7 @@ func init() {
 }
 
 func TestRequest(t *testing.T) {
-	opt := &RequestOption{
+	opt := &RequestOptions{
 		Url:    "http://example.com/users/{name}",
 		Method: "GET",
 		Input: &Sample{

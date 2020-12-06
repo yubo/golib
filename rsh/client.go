@@ -61,7 +61,7 @@ func (c *Conn) ReadMessage() (messageType int, p []byte, err error) {
 
 type Client struct {
 	IOStreams
-	Opt             *openapi.RequestOption
+	Opt             *openapi.RequestOptions
 	Stdin           bool
 	TTY             bool
 	Quiet           bool               // minimize unnecessary output

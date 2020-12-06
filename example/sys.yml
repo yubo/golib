@@ -80,4 +80,3 @@ session:
   domain:
   gcInterval: 60
   cookieLifetime:  {{timeOf "16h"}}
-

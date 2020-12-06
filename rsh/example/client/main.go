@@ -24,7 +24,7 @@ func main() {
 	flag.Set("v", "3")
 	flag.Parse()
 
-	opt := &openapi.RequestOption{
+	opt := &openapi.RequestOptions{
 		Url:    "http://localhost:18080/exec",
 		Bearer: util.String("1"),
 		Input: &ExecOption{

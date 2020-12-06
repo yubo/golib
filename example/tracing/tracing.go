@@ -116,7 +116,7 @@ func (p *Module) b(req *restful.Request, resp *restful.Response) {
 	delay()
 
 	// call b1
-	_, _, err := openapi.HttpRequest(&openapi.RequestOption{
+	_, _, err := openapi.HttpRequest(&openapi.RequestOptions{
 		Url:    "http://localhost:8080/tracing/b1",
 		Method: "GET",
 		Ctx:    ctx,

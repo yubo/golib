@@ -2,8 +2,6 @@ package openapi
 
 import (
 	"bytes"
-	"context"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
@@ -22,7 +20,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func HttpRequest(in *RequestOption) (*http.Request, *http.Response, error) {
+func HttpRequest(in *RequestOptions) (*http.Request, *http.Response, error) {
 	req, err := NewRequest(in)
 	if err != nil {
 		return nil, nil, err
@@ -33,157 +31,156 @@ func HttpRequest(in *RequestOption) (*http.Request, *http.Response, error) {
 	return req.Request, resp, err
 }
 
-type RequestOption struct {
-	http.Client
-	Url          string // https://example.com/api/v{version}/{model}/{object}?type=vm
-	Method       string
-	User         *string
-	Pwd          *string
-	Bearer       *string
-	ApiKey       *string
-	OtpCode      *string
-	InputFile    *string // Priority is higher than Content
-	InputContent []byte  // Priority is higher than input
-	Input        interface{}
-	OutputFile   *string // Priority is higher than output
-	Output       interface{}
-	Mime         string
-	Header       map[string]string
-	Ctx          context.Context
-}
-
-func (p RequestOption) String() string {
-	return util.Prettify(p)
-}
-
 type Request struct {
-	*RequestOption
-	Request      *http.Request
-	url          string
-	header       http.Header
-	input        interface{}
-	inputContent []byte
-	inputReader  io.Reader
-	inputCloser  io.Closer
-	outputWriter io.Writer
-	outputCloser io.Closer
+	*RequestOptions
+	Request        *http.Request
+	url            string
+	bodyObject     interface{} // the object in http.body
+	bodyContent    []byte
+	bodyReader     io.Reader
+	bodyCloser     io.Closer
+	responseWriter io.Writer
+	responseCloser io.Closer
 }
 
-func (p Request) String() string {
-	return util.Prettify(p.RequestOption)
-}
-
-func NewRequest(in *RequestOption) (req *Request, err error) {
-	req = &Request{RequestOption: in}
-
-	// klog.V(10).Infof("newreqeust %s", in)
-
-	if req.Mime == "" {
-		req.Mime = MIME_JSON
+func NewRequest(in *RequestOptions, opts ...RequestOption) (req *Request, err error) {
+	for _, opt := range opts {
+		opt.apply(in)
 	}
 
-	if req.url, req.input, req.header, err = NewEncoder().Encode(req.Url, req.Input); err != nil {
+	req = &Request{RequestOptions: in}
+
+	if err = req.prepare(); err != nil {
 		return nil, err
 	}
 
-	if util.StringValue(req.ApiKey) != "" {
-		req.header.Set("X-API-Key", *req.ApiKey)
-		req.Bearer = nil
-	}
-
-	if util.StringValue(req.User) != "" && util.StringValue(req.Pwd) != "" {
-		req.header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(*req.User+":"+*req.Pwd)))
-	}
-
-	if req.Bearer != nil {
-		req.header.Set("Authorization", "Bearer "+*req.Bearer)
-
-		if req.OtpCode != nil {
-			req.header.Set("X-Otp-Code", *req.OtpCode)
-		}
-	}
-
-	for k, v := range in.Header {
-		req.header.Set(k, v)
-	}
-
-	req.header.Set("Accept", "*/*")
-
-	if err := req.prepareBody(); err != nil {
-		return nil, err
-	}
-
-	if req.OutputFile != nil {
-		fd, err := os.OpenFile(*req.OutputFile, os.O_RDWR|os.O_CREATE, 0644)
-		if err != nil {
-			return nil, err
-		}
-		req.outputWriter = fd
-		req.outputCloser = fd
-	}
-
-	// http client
-	if strings.HasPrefix(req.Url, "https:") || strings.HasPrefix(req.Url, "wss:") {
-		req.Client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		}
-	}
-
-	req.Request, err = http.NewRequest(req.Method, req.url, req.inputReader)
+	req.Request, err = http.NewRequest(req.Method, req.url, req.bodyReader)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Request.Header = req.header
 
-	// klog.V(10).Infof("req %s", req)
+	klog.V(10).Infof("req %s", req)
 	return req, nil
 }
 
+func (p *Request) prepare() error {
+	if p.Mime == "" {
+		p.Mime = MIME_JSON
+	}
+
+	if err := p.prepareInput(); err != nil {
+		return err
+	}
+
+	if err := p.prepareBody(); err != nil {
+		return err
+	}
+
+	if p.ApiKey != nil {
+		p.header.Set("X-API-Key", *p.ApiKey)
+	}
+
+	if p.Bearer != nil {
+		p.header.Set("Authorization", "Bearer "+*p.Bearer)
+	}
+
+	if p.User != nil && p.Pwd != nil {
+		p.header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(*p.User+":"+*p.Pwd)))
+	}
+
+	if p.header.Get("Accept") == "" {
+		p.header.Set("Accept", "*/*")
+	}
+
+	if p.Client.Transport == nil {
+		var err error
+		if p.Client.Transport, err = p.Transport(); err != nil {
+			return err
+		}
+	}
+
+	if filePath := strings.TrimSpace(util.StringValue(p.OutputFile)); filePath != "" {
+		if filePath == "-" {
+			p.responseWriter = os.Stdout
+		} else {
+			fd, err := os.OpenFile(*p.OutputFile, os.O_RDWR|os.O_CREATE, 0644)
+			if err != nil {
+				return err
+			}
+			p.responseWriter = fd
+			p.responseCloser = fd
+		}
+	}
+
+	return nil
+}
+
+func (p Request) String() string {
+	return util.Prettify(p.RequestOptions)
+}
+
+func (p *Request) prepareInput() (err error) {
+	p.url, p.bodyObject, p.header, err = (&Encoder{
+		path:   map[string]string{},
+		param:  map[string][]string{},
+		header: p.header,
+		data2:  map[string]interface{}{},
+	}).Encode(p.Url, p.Input)
+	return err
+}
+
 func (p *Request) prepareBody() error {
-	if p.InputFile != nil {
-		info, err := os.Stat(*p.InputFile)
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return fmt.Errorf("%s is dir", *p.InputFile)
-		}
+	if filePath := strings.TrimSpace(util.StringValue(p.InputFile)); filePath != "" {
+		if filePath == "-" {
+			b, err := ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				return err
+			}
+			p.InputContent = b
+		} else {
+			info, err := os.Stat(*p.InputFile)
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return fmt.Errorf("%s is dir", *p.InputFile)
+			}
 
-		fd, err := os.Open(*p.InputFile)
-		if err != nil {
-			return err
-		}
-		p.inputReader = fd
-		p.inputCloser = fd
-		p.header.Set("Content-Length", fmt.Sprintf("%d", info.Size()))
+			fd, err := os.Open(*p.InputFile)
+			if err != nil {
+				return err
+			}
+			p.bodyReader = fd
+			p.bodyCloser = fd
+			p.header.Set("Content-Length", fmt.Sprintf("%d", info.Size()))
 
-		return nil
+			return nil
+		}
 	}
 
 	if len(p.InputContent) > 0 {
 		p.header.Set("Content-Type", p.Mime)
-		p.inputContent = p.InputContent
-		p.inputReader = bytes.NewReader(p.inputContent)
-		p.header.Set("Content-Length", fmt.Sprintf("%d", len(p.inputContent)))
+		p.bodyContent = p.InputContent
+		p.bodyReader = bytes.NewReader(p.bodyContent)
+		p.header.Set("Content-Length", fmt.Sprintf("%d", len(p.bodyContent)))
 		return nil
 	}
 
-	if p.input != nil {
+	if p.bodyObject != nil {
 		var err error
 		switch p.Mime {
 		case MIME_JSON:
-			if p.inputContent, err = json.Marshal(p.input); err != nil {
+			if p.bodyContent, err = json.Marshal(p.bodyObject); err != nil {
 				return err
 			}
 		case MIME_XML:
-			if p.inputContent, err = xml.Marshal(p.input); err != nil {
+			if p.bodyContent, err = xml.Marshal(p.bodyObject); err != nil {
 				return err
 			}
 		case MIME_URL_ENCODED:
-			if p.inputContent, err = urlencoded.Marshal(p.input); err != nil {
+			if p.bodyContent, err = urlencoded.Marshal(p.bodyObject); err != nil {
 				return err
 			}
 		default:
@@ -192,8 +189,8 @@ func (p *Request) prepareBody() error {
 
 		if p.Method != "GET" {
 			p.header.Set("Content-Type", p.Mime)
-			p.inputReader = bytes.NewReader(p.inputContent)
-			p.header.Set("Content-Length", fmt.Sprintf("%d", len(p.inputContent)))
+			p.bodyReader = bytes.NewReader(p.bodyContent)
+			p.header.Set("Content-Length", fmt.Sprintf("%d", len(p.bodyContent)))
 		}
 		return nil
 	}
@@ -202,7 +199,7 @@ func (p *Request) prepareBody() error {
 }
 
 func (p *Request) Content() []byte {
-	return p.inputContent
+	return p.bodyContent
 }
 
 func (p *Request) HeaderSet(key, value string) {
@@ -218,12 +215,11 @@ func (p *Request) Do() (resp *http.Response, err error) {
 			return
 		}
 
-		body := p.inputContent
+		body := p.bodyContent
 		if len(body) > 1024 {
 			body = body[:1024]
 		}
-		klog.Infof("[req] %s\n", Req2curl(r,
-			body, p.InputFile, p.OutputFile))
+		klog.Infof("[req] %s\n", Req2curl(r, body, p.InputFile, p.OutputFile))
 
 		buf := &bytes.Buffer{}
 		HttpRespPrint(buf, resp, respBody)
@@ -232,8 +228,7 @@ func (p *Request) Do() (resp *http.Response, err error) {
 		}
 	}()
 
-	// tracer
-	// ctx
+	// ctx & tracer
 	if sp := opentracing.SpanFromContext(p.Ctx); sp != nil {
 		p.Client.Transport = &nethttp.Transport{}
 
@@ -248,11 +243,11 @@ func (p *Request) Do() (resp *http.Response, err error) {
 	}
 
 	defer func() {
-		if p.inputCloser != nil {
-			p.inputCloser.Close()
+		if p.bodyCloser != nil {
+			p.bodyCloser.Close()
 		}
-		if p.outputCloser != nil {
-			p.outputCloser.Close()
+		if p.responseCloser != nil {
+			p.responseCloser.Close()
 		}
 		resp.Body.Close()
 	}()
@@ -263,8 +258,8 @@ func (p *Request) Do() (resp *http.Response, err error) {
 		return
 	}
 
-	if p.outputWriter != nil {
-		_, err = io.Copy(p.outputWriter, resp.Body)
+	if p.responseWriter != nil {
+		_, err = io.Copy(p.responseWriter, resp.Body)
 		return
 	}
 
@@ -296,5 +291,5 @@ func (p *Request) Do() (resp *http.Response, err error) {
 }
 
 func (p *Request) Curl() string {
-	return Req2curl(p.Request, p.inputContent, p.InputFile, p.OutputFile)
+	return Req2curl(p.Request, p.bodyContent, p.InputFile, p.OutputFile)
 }

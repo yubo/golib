@@ -61,7 +61,7 @@ func (p *Client) Error() error {
 	return nil
 }
 
-func RshRequest(opt *openapi.RequestOption) error {
+func RshRequest(opt *openapi.RequestOptions) error {
 	opt.Method = "GET"
 	opt.Url = strings.NewReplacer("http://", "ws://",
 		"https://", "wss://").Replace(opt.Url)

@@ -86,7 +86,7 @@ func TestHttpParam(t *testing.T) {
 		restful.DefaultContainer.Add(ws)
 
 		// write
-		opt := &RequestOption{
+		opt := &RequestOptions{
 			Method: "GET",
 			Url:    "http://example.com/api/v1/dirs/{dir}/hosts/{name}",
 			Input:  &c,
