@@ -21,6 +21,7 @@ import (
 	_ "github.com/yubo/golib/proc/tracing"
 
 	_ "github.com/yubo/golib/example/echo"
+	_ "github.com/yubo/golib/example/metrics"
 	_ "github.com/yubo/golib/example/tracing"
 )
 
