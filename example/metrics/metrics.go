@@ -36,6 +36,16 @@ var (
 		HookNum:  proc.ACTION_STOP,
 		Priority: proc.PRI_SYS,
 	}}
+	buckets = tally.DurationBuckets{
+		0 * time.Millisecond,
+		50 * time.Millisecond,
+		100 * time.Millisecond,
+		250 * time.Millisecond,
+		500 * time.Millisecond,
+		1 * time.Second,
+		3 * time.Second,
+		6 * time.Second,
+	}
 )
 
 func (p *Module) start(ops *proc.HookOps, cf *configer.Configer) error {
@@ -50,7 +60,7 @@ func (p *Module) start(ops *proc.HookOps, cf *configer.Configer) error {
 	counter := scope.Counter("test-counter")
 	gauge := scope.Gauge("test-gauge")
 	timer := scope.Timer("test-timer")
-	histogram := scope.Histogram("test-histogram", tally.DefaultBuckets)
+	histogram := scope.Histogram("test-histogram", buckets)
 
 	go func() {
 		for {
