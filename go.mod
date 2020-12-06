@@ -14,7 +14,6 @@ require (
 	github.com/go-ldap/ldap v3.0.3+incompatible
 	github.com/go-openapi/spec v0.19.9
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/go-xorm/xorm v0.7.9
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6
