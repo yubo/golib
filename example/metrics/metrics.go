@@ -4,7 +4,9 @@ package metrics
 
 import (
 	"context"
+	"math"
 	"math/rand"
+	"strconv"
 	"time"
 
 	"github.com/uber-go/tally"
@@ -13,7 +15,9 @@ import (
 )
 
 const (
-	moduleName = "metrics"
+	moduleName   = "metrics"
+	gaugesNumber = 10
+	gaugesPeriod = 3600 // Second
 )
 
 type Module struct {
@@ -62,6 +66,11 @@ func (p *Module) start(ops *proc.HookOps, cf *configer.Configer) error {
 	timer := scope.Timer("test-timer")
 	histogram := scope.Histogram("test-histogram", buckets)
 
+	gauges := make([]tally.Gauge, gaugesNumber)
+	for i := 0; i < gaugesNumber; i++ {
+		gauges[i] = scope.Tagged(map[string]string{"id": strconv.Itoa(i)}).Gauge("sin")
+	}
+
 	go func() {
 		for {
 			select {
@@ -82,6 +91,14 @@ func (p *Module) start(ops *proc.HookOps, cf *configer.Configer) error {
 			default:
 			}
 			gauge.Update(rand.Float64() * 1000)
+
+			radian := (float64(time.Now().Unix()%gaugesPeriod) / gaugesPeriod) * 2 * math.Pi
+			offset := (2 * math.Pi) / gaugesNumber
+			for i := 0; i < gaugesNumber; i++ {
+				gauges[i].Update(math.Sin(radian))
+				radian += offset
+			}
+
 			time.Sleep(time.Second)
 		}
 	}()
