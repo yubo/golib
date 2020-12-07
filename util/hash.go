@@ -1,7 +1,9 @@
 package util
 
 import (
+	"bytes"
 	"crypto/md5"
+	"encoding/gob"
 	"fmt"
 	"hash/crc32"
 	"hash/crc64"
@@ -84,4 +86,14 @@ func Sum64(raw []byte) uint64 {
 
 func Sum32(raw []byte) uint32 {
 	return crc32.Checksum(raw, crc32_table)
+}
+
+func StructMd5(in interface{}) (string, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(in)
+	if err != nil {
+		return "", err
+	}
+	return Md5sum(buf.Bytes()), nil
 }
