@@ -3,6 +3,7 @@ package util
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/sha1"
 	"encoding/gob"
 	"fmt"
 	"hash/crc32"
@@ -56,9 +57,11 @@ func RandInt() int {
 func Md5sum(raw []byte) string {
 	h := md5.New()
 	h.Write(raw)
-	//io.WriteString(h, raw)
-
 	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func Sha1sum(raw []byte) string {
+	fmt.Printf("%x", sha1.Sum(raw))
 }
 
 func FileMd5sum(file string) (string, error) {

@@ -18,5 +18,4 @@ func TestStructMd5(t *testing.T) {
 		E: []string{"5"},
 	})
 	t.Logf("md5Struct(a) %s %v", s, err)
-
 }

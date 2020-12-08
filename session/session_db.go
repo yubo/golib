@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"time"
 
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/util"
-	//_ "github.com/go-sql-driver/mysql"
 )
 
 const (
 	TABLE_NAME       = "session"
 	CREATE_TABLE_SQL = "CREATE TABLE `session` (" +
-		"   `sid`		char(128)		NOT NULL," +
-		"   `data`		blob			NULL," +
-		"   `cookie_name`	char(128)		DEFAULT ''," +
-		"   `created_at`	integer unsigned	DEFAULT '0'," +
-		"   `updated_at`	integer unsigned	DEFAULT '0' NOT NULL," +
+		"   `sid` char(128) NOT NULL," +
+		"   `data` blob NULL," +
+		"   `cookie_name` char(128) DEFAULT ''," +
+		"   `created_at` integer unsigned DEFAULT '0'," +
+		"   `updated_at` integer unsigned DEFAULT '0' NOT NULL," +
 		"   PRIMARY KEY (`sid`)," +
 		"   KEY (`cookie_name`)," +
 		"   KEY (`updated_at`)" +

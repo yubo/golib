@@ -1,18 +1,5 @@
 package session
 
-// mysql session support need create table as sql:
-// CREATE TABLE `session` (
-//   `sid` char(128) NOT NULL,
-//   `data` blob NULL,
-//   `cookie_name` char(128) DEFAULT '',
-//   `created_at` integer unsigned DEFAULT '0',
-//   `updated_at` integer unsigned DEFAULT '0' NOT NULL,
-//   PRIMARY KEY (`session_key`),
-//   KEY (`cookie_name`),
-//   KEY (`updated_at`)
-// ) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8 COLLATE = utf8_unicode_ci
-// COMMENT = '[auth] session';
-
 import (
 	"context"
 	"net/http"
@@ -24,7 +11,6 @@ import (
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/clock"
 	"google.golang.org/grpc/codes"
-	//_ "github.com/go-sql-driver/mysql"
 )
 
 type storage interface {
