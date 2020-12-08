@@ -75,7 +75,7 @@ func (p *mStorage) gc() {
 	p.Lock()
 	defer p.Unlock()
 
-	expiresAt := p.opts.clock.Now().Unix() - p.config.CookieLifetime
+	expiresAt := p.opts.clock.Now().Unix() - p.config.MaxIdleTime
 	keys := []string{}
 	for k, v := range p.data {
 		if v.UpdatedAt < expiresAt {

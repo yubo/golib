@@ -28,6 +28,7 @@ type Config struct {
 	Domain         string `json:"domain"`
 	GcInterval     int64  `json:"gcInterval"`
 	CookieLifetime int64  `json:"cookieLifetime"`
+	MaxIdleTime    int64  `json:"maxIdleTime" description:"session timeout"`
 	DbDriver       string `json:"dbDriver"`
 	Dsn            string `json:"dsn"`
 	Storage        string `json:"storage" description:"mem|db(defualt)"`
@@ -35,11 +36,15 @@ type Config struct {
 
 func (p *Config) Validate() error {
 	if p.CookieLifetime == 0 {
-		p.CookieLifetime = p.GcInterval
+		p.CookieLifetime = 24 * 3600
 	}
 
 	if p.SidLength == 0 {
 		p.SidLength = 32
+	}
+
+	if p.MaxIdleTime == 0 {
+		p.MaxIdleTime = 3600
 	}
 
 	return nil
@@ -124,7 +129,7 @@ func (p *Session) Start(w http.ResponseWriter, r *http.Request) (store *SessionS
 	}
 	if p.config.CookieLifetime > 0 {
 		cookie.MaxAge = int(p.config.CookieLifetime)
-		cookie.Expires = p.clock.Now().Add(time.Duration(p.config.CookieLifetime) * time.Second)
+		// cookie.Expires = p.clock.Now().Add(time.Duration(p.config.CookieLifetime) * time.Second)
 	}
 	http.SetCookie(w, cookie)
 	r.AddCookie(cookie)
@@ -146,13 +151,15 @@ func (p *Session) Destroy(w http.ResponseWriter, r *http.Request) error {
 	sid, _ := url.QueryUnescape(cookie.Value)
 	p.del(sid)
 
-	cookie = &http.Cookie{Name: p.config.CookieName,
-		Path:     "/",
-		HttpOnly: p.config.HttpOnly,
-		Expires:  p.clock.Now(),
-		MaxAge:   -1}
+	/*
+		cookie = &http.Cookie{Name: p.config.CookieName,
+			Path:     "/",
+			HttpOnly: p.config.HttpOnly,
+			Expires:  p.clock.Now(),
+			MaxAge:   -1}
 
-	http.SetCookie(w, cookie)
+		http.SetCookie(w, cookie)
+	*/
 	return nil
 }
 
