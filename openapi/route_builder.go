@@ -24,6 +24,7 @@ type WsRoute struct {
 	Output      interface{}
 	Handle      restful.RouteFunction
 	Filter      restful.FilterFunction
+	Filters     []restful.FilterFunction
 	ExtraOutput []ApiOutput
 	Tags        []string
 }
@@ -74,8 +75,8 @@ func (p *RouteBuilder) Build(v *WsRoute) error {
 		b.Produces(v.Produce)
 	}
 
-	if v.Filter != nil {
-		b.Filter(v.Filter)
+	for _, filter := range v.Filters {
+		b.Filter(filter)
 	}
 
 	if v.Output != nil {

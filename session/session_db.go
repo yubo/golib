@@ -14,16 +14,17 @@ const (
 	CREATE_TABLE_SQL = "CREATE TABLE `session` (" +
 		"   `sid` char(128) NOT NULL," +
 		"   `data` blob NULL," +
+		"   `user_name` char(128) DEFAULT ''," +
 		"   `cookie_name` char(128) DEFAULT ''," +
-		"   `created_at` integer unsigned DEFAULT '0'," +
-		"   `updated_at` integer unsigned DEFAULT '0' NOT NULL," +
+		"   `created_at` bigint unsigned DEFAULT '0'," +
+		"   `updated_at` bigint unsigned DEFAULT '0' NOT NULL," +
 		"   PRIMARY KEY (`sid`)," +
 		"   KEY (`cookie_name`)," +
 		"   KEY (`updated_at`)" +
 		" ) ENGINE = InnoDB DEFAULT CHARACTER SET = utf8;"
 )
 
-func newDbStorage(cf *Config, opts *sessionOptions) (storage, error) {
+func newDbStorage(cf *Config, opts *options) (storage, error) {
 	st := &dbStorage{config: cf, db: opts.db}
 
 	if st.db == nil {
@@ -63,12 +64,12 @@ func (p *dbStorage) all() (ret int) {
 	return
 }
 
-func (p *dbStorage) get(sid string) (ret *sessionConnect, err error) {
+func (p *dbStorage) get(sid string) (ret *session, err error) {
 	err = p.db.Query("select * from "+TABLE_NAME+" where sid=?", sid).Row(&ret)
 	return
 }
 
-func (p *dbStorage) insert(s *sessionConnect) error {
+func (p *dbStorage) insert(s *session) error {
 	return p.db.Insert(TABLE_NAME, s)
 }
 
@@ -76,6 +77,6 @@ func (p *dbStorage) del(sid string) error {
 	return p.db.ExecNumErr("DELETE FROM "+TABLE_NAME+" where sid=?", sid)
 }
 
-func (p *dbStorage) update(s *sessionConnect) error {
+func (p *dbStorage) update(s *session) error {
 	return p.db.Update(TABLE_NAME, s)
 }

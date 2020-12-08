@@ -20,7 +20,7 @@ type Module struct {
 	db      *orm.Db
 	ctx     context.Context
 	cancel  context.CancelFunc
-	session *session.Session
+	session *session.Manager
 }
 
 var (

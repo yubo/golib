@@ -59,7 +59,7 @@ type options struct {
 	grpc    *grpc.Server
 	http    HttpServer
 	audit   Audit
-	session *session.Session
+	session *session.Manager
 	wg      sync.WaitGroup // for start/stop
 
 	extra map[string]interface{}
@@ -210,11 +210,11 @@ func (o *options) SetAudit(audit Audit) Options {
 	opts.audit = audit
 	return &opts
 }
-func (o *options) Session() *session.Session {
+func (o *options) Session() *session.Manager {
 	return o.session
 }
 
-func (o *options) SetSession(session *session.Session) Options {
+func (o *options) SetSession(session *session.Manager) Options {
 	opts := *o
 	opts.session = session
 	return &opts

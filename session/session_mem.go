@@ -9,9 +9,9 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-func newMemStorage(cf *Config, opts *sessionOptions) (storage, error) {
+func newMemStorage(cf *Config, opts *options) (storage, error) {
 	st := &mStorage{
-		data:   make(map[string]*sessionConnect),
+		data:   make(map[string]*session),
 		opts:   opts,
 		config: cf,
 	}
@@ -25,9 +25,9 @@ func newMemStorage(cf *Config, opts *sessionOptions) (storage, error) {
 
 type mStorage struct {
 	sync.RWMutex
-	data map[string]*sessionConnect
+	data map[string]*session
 
-	opts   *sessionOptions
+	opts   *options
 	config *Config
 }
 
@@ -37,7 +37,7 @@ func (p *mStorage) all() int {
 	return len(p.data)
 }
 
-func (p *mStorage) get(sid string) (*sessionConnect, error) {
+func (p *mStorage) get(sid string) (*session, error) {
 	p.RLock()
 	defer p.RUnlock()
 	s, ok := p.data[sid]
@@ -47,7 +47,7 @@ func (p *mStorage) get(sid string) (*sessionConnect, error) {
 	return s, nil
 }
 
-func (p *mStorage) insert(s *sessionConnect) error {
+func (p *mStorage) insert(s *session) error {
 	p.Lock()
 	defer p.Unlock()
 
@@ -63,7 +63,7 @@ func (p *mStorage) del(sid string) error {
 	return nil
 }
 
-func (p *mStorage) update(s *sessionConnect) error {
+func (p *mStorage) update(s *session) error {
 	p.Lock()
 	defer p.Unlock()
 

@@ -13,6 +13,8 @@ func WsRouteBuild(opt *WsOption, in []WsRoute) {
 type WsOption struct {
 	Ws          *restful.WebService
 	Acl         func(aclName string) (restful.FilterFunction, string, error)
+	Filter      restful.FilterFunction
+	Filters     []restful.FilterFunction
 	Kind        string
 	PrefixPath  string
 	ResourceKey string // e.g. name => xxx/{name}/
@@ -29,88 +31,102 @@ func NewWsBuilder() *WsBuilder {
 	return &WsBuilder{}
 }
 
-func (p *WsBuilder) Build(in *WsOption) (err error) {
+func (p *WsBuilder) Build(opt *WsOption) (err error) {
 	var article string
 
-	if in.Kind != "" {
-		article = util.GetArticleForNoun(in.Kind, " ")
+	if opt.Kind != "" {
+		article = util.GetArticleForNoun(opt.Kind, " ")
 	}
 
-	if in.ResourceKey == "" {
-		in.ResourceKey = "name"
+	if opt.ResourceKey == "" {
+		opt.ResourceKey = "name"
 	}
 
-	rb := NewRouteBuilder(in.Ws)
+	rb := NewRouteBuilder(opt.Ws)
 
-	for i, _ := range in.Routes {
-		v := &in.Routes[i]
+	for i, _ := range opt.Routes {
+		route := &opt.Routes[i]
 
-		switch v.Action {
+		switch route.Action {
 		case "list":
-			v.SubPath = "/"
-			v.Method = "GET"
-			v.Desc = "list objects of kind " + in.Kind
-			if v.Output == nil {
-				v.Output = util.MakeSlice(in.Obj)
+			route.SubPath = "/"
+			route.Method = "GET"
+			route.Desc = "list objects of kind " + opt.Kind
+			if route.Output == nil {
+				route.Output = util.MakeSlice(opt.Obj)
 			}
 		case "create":
-			v.SubPath = "/"
-			v.Method = "POST"
-			v.Desc = "create" + article + in.Kind
-			if v.Output == nil {
-				v.Output = in.Obj
+			route.SubPath = "/"
+			route.Method = "POST"
+			route.Desc = "create" + article + opt.Kind
+			if route.Output == nil {
+				route.Output = opt.Obj
 			}
 		case "get":
-			v.SubPath = "/{" + in.ResourceKey + "}"
-			v.Method = "GET"
-			v.Desc = "read the specified " + in.Kind
-			if v.Output == nil {
-				v.Output = in.Obj
+			route.SubPath = "/{" + opt.ResourceKey + "}"
+			route.Method = "GET"
+			route.Desc = "read the specified " + opt.Kind
+			if route.Output == nil {
+				route.Output = opt.Obj
 			}
 		case "update":
-			v.SubPath = "/{" + in.ResourceKey + "}"
-			v.Method = "PUT"
-			v.Desc = "update the specified  " + in.Kind
-			if v.Output == nil {
-				v.Output = in.Obj
+			route.SubPath = "/{" + opt.ResourceKey + "}"
+			route.Method = "PUT"
+			route.Desc = "update the specified  " + opt.Kind
+			if route.Output == nil {
+				route.Output = opt.Obj
 			}
 		case "delete":
-			v.SubPath = "/{" + in.ResourceKey + "}"
-			v.Method = "DELETE"
-			v.Desc = "delete" + article + in.Kind
-			if v.Output == nil {
-				v.Output = in.Obj
+			route.SubPath = "/{" + opt.ResourceKey + "}"
+			route.Method = "DELETE"
+			route.Desc = "delete" + article + opt.Kind
+			if route.Output == nil {
+				route.Output = opt.Obj
 			}
 		case "":
 		default:
-			panic("unsupported action " + v.Action)
+			panic("unsupported action " + route.Action)
 		}
 
-		v.SubPath = in.PrefixPath + v.SubPath
+		route.SubPath = opt.PrefixPath + route.SubPath
 
-		if v.Acl != "" && v.Filter == nil && in.Acl != nil {
-			if v.Filter, v.Scope, err = in.Acl(v.Acl); err != nil {
+		if route.Filter != nil {
+			route.Filters = append(route.Filters, route.Filter)
+		}
+
+		if route.Acl != "" && opt.Acl != nil {
+			var filter restful.FilterFunction
+			if filter, route.Scope, err = opt.Acl(route.Acl); err != nil {
 				panic(err)
 			}
+			route.Filters = append(route.Filters, filter)
 		}
 
-		if v.Acl != "" {
-			v.Desc += " acl(" + v.Acl + ")"
+		if len(opt.Filters) > 0 {
+			route.Filters = append(route.Filters, opt.Filters...)
 		}
 
-		if v.Scope != "" {
-			v.Desc += " scope(" + v.Scope + ")"
+		if opt.Filter != nil {
+			route.Filters = append(route.Filters, opt.Filter)
 		}
 
-		if v.Output == nil && in.Output != nil {
-			v.Output = in.Output
+		if route.Acl != "" {
+			route.Desc += " acl(" + route.Acl + ")"
 		}
 
-		if v.Tags == nil && in.Tags != nil {
-			v.Tags = in.Tags
+		if route.Scope != "" {
+			route.Desc += " scope(" + route.Scope + ")"
 		}
 
-		rb.Build(v)
+		if route.Output == nil && opt.Output != nil {
+			route.Output = opt.Output
+		}
+
+		if route.Tags == nil && opt.Tags != nil {
+			route.Tags = opt.Tags
+		}
+
+		rb.Build(route)
 	}
 	return nil
 }

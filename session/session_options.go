@@ -7,7 +7,7 @@ import (
 	"github.com/yubo/golib/util/clock"
 )
 
-type sessionOptions struct {
+type options struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	clock  clock.Clock
@@ -15,45 +15,45 @@ type sessionOptions struct {
 	mem    bool
 }
 
-type SessionOption interface {
-	apply(*sessionOptions)
+type Option interface {
+	apply(*options)
 }
 
-type funcSessionOption struct {
-	f func(*sessionOptions)
+type funcOption struct {
+	f func(*options)
 }
 
-func (p *funcSessionOption) apply(opt *sessionOptions) {
+func (p *funcOption) apply(opt *options) {
 	p.f(opt)
 }
 
-func newFuncSessionOption(f func(*sessionOptions)) *funcSessionOption {
-	return &funcSessionOption{
+func newFuncOption(f func(*options)) *funcOption {
+	return &funcOption{
 		f: f,
 	}
 }
 
-func WithCtx(ctx context.Context) SessionOption {
-	return newFuncSessionOption(func(o *sessionOptions) {
+func WithCtx(ctx context.Context) Option {
+	return newFuncOption(func(o *options) {
 		o.ctx = ctx
 		o.cancel = nil
 	})
 }
 
-func WithDb(db *orm.Db) SessionOption {
-	return newFuncSessionOption(func(o *sessionOptions) {
+func WithDb(db *orm.Db) Option {
+	return newFuncOption(func(o *options) {
 		o.db = db
 	})
 }
 
-func WithClock(clock clock.Clock) SessionOption {
-	return newFuncSessionOption(func(o *sessionOptions) {
+func WithClock(clock clock.Clock) Option {
+	return newFuncOption(func(o *options) {
 		o.clock = clock
 	})
 }
 
-func WithMem() SessionOption {
-	return newFuncSessionOption(func(o *sessionOptions) {
+func WithMem() Option {
+	return newFuncOption(func(o *options) {
 		o.mem = true
 	})
 }

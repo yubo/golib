@@ -61,7 +61,7 @@ func Md5sum(raw []byte) string {
 }
 
 func Sha1sum(raw []byte) string {
-	fmt.Printf("%x", sha1.Sum(raw))
+	return fmt.Sprintf("%x", sha1.Sum(raw))
 }
 
 func FileMd5sum(file string) (string, error) {

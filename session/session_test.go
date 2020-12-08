@@ -47,7 +47,7 @@ func mustExec(t *testing.T, db *orm.Db, query string, args ...interface{}) (res 
 
 func TestDbSession(t *testing.T) {
 	var (
-		sess  *Session
+		sess  *Manager
 		store *SessionStore
 		err   error
 		sid   string
@@ -120,13 +120,13 @@ func TestDbSession(t *testing.T) {
 		t.Fatalf("sess.All() got %d want %d", n, 1)
 	}
 
-	if v, ok := store.Get("abc").(string); !(ok && v == "11223344") {
+	if v := store.Get("abc"); v != "11223344" {
 		t.Fatalf("store.Get('abc') got %s want %s", v, "11223344")
 	}
 
 	store.Set("abc", "22334455")
 
-	if v, ok := store.Get("abc").(string); !(ok && v == "22334455") {
+	if v := store.Get("abc"); v != "22334455" {
 		t.Fatalf("store.Get('abc') got %s want %s", v, "22334455")
 	}
 
@@ -139,7 +139,7 @@ func TestDbSession(t *testing.T) {
 
 func TestDbSessionGC(t *testing.T) {
 	var (
-		sess *Session
+		sess *Manager
 		err  error
 	)
 
@@ -192,7 +192,7 @@ func TestDbSessionGC(t *testing.T) {
 
 func TestMemSession(t *testing.T) {
 	var (
-		sess  *Session
+		sess  *Manager
 		store *SessionStore
 		err   error
 		sid   string
@@ -257,13 +257,13 @@ func TestMemSession(t *testing.T) {
 		t.Fatalf("sess.All() got %d want %d", n, 1)
 	}
 
-	if v, ok := store.Get("abc").(string); !(ok && v == "11223344") {
+	if v := store.Get("abc"); v != "11223344" {
 		t.Fatalf("store.Get('abc') got %s want %s", v, "11223344")
 	}
 
 	store.Set("abc", "22334455")
 
-	if v, ok := store.Get("abc").(string); !(ok && v == "22334455") {
+	if v := store.Get("abc"); v != "22334455" {
 		t.Fatalf("store.Get('abc') got %s want %s", v, "22334455")
 	}
 
@@ -276,7 +276,7 @@ func TestMemSession(t *testing.T) {
 
 func TestMemSessionGC(t *testing.T) {
 	var (
-		sess *Session
+		sess *Manager
 		err  error
 	)
 

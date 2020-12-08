@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
-	"time"
 
 	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/util"
@@ -15,10 +15,10 @@ import (
 
 type storage interface {
 	all() int
-	get(sid string) (*sessionConnect, error)
-	insert(*sessionConnect) error
+	get(sid string) (*session, error)
+	insert(*session) error
 	del(sid string) error
-	update(*sessionConnect) error
+	update(*session) error
 }
 
 type Config struct {
@@ -50,8 +50,8 @@ func (p *Config) Validate() error {
 	return nil
 }
 
-func StartSession(cf *Config, opts ...SessionOption) (*Session, error) {
-	sopts := &sessionOptions{}
+func StartSession(cf *Config, opts ...Option) (*Manager, error) {
+	sopts := &options{}
 
 	for _, opt := range opts {
 		opt.apply(sopts)
@@ -77,30 +77,31 @@ func StartSession(cf *Config, opts ...SessionOption) (*Session, error) {
 		return nil, err
 	}
 
-	return &Session{
-		storage:        storage,
-		config:         cf,
-		sessionOptions: sopts,
+	return &Manager{
+		storage: storage,
+		config:  cf,
+		options: sopts,
 	}, nil
 }
 
-type sessionConnect struct {
+type session struct {
 	Sid        string `sql:"sid,where"`
-	Data       map[string]interface{}
+	UserName   string
+	Data       map[string]string
 	CookieName string
 	CreatedAt  int64
 	UpdatedAt  int64
 }
 
-type Session struct {
+type Manager struct {
 	storage
-	*sessionOptions
-	config *Config
+	options *options
+	config  *Config
 }
 
 // SessionStart generate or read the session id from http request.
 // if session id exists, return SessionStore with this id.
-func (p *Session) Start(w http.ResponseWriter, r *http.Request) (store *SessionStore, err error) {
+func (p *Manager) Start(w http.ResponseWriter, r *http.Request) (store *SessionStore, err error) {
 	var sid string
 
 	if sid, err = p.getSid(r); err != nil {
@@ -136,13 +137,13 @@ func (p *Session) Start(w http.ResponseWriter, r *http.Request) (store *SessionS
 	return
 }
 
-func (p *Session) StopGC() {
-	if p.cancel != nil {
-		p.cancel()
+func (p *Manager) StopGC() {
+	if p.options.cancel != nil {
+		p.options.cancel()
 	}
 }
 
-func (p *Session) Destroy(w http.ResponseWriter, r *http.Request) error {
+func (p *Manager) Destroy(w http.ResponseWriter, r *http.Request) error {
 	cookie, err := r.Cookie(p.config.CookieName)
 	if err != nil || cookie.Value == "" {
 		return status.Error(codes.Unauthenticated, "Have not login yet")
@@ -151,33 +152,31 @@ func (p *Session) Destroy(w http.ResponseWriter, r *http.Request) error {
 	sid, _ := url.QueryUnescape(cookie.Value)
 	p.del(sid)
 
-	/*
-		cookie = &http.Cookie{Name: p.config.CookieName,
-			Path:     "/",
-			HttpOnly: p.config.HttpOnly,
-			Expires:  p.clock.Now(),
-			MaxAge:   -1}
+	cookie = &http.Cookie{Name: p.config.CookieName,
+		Path:     "/",
+		HttpOnly: p.config.HttpOnly,
+		Expires:  p.options.clock.Now(),
+		MaxAge:   -1}
 
-		http.SetCookie(w, cookie)
-	*/
+	http.SetCookie(w, cookie)
 	return nil
 }
 
-func (p *Session) Get(sid string) (*SessionStore, error) {
+func (p *Manager) Get(sid string) (*SessionStore, error) {
 	return p.getSessionStore(sid, true)
 }
 
-func (p *Session) Exist(sid string) bool {
+func (p *Manager) Exist(sid string) bool {
 	_, err := p.get(sid)
 	return !status.NotFound(err)
 }
 
 // All count values in mysql session
-func (p *Session) All() int {
+func (p *Manager) All() int {
 	return p.all()
 }
 
-func (p *Session) getSid(r *http.Request) (sid string, err error) {
+func (p *Manager) getSid(r *http.Request) (sid string, err error) {
 	var cookie *http.Cookie
 
 	cookie, err = r.Cookie(p.config.CookieName)
@@ -188,77 +187,87 @@ func (p *Session) getSid(r *http.Request) (sid string, err error) {
 	return url.QueryUnescape(cookie.Value)
 }
 
-func (p *Session) getSessionStore(sid string, create bool) (*SessionStore, error) {
+func (p *Manager) getSessionStore(sid string, create bool) (*SessionStore, error) {
 	sc, err := p.get(sid)
 	if status.NotFound(err) && create {
-		ts := p.clock.Now().Unix()
-		sc = &sessionConnect{
+		ts := p.options.clock.Now().Unix()
+		sc = &session{
 			Sid:        sid,
 			CookieName: p.config.CookieName,
 			CreatedAt:  ts,
 			UpdatedAt:  ts,
-			Data:       make(map[string]interface{}),
+			Data:       make(map[string]string),
 		}
 		err = p.insert(sc)
 	}
 	if err != nil {
 		return nil, err
 	}
-	return &SessionStore{Session: p, sessionConnect: sc}, nil
+	return &SessionStore{manager: p, connect: sc}, nil
 }
 
 // SessionStore mysql session store
 type SessionStore struct {
 	sync.RWMutex
-	*sessionConnect
-	*Session
+	connect *session
+	manager *Manager
 }
 
 // Set value in mysql session.
 // it is temp value in map.
-func (p *SessionStore) Set(key string, value interface{}) error {
+func (p *SessionStore) Set(key, value string) error {
 	p.Lock()
 	defer p.Unlock()
-	p.Data[key] = value
-	return nil
-}
 
-// Get value from mysql session
-func (p *SessionStore) Get(key string) interface{} {
-	p.RLock()
-	defer p.RUnlock()
-	if v, ok := p.Data[key]; ok {
-		return v
+	switch strings.ToLower(key) {
+	case "username":
+		p.connect.UserName = value
+	default:
+		p.connect.Data[key] = value
 	}
 	return nil
 }
 
+// Get value from mysql session
+func (p *SessionStore) Get(key string) string {
+	p.RLock()
+	defer p.RUnlock()
+
+	switch strings.ToLower(key) {
+	case "username":
+		return p.connect.UserName
+	default:
+		return p.connect.Data[key]
+	}
+}
+
 func (p *SessionStore) CreatedAt() int64 {
-	return p.sessionConnect.CreatedAt
+	return p.connect.CreatedAt
 }
 
 // Delete value in mysql session
 func (p *SessionStore) Delete(key string) error {
 	p.Lock()
 	defer p.Unlock()
-	delete(p.Data, key)
+	delete(p.connect.Data, key)
 	return nil
 }
 
-// Flush clear all values in mysql session
-func (p *SessionStore) Flush() error {
+// Reset clear all values in mysql session
+func (p *SessionStore) Reset() error {
 	p.Lock()
 	defer p.Unlock()
-	p.Data = make(map[string]interface{})
+	p.connect.UserName = ""
+	p.connect.Data = make(map[string]string)
 	return nil
 }
 
 // Sid get session id of this mysql session store
 func (p *SessionStore) Sid() string {
-	return p.sessionConnect.Sid
+	return p.connect.Sid
 }
 
 func (p *SessionStore) Update(w http.ResponseWriter) error {
-	p.UpdatedAt = p.clock.Now().Unix()
-	return p.update(p.sessionConnect)
+	p.connect.UpdatedAt = p.manager.options.clock.Now().Unix()
+	return p.manager.update(p.connect)
 }

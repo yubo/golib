@@ -106,8 +106,8 @@ type Options interface {
 	Audit() Audit
 	SetAudit(Audit) Options
 
-	Session() *session.Session
-	SetSession(*session.Session) Options
+	Session() *session.Manager
+	SetSession(*session.Manager) Options
 
 	Wg() sync.WaitGroup
 
