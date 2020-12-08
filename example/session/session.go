@@ -10,8 +10,6 @@ import (
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/session"
-	"github.com/yubo/golib/status"
-	"google.golang.org/grpc/codes"
 )
 
 const (
@@ -49,7 +47,7 @@ func (p *Module) installWs() {
 
 	openapi.WsRouteBuild(&openapi.WsOption{
 		Ws:     ws.Path("/session").Produces(openapi.MIME_JSON).Consumes("*/*"),
-		Filter: p.sessionStart,
+		Filter: session.Filter(p.session),
 		Tags:   []string{"session"},
 	}, []openapi.WsRoute{{
 		Method: "GET", SubPath: "/",
@@ -68,57 +66,44 @@ func (p *Module) installWs() {
 	p.http.Add(ws)
 }
 
-func (p *Module) sessionStart(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-	session, err := p.session.Start(resp, req.Request)
-	if err != nil {
-		openapi.HttpWriteErr(resp, status.Errorf(codes.Internal,
-			"session start err %s", err))
-		return
-
-	}
-	req.SetAttribute("session", session)
-	chain.ProcessFilter(req, resp)
-	session.Update(resp)
-}
-
 // show session information
 func (p *Module) info(req *restful.Request, resp *restful.Response) {
-	session, ok := req.Attribute("session").(*session.SessionStore)
+	sess, ok := session.FromReq(req)
 	if !ok {
 		openapi.HttpWriteEntity(resp, "can't get session info", nil)
 		return
 	}
 
-	userName := session.Get("userName")
+	userName := sess.Get("userName")
 	if userName == "" {
 		openapi.HttpWriteEntity(resp, "can't get username from session", nil)
 		return
 	}
 
-	cnt, err := strconv.Atoi(session.Get("info.cnt"))
+	cnt, err := strconv.Atoi(sess.Get("info.cnt"))
 	if err != nil {
 		cnt = 0
 	}
 
 	cnt++
-	session.Set("info.cnt", strconv.Itoa(cnt))
+	sess.Set("info.cnt", strconv.Itoa(cnt))
 	openapi.HttpWriteEntity(resp, fmt.Sprintf("%s %d", userName, cnt), nil)
 }
 
 // set session
 func (p *Module) set(req *restful.Request, resp *restful.Response) {
-	session, ok := req.Attribute("session").(*session.SessionStore)
+	sess, ok := session.FromReq(req)
 	if ok {
-		session.Set("userName", "tom")
+		sess.Set("userName", "tom")
 	}
 	openapi.HttpWriteEntity(resp, "set username successfully", nil)
 }
 
 // reset session
 func (p *Module) reset(req *restful.Request, resp *restful.Response) {
-	session, ok := req.Attribute("session").(*session.SessionStore)
+	sess, ok := session.FromReq(req)
 	if ok {
-		session.Reset()
+		sess.Reset()
 	}
 	openapi.HttpWriteEntity(resp, "reset successfully", nil)
 }

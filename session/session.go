@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/emicklei/go-restful"
+	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/clock"
@@ -270,4 +272,44 @@ func (p *SessionStore) Sid() string {
 func (p *SessionStore) Update(w http.ResponseWriter) error {
 	p.connect.UpdatedAt = p.manager.options.clock.Now().Unix()
 	return p.manager.update(p.connect)
+}
+
+type contextKeyT string
+
+var contextKey = contextKeyT("session")
+
+// NewContext returns a copy of the parent context
+// and associates it with an sessionStore.
+func NewContext(ctx context.Context, session *SessionStore) context.Context {
+	return context.WithValue(ctx, contextKey, session)
+}
+
+// FromContext returns the sessionStore bound to the context, if any.
+func FromContext(ctx context.Context) (session *SessionStore, ok bool) {
+	session, ok = ctx.Value(contextKey).(*SessionStore)
+	return
+}
+
+func WithReq(req *restful.Request, session *SessionStore) {
+	req.SetAttribute(string(contextKey), session)
+}
+
+func FromReq(req *restful.Request) (session *SessionStore, ok bool) {
+	session, ok = req.Attribute(string(contextKey)).(*SessionStore)
+	return
+}
+
+func Filter(manager *Manager) restful.FilterFunction {
+	return func(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+		session, err := manager.Start(resp, req.Request)
+		if err != nil {
+			openapi.HttpWriteErr(resp, status.Errorf(codes.Internal,
+				"session start err %s", err))
+			return
+
+		}
+		WithReq(req, session)
+		chain.ProcessFilter(req, resp)
+		session.Update(resp)
+	}
 }

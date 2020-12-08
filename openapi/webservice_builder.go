@@ -10,6 +10,7 @@ func WsRouteBuild(opt *WsOption, in []WsRoute) {
 	NewWsBuilder().Build(opt)
 }
 
+// opt.Filter > opt.Filters > route.acl > route.filter > route.filters
 type WsOption struct {
 	Ws          *restful.WebService
 	Acl         func(aclName string) (restful.FilterFunction, string, error)
@@ -24,8 +25,7 @@ type WsOption struct {
 	Routes      []WsRoute
 }
 
-type WsBuilder struct {
-}
+type WsBuilder struct{}
 
 func NewWsBuilder() *WsBuilder {
 	return &WsBuilder{}
@@ -89,26 +89,7 @@ func (p *WsBuilder) Build(opt *WsOption) (err error) {
 		}
 
 		route.SubPath = opt.PrefixPath + route.SubPath
-
-		if route.Filter != nil {
-			route.Filters = append(route.Filters, route.Filter)
-		}
-
-		if route.Acl != "" && opt.Acl != nil {
-			var filter restful.FilterFunction
-			if filter, route.Scope, err = opt.Acl(route.Acl); err != nil {
-				panic(err)
-			}
-			route.Filters = append(route.Filters, filter)
-		}
-
-		if len(opt.Filters) > 0 {
-			route.Filters = append(route.Filters, opt.Filters...)
-		}
-
-		if opt.Filter != nil {
-			route.Filters = append(route.Filters, opt.Filter)
-		}
+		route.Filters = routeFilters(route, opt)
 
 		if route.Acl != "" {
 			route.Desc += " acl(" + route.Acl + ")"
@@ -129,4 +110,35 @@ func (p *WsBuilder) Build(opt *WsOption) (err error) {
 		rb.Build(route)
 	}
 	return nil
+}
+
+// opt.Filter > opt.Filters > route.acl > route.filter > route.filters
+func routeFilters(route *WsRoute, opt *WsOption) (filters []restful.FilterFunction) {
+	var filter restful.FilterFunction
+	var err error
+
+	if opt.Filter != nil {
+		filters = append(filters, opt.Filter)
+	}
+
+	if len(opt.Filters) > 0 {
+		filters = append(filters, opt.Filters...)
+	}
+
+	if route.Acl != "" && opt.Acl != nil {
+		if filter, route.Scope, err = opt.Acl(route.Acl); err != nil {
+			panic(err)
+		}
+		filters = append(filters, filter)
+	}
+
+	if route.Filter != nil {
+		filters = append(filters, route.Filter)
+	}
+
+	if len(route.Filters) > 0 {
+		filters = append(filters, route.Filters...)
+	}
+
+	return filters
 }
