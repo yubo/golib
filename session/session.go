@@ -52,27 +52,27 @@ func (p *Config) Validate() error {
 	return nil
 }
 
-func StartSession(cf *Config, opts ...Option) (*Manager, error) {
-	sopts := &options{}
+func StartSession(cf *Config, opts_ ...Option) (*Manager, error) {
+	opts := &options{}
 
-	for _, opt := range opts {
-		opt.apply(sopts)
+	for _, opt := range opts_ {
+		opt.apply(opts)
 	}
 
-	if sopts.ctx == nil {
-		sopts.ctx, sopts.cancel = context.WithCancel(context.Background())
+	if opts.ctx == nil {
+		opts.ctx, opts.cancel = context.WithCancel(context.Background())
 	}
 
-	if sopts.clock == nil {
-		sopts.clock = clock.RealClock{}
+	if opts.clock == nil {
+		opts.clock = clock.RealClock{}
 	}
 
 	var storage storage
 	var err error
 	if cf.Storage == "mem" {
-		storage, err = newMemStorage(cf, sopts)
+		storage, err = newMemStorage(cf, opts)
 	} else {
-		storage, err = newDbStorage(cf, sopts)
+		storage, err = newDbStorage(cf, opts)
 	}
 
 	if err != nil {
@@ -82,7 +82,7 @@ func StartSession(cf *Config, opts ...Option) (*Manager, error) {
 	return &Manager{
 		storage: storage,
 		config:  cf,
-		options: sopts,
+		options: opts,
 	}, nil
 }
 
@@ -97,8 +97,8 @@ type session struct {
 
 type Manager struct {
 	storage
-	options *options
-	config  *Config
+	*options
+	config *Config
 }
 
 // SessionStart generate or read the session id from http request.
@@ -140,8 +140,8 @@ func (p *Manager) Start(w http.ResponseWriter, r *http.Request) (store *SessionS
 }
 
 func (p *Manager) StopGC() {
-	if p.options.cancel != nil {
-		p.options.cancel()
+	if p.cancel != nil {
+		p.cancel()
 	}
 }
 
@@ -157,7 +157,7 @@ func (p *Manager) Destroy(w http.ResponseWriter, r *http.Request) error {
 	cookie = &http.Cookie{Name: p.config.CookieName,
 		Path:     "/",
 		HttpOnly: p.config.HttpOnly,
-		Expires:  p.options.clock.Now(),
+		Expires:  p.clock.Now(),
 		MaxAge:   -1}
 
 	http.SetCookie(w, cookie)
@@ -192,7 +192,7 @@ func (p *Manager) getSid(r *http.Request) (sid string, err error) {
 func (p *Manager) getSessionStore(sid string, create bool) (*SessionStore, error) {
 	sc, err := p.get(sid)
 	if status.NotFound(err) && create {
-		ts := p.options.clock.Now().Unix()
+		ts := p.clock.Now().Unix()
 		sc = &session{
 			Sid:        sid,
 			CookieName: p.config.CookieName,
@@ -270,7 +270,7 @@ func (p *SessionStore) Sid() string {
 }
 
 func (p *SessionStore) Update(w http.ResponseWriter) error {
-	p.connect.UpdatedAt = p.manager.options.clock.Now().Unix()
+	p.connect.UpdatedAt = p.manager.clock.Now().Unix()
 	return p.manager.update(p.connect)
 }
 

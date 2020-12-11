@@ -44,6 +44,10 @@ type Request struct {
 }
 
 func NewRequest(in *RequestOptions, opts ...RequestOption) (req *Request, err error) {
+	if in.header == nil {
+		in.header = make(http.Header)
+	}
+
 	for _, opt := range opts {
 		opt.apply(in)
 	}
