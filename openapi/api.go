@@ -1,5 +1,11 @@
 package openapi
 
+import (
+	"net/http"
+
+	"github.com/yubo/golib/status"
+)
+
 const (
 	MODULE_SSO_BASE = 1 << 6 << iota
 	MODULE_GATHER_BASE
@@ -39,3 +45,40 @@ const (
 	ActionRestore  = "restore"
 	ActionReboot   = "reboot"
 )
+
+type RespStatus struct {
+	Code int    `json:"code" description:"status code"`
+	Err  string `json:"err" description:"error msg"`
+}
+
+type RespTotal struct {
+	Total int64 `json:"total" description:"total number"`
+}
+
+type RespID struct {
+	ID int64 `json:"id" description:"id"`
+}
+
+func NewRespStatus(err error) RespStatus {
+	ret := RespStatus{
+		Code: 200,
+	}
+	if err != nil {
+		ret.Err = err.Error()
+		ret.Code = http.StatusBadRequest
+
+		if s, ok := status.FromError(err); ok {
+			ret.Code = status.HTTPStatusFromCode(s.Code())
+		}
+	}
+
+	return ret
+}
+
+func NewRespID(id int64) RespID {
+	return RespID{ID: id}
+}
+
+func NewRespTotal(total int64) RespTotal {
+	return RespTotal{Total: total}
+}

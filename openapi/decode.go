@@ -74,6 +74,10 @@ func (p *Decoder) Decode(r *restful.Request, dst interface{}) error {
 	rv = rv.Elem()
 	rt = rv.Type()
 
+	if rv.Kind() == reflect.Slice {
+		return r.ReadEntity(dst)
+	}
+
 	if rv.Kind() != reflect.Struct || rv.Kind() == reflect.Slice || rt.String() == "time.Time" {
 		return status.Errorf(codes.InvalidArgument,
 			"schema: interface must be a pointer to struct")

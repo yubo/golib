@@ -130,7 +130,7 @@ type GetLogsInput struct {
 }
 
 type GetLogsOutput struct {
-	openapi.Resp
+	openapi.RespStatus
 	Data struct {
 		Total int64 `json: "total"`
 		List  []Log `json: "list"`
@@ -142,8 +142,8 @@ type GetLogInput struct {
 }
 
 type GetLogOutput struct {
-	openapi.Resp
-	Data Log `json:"dat"`
+	openapi.RespStatus
+	Data *Log `json:"dat"`
 }
 
 func (p *Module) install() error {
@@ -151,25 +151,19 @@ func (p *Module) install() error {
 
 	ws := new(restful.WebService)
 	opt := &openapi.WsOption{
-		Ws:          ws.Path("/api/v1/audit").Produces(restful.MIME_JSON).Consumes("*/*"),
-		Kind:        "audit log",
-		Tags:        []string{"audit log"},
-		Acl:         p.getFilter,
-		Obj:         Log{},
-		ResourceKey: "id",
+		Ws:   ws.Path("/api/v1/audit").Produces(restful.MIME_JSON).Consumes("*/*"),
+		Tags: []string{"audit log"},
+		Acl:  p.getFilter,
 	}
 
 	openapi.WsRouteBuild(opt, []openapi.WsRoute{{
 		SubPath: "/", Acl: "read",
 		Method: "GET",
 		Handle: p.getLogs,
-		Input:  GetLogsInput{},
-		Output: GetLogsOutput{},
 	}, {
-		Action: "get", Acl: "read",
+		SubPath: "/{id}", Acl: "read",
+		Method: "GET",
 		Handle: p.getLog,
-		Input:  GetLogInput{},
-		Output: GetLogOutput{},
 	}})
 
 	p.http.Add(ws)
@@ -204,31 +198,26 @@ func (p *Module) logFilter(req *restful.Request, resp *restful.Response, chain *
 }
 
 // ###########################
-func (p *Module) getLogs(req *restful.Request, resp *restful.Response) {
-	in := &GetLogsInput{}
+func (p *Module) getLogs(req *restful.Request, resp *restful.Response, in *GetLogsInput) (*GetLogsOutput, error) {
 
-	total, list, err := func() (total int64, list []Log, err error) {
-		if err = openapi.ReadEntity(req, in); err != nil {
-			return
-		}
+	sqlExtra := in.SqlExtra("id desc")
 
-		sqlExtra := in.SqlExtra("id desc")
+	total, list, err := GetLogs(p.db, in, sqlExtra)
 
-		return GetLogs(p.db, in, sqlExtra)
-	}()
-	openapi.HttpWriteList(resp, total, list, err)
+	ret := &GetLogsOutput{RespStatus: openapi.NewRespStatus(err)}
+	ret.Data.Total = total
+	ret.Data.List = list
+
+	return ret, nil
 }
 
-func (p *Module) getLog(req *restful.Request, resp *restful.Response) {
-	in := &GetLogInput{}
-	ret, err := func() (*Log, error) {
-		if err := openapi.ReadEntity(req, in); err != nil {
-			return nil, err
-		}
-		return GetLog(p.db, in.Id)
-	}()
+func (p *Module) getLog(req *restful.Request, resp *restful.Response, in *GetLogInput) (*GetLogOutput, error) {
+	ret, err := GetLog(p.db, in.Id)
 
-	openapi.HttpWriteData(resp, ret, err)
+	return &GetLogOutput{
+		RespStatus: openapi.NewRespStatus(err),
+		Data:       ret,
+	}, nil
 }
 
 type Extra struct {

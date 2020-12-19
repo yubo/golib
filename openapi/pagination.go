@@ -40,14 +40,6 @@ type Pagination struct {
 	Order       *string `param:"query" flags:"-" description:"asc(default)/desc"`
 }
 
-type Resp struct {
-	Error string `json:"err" description:"error msg"`
-}
-
-type RespTotal struct {
-	Total int64 `json:"total" description:"total number"`
-}
-
 func (p *Pagination) OffsetLimit() (int, int) {
 	limit := util.IntValue(p.PageSize)
 
