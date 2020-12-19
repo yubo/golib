@@ -16,12 +16,12 @@ type CreateUserInput struct {
 
 type CreateUserOutput struct {
 	openapi.RespStatus
-	Data openapi.RespID `json:"data"`
+	Data openapi.RespID `json:"dat"`
 }
 
 type CreateUsersOutput struct {
 	openapi.RespStatus
-	Data openapi.RespTotal `json:"data"`
+	Data openapi.RespTotal `json:"dat"`
 }
 
 type GetUsersInput struct {
@@ -38,7 +38,7 @@ type GetUsersOutput struct {
 	Data struct {
 		Total int     `json:"total"`
 		List  []*User `json:"list"`
-	} `json:'data'`
+	} `json:'dat'`
 }
 
 type GetUserInput struct {
@@ -51,7 +51,7 @@ func (p *GetUserInput) Validate() error {
 
 type GetUserOutput struct {
 	openapi.RespStatus
-	Data *User `json:"data"`
+	Data *User `json:"dat"`
 }
 
 type UpdateUserInput struct {
@@ -61,7 +61,7 @@ type UpdateUserInput struct {
 
 type UpdateUserOutput struct {
 	openapi.RespStatus
-	Data *User `json:"data"`
+	Data *User `json:"dat"`
 }
 
 type DeleteUserInput struct {
@@ -70,5 +70,5 @@ type DeleteUserInput struct {
 
 type DeleteUserOutput struct {
 	openapi.RespStatus
-	Data *User `json:"data"`
+	Data *User `json:"dat"`
 }

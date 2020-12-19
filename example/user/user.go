@@ -1,4 +1,4 @@
-// this is a sample echo rest api module
+// this is a sample user rest api module
 package user
 
 import (
@@ -37,13 +37,13 @@ func (p *Module) startHook(ops *proc.HookOps, cf *configer.Configer) error {
 }
 
 func (p *Module) installWs() {
-	openapi.SwaggerTagRegister("echo", "echo Api - for restful sample")
+	openapi.SwaggerTagRegister("user", "user Api - for restful sample")
 
 	ws := new(restful.WebService)
 
 	openapi.WsRouteBuild(&openapi.WsOption{
-		Ws:   ws.Path("/echo/users").Produces(openapi.MIME_JSON).Consumes(openapi.MIME_JSON),
-		Tags: []string{"echo"},
+		Ws:   ws.Path("/users").Produces(openapi.MIME_JSON).Consumes(openapi.MIME_JSON),
+		Tags: []string{"user"},
 	}, []openapi.WsRoute{{
 		Method: "POST", SubPath: "/createWithList",
 		Desc:   "create users",
@@ -132,5 +132,5 @@ func init() {
 }
 
 func addAuthScope() {
-	openapi.ScopeRegister("echo:write", "echo msg")
+	openapi.ScopeRegister("user:write", "user")
 }

@@ -175,9 +175,11 @@ func (p *RouteBuilder) Build(wr *WsRoute) error {
 	return nil
 }
 
+func noneHandle(req *restful.Request, resp *restful.Response) {}
+
 func (p *RouteBuilder) registerHandle(b *restful.RouteBuilder, wr *WsRoute) error {
 	if wr.Handle == nil {
-		b.To(func(req *restful.Request, resp *restful.Response) {})
+		b.To(noneHandle)
 		return nil
 	}
 
