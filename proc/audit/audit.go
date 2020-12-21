@@ -31,21 +31,21 @@ var (
 	errHttpServer = errors.New("unable get http server")
 	_module       = &Module{name: moduleName}
 	hookOps       = []proc.HookOps{{
-		Hook:     _module.preStartHook,
+		Hook:     _module.prestart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_POST_MODULE,
 		// dblooger need get user.filter, so, private -> post_module
 	}, {
 		// reload.represtart
-		Hook:     _module.preStartHook,
+		Hook:     _module.prestart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_RELOAD,
 		Priority: proc.PRI_POST_MODULE,
 	}}
 )
 
-func (p *Module) preStartHook(ops *proc.HookOps, configer *configer.Configer) error {
+func (p *Module) prestart(ops *proc.HookOps, configer *configer.Configer) error {
 	popts := ops.Options()
 
 	if p.db = popts.Db(); p.db == nil {

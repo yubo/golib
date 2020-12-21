@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/yubo/golib/configer"
@@ -100,13 +101,24 @@ func hookNumName(n ProcessAction) string {
 	}
 }
 
+func nameOfFunction(f interface{}) string {
+	fun := runtime.FuncForPC(reflect.ValueOf(f).Pointer())
+	tokenized := strings.Split(fun.Name(), ".")
+	last := tokenized[len(tokenized)-1]
+	last = strings.TrimSuffix(last, ")·fm") // < Go 1.5
+	last = strings.TrimSuffix(last, ")-fm") // Go 1.5
+	last = strings.TrimSuffix(last, "·fm")  // < Go 1.5
+	last = strings.TrimSuffix(last, "-fm")  // Go 1.5
+	return last
+
+}
+
 func dbgOps(ops *HookOps) {
-	klog.V(5).Infof("hook %s %s[%d] %s()",
+	klog.V(5).Infof("hook %s %s[%d] %s",
 		hookNumName(ops.HookNum),
 		ops.Owner,
 		ops.Priority,
-		runtime.FuncForPC(reflect.ValueOf(ops.Hook).
-			Pointer()).Name())
+		nameOfFunction(ops.Hook))
 }
 
 // only be called once

@@ -6,10 +6,12 @@ import (
 	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/logs"
 	"github.com/yubo/golib/proc"
+	"github.com/yubo/golib/session"
 	"k8s.io/klog/v2"
 
 	_ "github.com/yubo/golib/example/auth"
-	_ "github.com/yubo/golib/orm/mysql"
+	"github.com/yubo/golib/example/user"
+	_ "github.com/yubo/golib/orm/sqlite"
 	_ "github.com/yubo/golib/proc/audit"
 	_ "github.com/yubo/golib/proc/db"
 	_ "github.com/yubo/golib/proc/grpc"
@@ -33,12 +35,17 @@ const (
 
 var (
 	hookOps = []proc.HookOps{{
-		Hook:     startHook,
+		Hook:     prestart,
+		Owner:    moduleName,
+		HookNum:  proc.ACTION_START,
+		Priority: proc.PRI_PRE_MODULE,
+	}, {
+		Hook:     start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_MODULE,
 	}, {
-		Hook:     stopHook,
+		Hook:     stop,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_STOP,
 		Priority: proc.PRI_MODULE,
@@ -60,7 +67,28 @@ func main() {
 	}
 }
 
-func startHook(ops *proc.HookOps, cf *configer.Configer) error {
+func prestart(ops *proc.HookOps, cf *configer.Configer) error {
+	klog.Info("prestart")
+
+	popts := ops.Options()
+
+	db := popts.Db()
+	if err := db.ExecRows([]byte(session.CREATE_TABLE_SQLITE)); err != nil {
+		return err
+	}
+	if err := db.ExecRows([]byte(user.CREATE_TABLE_SQLITE)); err != nil {
+		return err
+	}
+
+	buildReporter = proc.NewBuildReporter(popts)
+	if err := buildReporter.Start(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func start(ops *proc.HookOps, cf *configer.Configer) error {
 	klog.Info("start")
 
 	popts := ops.Options()
@@ -73,7 +101,7 @@ func startHook(ops *proc.HookOps, cf *configer.Configer) error {
 	return nil
 }
 
-func stopHook(ops *proc.HookOps, cf *configer.Configer) error {
+func stop(ops *proc.HookOps, cf *configer.Configer) error {
 	klog.Info("stop")
 	buildReporter.Stop()
 	return nil

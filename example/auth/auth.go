@@ -33,19 +33,19 @@ type Module struct {
 var (
 	_module = &Module{Name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.preStartHook,
+		Hook:     _module.prestart,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_PRE_MODULE,
 	}, {
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_POST_MODULE,
 	}}
 )
 
-func (p *Module) preStartHook(ops *proc.HookOps, cf *configer.Configer) (err error) {
+func (p *Module) prestart(ops *proc.HookOps, cf *configer.Configer) (err error) {
 	popts := ops.Options()
 
 	c := &Config{}
@@ -62,7 +62,7 @@ func (p *Module) preStartHook(ops *proc.HookOps, cf *configer.Configer) (err err
 	return
 }
 
-func (p *Module) startHook(ops *proc.HookOps, cf *configer.Configer) (err error) {
+func (p *Module) start(ops *proc.HookOps, cf *configer.Configer) (err error) {
 	return nil
 }
 

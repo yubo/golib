@@ -200,13 +200,13 @@ func (p HookOps) Options() Options {
 type ProcessPriority uint32
 
 const (
-	_ ProcessPriority = iota
-	PRI_PRE_SYS
-	PRI_PRE_MODULE
-	PRI_MODULE
-	PRI_POST_MODULE
-	PRI_SYS
-	PRI_POST_SYS
+	_               ProcessPriority = iota
+	PRI_PRE_SYS                     // init orm, grpc, http server
+	PRI_PRE_MODULE                  // pre check database
+	PRI_MODULE                      // init each modules
+	PRI_POST_MODULE                 // nouse
+	PRI_SYS                         // start server
+	PRI_POST_SYS                    // nouse
 )
 
 type ProcessAction uint32

@@ -7,6 +7,7 @@ import (
 	"github.com/emicklei/go-restful"
 	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/openapi"
+	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/proc"
 )
 
@@ -18,22 +19,24 @@ type Module struct {
 	Name string
 	http proc.HttpServer
 	auth proc.Auth
+	db   *orm.Db
 }
 
 var (
 	_module = &Module{Name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_MODULE,
 	}}
 )
 
-func (p *Module) startHook(ops *proc.HookOps, cf *configer.Configer) error {
+func (p *Module) start(ops *proc.HookOps, cf *configer.Configer) error {
 	popts := ops.Options()
 	p.http = popts.Http()
 	p.auth = popts.Auth()
+	p.db = popts.Db()
 	p.installWs()
 	return nil
 }
@@ -47,10 +50,6 @@ func (p *Module) installWs() {
 		Ws:   ws.Path("/users").Produces(openapi.MIME_JSON).Consumes(openapi.MIME_JSON),
 		Tags: []string{"user"},
 	}, []openapi.WsRoute{{
-		Method: "POST", SubPath: "/createWithList",
-		Desc:   "create users",
-		Handle: p.createUsers,
-	}, {
 		Method: "POST", SubPath: "/",
 		Desc:   "create user",
 		Handle: p.createUser,
@@ -76,7 +75,7 @@ func (p *Module) installWs() {
 }
 
 func (p *Module) createUser(req *restful.Request, resp *restful.Response, in *CreateUserInput) (*CreateUserOutput, error) {
-	id, err := createUser(in)
+	id, err := createUser(p.db, in)
 
 	return &CreateUserOutput{
 		RespStatus: openapi.NewRespStatus(err),
@@ -85,18 +84,10 @@ func (p *Module) createUser(req *restful.Request, resp *restful.Response, in *Cr
 
 }
 
-func (p *Module) createUsers(req *restful.Request, resp *restful.Response, in []CreateUserInput) (*CreateUsersOutput, error) {
-	total, err := createUsers(in)
-	return &CreateUsersOutput{
-		RespStatus: openapi.NewRespStatus(err),
-		Data:       openapi.NewRespTotal(int64(total)),
-	}, nil
-}
-
 func (p *Module) getUsers(req *restful.Request, resp *restful.Response, in *GetUsersInput) (*GetUsersOutput, error) {
 
 	log.Printf("input %s", in)
-	total, list, err := getUsers(in)
+	total, list, err := getUsers(p.db, in)
 
 	ret := &GetUsersOutput{RespStatus: openapi.NewRespStatus(err)}
 	ret.Data.Total = total
@@ -106,7 +97,7 @@ func (p *Module) getUsers(req *restful.Request, resp *restful.Response, in *GetU
 }
 
 func (p *Module) getUser(req *restful.Request, resp *restful.Response, in *GetUserInput) (*GetUserOutput, error) {
-	ret, err := getUser(in.Name)
+	ret, err := getUser(p.db, in.Name)
 	return &GetUserOutput{
 		RespStatus: openapi.NewRespStatus(err),
 		Data:       ret,
@@ -114,7 +105,7 @@ func (p *Module) getUser(req *restful.Request, resp *restful.Response, in *GetUs
 }
 
 func (p *Module) updateUser(req *restful.Request, resp *restful.Response, in *UpdateUserInput) (*UpdateUserOutput, error) {
-	ret, err := updateUser(in)
+	ret, err := updateUser(p.db, in)
 	return &UpdateUserOutput{
 		RespStatus: openapi.NewRespStatus(err),
 		Data:       ret,
@@ -123,7 +114,7 @@ func (p *Module) updateUser(req *restful.Request, resp *restful.Response, in *Up
 }
 
 func (p *Module) deleteUser(req *restful.Request, resp *restful.Response, in *DeleteUserInput) (*DeleteUserOutput, error) {
-	ret, err := deleteUser(in.Name)
+	ret, err := deleteUser(p.db, in.Name)
 	return &DeleteUserOutput{
 		RespStatus: openapi.NewRespStatus(err),
 		Data:       ret,

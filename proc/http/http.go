@@ -77,7 +77,7 @@ var (
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_PRE_SYS,
 	}, {
-		Hook:     _module.testHook,
+		Hook:     _module.test,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_SYS,
@@ -104,7 +104,7 @@ var (
 	}}
 )
 
-func (p *Module) testHook(ops *proc.HookOps, configer *configer.Configer) error {
+func (p *Module) test(ops *proc.HookOps, configer *configer.Configer) error {
 	cf := &Config{}
 	if err := configer.Read(p.name, cf); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)

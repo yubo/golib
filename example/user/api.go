@@ -13,8 +13,8 @@ type User struct {
 }
 
 type CreateUserInput struct {
-	Name  string `param:"data" name:"name"`
-	Phone string `param:"data" name:"phone"`
+	Name  string `param:"data" json:"name"`
+	Phone string `param:"data" json:"phone"`
 }
 
 type CreateUserOutput struct {
@@ -28,6 +28,7 @@ type CreateUsersOutput struct {
 }
 
 type GetUsersInput struct {
+	openapi.Pagination
 	Query *string `param:"query" name:"query" description:"query user"`
 	Count bool    `param:"query" name:"count" description:"just response total count"`
 }

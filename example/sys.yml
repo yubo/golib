@@ -60,8 +60,10 @@ grpc:
   addr: ":8081"
   maxRecvMsgSize: 1024000
 db:
-  driver: "mysql"
-  dsn: "root:1234@tcp(localhost:3306)/test?loc=Local&parseTime=true"
+  driver: "sqlite3"
+  dsn: "file:helo.db?cache=shared&mode=memory"
+  #driver: "mysql"
+  #dsn: "root:1234@tcp(localhost:3306)/test?loc=Local&parseTime=true"
 logLevel: 8
 logFlushFrequency: 5
 watchdogSec: 10
@@ -73,7 +75,7 @@ mail:
   password: ""
   tmpDir: "/tmp"
 session:
-  storage: "mem"
+  storage: "db" # mem | db
   cookieName: "golib-example-sid"
   sidLength: 24
   httpOnly: true

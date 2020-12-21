@@ -26,7 +26,7 @@ type Module struct {
 var (
 	_module = &Module{name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.testHook,
+		Hook:     _module.test,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_TEST,
 		Priority: proc.PRI_PRE_MODULE,
@@ -48,7 +48,7 @@ var (
 	}}
 )
 
-func (p *Module) testHook(ops *proc.HookOps, cf *configer.Configer) error {
+func (p *Module) test(ops *proc.HookOps, cf *configer.Configer) error {
 	c := &session.Config{}
 	if err := cf.Read(p.name, c); err != nil {
 		return fmt.Errorf("%s read config err: %s", p.name, err)

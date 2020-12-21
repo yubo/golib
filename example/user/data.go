@@ -2,95 +2,69 @@
 package user
 
 import (
-	"fmt"
 	"strings"
-	"sync"
+
+	"github.com/yubo/golib/orm"
+	"github.com/yubo/golib/util"
 )
 
-var (
-	users = users_{
-		id: 1,
-		data: map[string]*User{
-			"tom": &User{
-				Id:    1,
-				Name:  "tom",
-				Phone: "999",
-			},
-		},
-	}
+const (
+	CREATE_TABLE_SQLITE = "CREATE TABLE IF NOT EXISTS `user` (" +
+		"  `id`    integer      PRIMARY    KEY AUTOINCREMENT," +
+		"  `name`  varchar(128) DEFAULT '' NOT NULL," +
+		"  `phone` varchar(16)  DEFAULT '' NOT NULL" +
+		");" +
+		" CREATE UNIQUE INDEX `user_index_name` on `user` (`name`);" +
+		" CREATE UNIQUE INDEX `user_index_phone` on `user` (`phone`);"
 )
 
-type users_ struct {
-	sync.RWMutex
-	id   int
-	data map[string]*User
+func createUser(db *orm.Db, in *CreateUserInput) (int64, error) {
+	return db.InsertLastId("user", in)
 }
 
-func createUser(in *CreateUserInput) (int, error) {
-	users.Lock()
-	defer users.Unlock()
-
-	users.id++
-	users.data[in.Name] = &User{
-		Id:    users.id,
-		Name:  in.Name,
-		Phone: in.Phone,
+func genUserSql(in *GetUsersInput) (where string, args []interface{}) {
+	a := []string{}
+	b := []interface{}{}
+	if query := util.StringValue(in.Query); query != "" {
+		a = append(a, "name like ?")
+		b = append(b, "%"+query+"%")
 	}
-
-	return users.id, nil
-}
-
-func createUsers(in []CreateUserInput) (int, error) {
-	for _, v := range in {
-		createUser(&v)
+	if len(a) > 0 {
+		where = " where " + strings.Join(a, " and ")
+		args = b
 	}
-	return len(in), nil
-}
-
-func getUsers(in *GetUsersInput) (total int, list []*User, err error) {
-	if in.Query == nil {
-		for _, v := range users.data {
-			list = append(list, v)
-		}
-	} else {
-		for k, v := range users.data {
-			if strings.Contains(k, *in.Query) {
-				list = append(list, v)
-			}
-		}
-	}
-
-	total = len(list)
 	return
 }
 
-func getUser(userName string) (*User, error) {
-	users.RLock()
-	defer users.RUnlock()
-	if ret, ok := users.data[userName]; ok {
-		return ret, nil
+func getUsers(db *orm.Db, in *GetUsersInput) (total int, list []*User, err error) {
+	sql, args := genUserSql(in)
+
+	err = db.Query("select count(*) from user "+sql, args...).Row(&total)
+	if in.Count {
+		return
 	}
 
-	return nil, fmt.Errorf("user %s not found ", userName)
+	err = db.Query("select * from user"+sql+in.SqlExtra("id desc"), args...).Rows(&list)
+	return
 }
 
-func updateUser(in *UpdateUserInput) (*User, error) {
-	users.Lock()
-	defer users.Unlock()
-	if ret, ok := users.data[in.Name]; ok {
-		ret.Phone = in.Phone
-		return ret, nil
-	}
-	return nil, fmt.Errorf("user %s not found ", in.Name)
+func getUser(db *orm.Db, name string) (ret *User, err error) {
+	err = db.Query("select * from user where name = ?", name).Row(&ret)
+	return
 }
 
-func deleteUser(userName string) (*User, error) {
-	users.Lock()
-	defer users.Unlock()
-	if ret, ok := users.data[userName]; ok {
-		delete(users.data, userName)
-		return ret, nil
+func updateUser(db *orm.Db, in *UpdateUserInput) (*User, error) {
+	if err := db.Update("user", in); err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("user %s not found ", userName)
+	return getUser(db, in.Name)
+}
+
+func deleteUser(db *orm.Db, name string) (ret *User, err error) {
+	if ret, err = getUser(db, name); err != nil {
+		return
+	}
+	err = db.ExecNumErr("delete from user where name = ?", name)
+	return
 
 }

@@ -25,14 +25,14 @@ type Module struct {
 var (
 	_module = &Module{Name: moduleName}
 	hookOps = []proc.HookOps{{
-		Hook:     _module.startHook,
+		Hook:     _module.start,
 		Owner:    moduleName,
 		HookNum:  proc.ACTION_START,
 		Priority: proc.PRI_MODULE,
 	}}
 )
 
-func (p *Module) startHook(ops *proc.HookOps, cf *configer.Configer) error {
+func (p *Module) start(ops *proc.HookOps, cf *configer.Configer) error {
 	popts := ops.Options()
 	p.http = popts.Http()
 	p.session = popts.Session()

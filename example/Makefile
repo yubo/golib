@@ -7,7 +7,7 @@ FILE_NAME=$(APP_NAME)-$(VERSION)-$(RELEASE).$(shell uname -s).$(shell uname -m)
 DEP_OBJS=$(shell find . -name "*.go" -type f) \
 	 ./tracing/tracing.pb.go
 TARGETS=$(APP_NAME)
-CGO_ENABLED?=0
+CGO_ENABLED?=1
 
 GO_BUILD_LDFLAGS_CMD      := $(abspath ./scripts/go-build-ldflags.sh)
 GO_BUILD_LDFLAGS          := $(shell $(GO_BUILD_LDFLAGS_CMD) LDFLAG)
