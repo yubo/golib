@@ -1,7 +1,10 @@
 // this is a sample echo rest api module
 package user
 
-import "github.com/yubo/golib/openapi"
+import (
+	"github.com/yubo/golib/openapi"
+	"github.com/yubo/golib/util"
+)
 
 type User struct {
 	Id    int    `json:"id"`
@@ -31,6 +34,10 @@ type GetUsersInput struct {
 
 func (p *GetUsersInput) Validate() error {
 	return nil
+}
+
+func (p GetUsersInput) String() string {
+	return util.Prettify(p)
 }
 
 type GetUsersOutput struct {

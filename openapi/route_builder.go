@@ -339,7 +339,7 @@ func (p *RouteBuilder) setParam(f *field) error {
 	case reflect.String:
 		parameter.DataType("string")
 	case reflect.Bool:
-		parameter.DataType("bool")
+		parameter.DataType("boolean")
 	case reflect.Uint, reflect.Int, reflect.Int32, reflect.Int64:
 		parameter.DataType("integer")
 	case reflect.Slice:

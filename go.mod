@@ -7,7 +7,7 @@ require (
 	github.com/buger/goterm v0.0.0-20200322175922-2f3e71b85129
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/creack/pty v1.1.11
-	github.com/emicklei/go-restful v2.13.0+incompatible
+	github.com/emicklei/go-restful v2.15.0+incompatible
 	github.com/emicklei/go-restful-openapi v1.4.1
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/ghodss/yaml v1.0.0

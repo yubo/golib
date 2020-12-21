@@ -2,6 +2,8 @@
 package user
 
 import (
+	"log"
+
 	"github.com/emicklei/go-restful"
 	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/openapi"
@@ -92,6 +94,8 @@ func (p *Module) createUsers(req *restful.Request, resp *restful.Response, in []
 }
 
 func (p *Module) getUsers(req *restful.Request, resp *restful.Response, in *GetUsersInput) (*GetUsersOutput, error) {
+
+	log.Printf("input %s", in)
 	total, list, err := getUsers(in)
 
 	ret := &GetUsersOutput{RespStatus: openapi.NewRespStatus(err)}
