@@ -10,7 +10,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"github.com/opentracing/opentracing-go/log"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // TraceFilter will record all REST API request info and response code

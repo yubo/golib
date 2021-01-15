@@ -21,7 +21,7 @@ const (
 	PathType   = "path"
 	QueryType  = "query"
 	HeaderType = "header"
-	DataType   = "data"
+	// DataType   = "data"
 
 	MaxFormSize = int64(1<<63 - 1)
 )

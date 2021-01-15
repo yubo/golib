@@ -40,13 +40,15 @@ func (p tagOpt) String() string {
 }
 
 type structFields struct {
-	hasData   bool
+	body *field
+	//hasData   bool
 	list      []field
 	nameIndex map[string]int
 }
 
 func (p structFields) String() string {
-	ret := fmt.Sprintf("hasData %v\n", p.hasData)
+	//ret := fmt.Sprintf("hasData %v\n", p.hasData)
+	ret := fmt.Sprintf("body %v\n", p.body)
 	for k, v := range p.list {
 		ret += fmt.Sprintf("%d %s\n", k, v)
 	}
@@ -67,7 +69,8 @@ func cachedTypeFields(t reflect.Type) structFields {
 // and then any reachable anonymous structs.
 func typeFields(t reflect.Type) structFields {
 	// Anonymous fields to explore at the current level and the next.
-	hasData := false
+	// hasData := false
+	var body *field
 	current := []field{}
 	next := []field{{typ: t}}
 
@@ -113,15 +116,23 @@ func typeFields(t reflect.Type) structFields {
 					continue
 				}
 
+				if sf.Name == "Body" && len(f.index) == 0 {
+					body = &field{
+						index: []int{i},
+						typ:   sf.Type,
+					}
+					continue
+				}
+
 				opt := getTagOpt(sf)
 				if opt.skip {
 					continue
 				}
-				if opt.paramType == DataType {
-					hasData = true
-					// data encoder handle it, skip
-					continue
-				}
+				// if opt.paramType == DataType {
+				// 	hasData = true
+				// 	// data encoder handle it, skip
+				// 	continue
+				// }
 				index := make([]int, len(f.index)+1)
 				copy(index, f.index)
 				index[len(f.index)] = i
@@ -167,7 +178,7 @@ func typeFields(t reflect.Type) structFields {
 		}
 		nameIndex[field.key] = i
 	}
-	return structFields{hasData, fields, nameIndex}
+	return structFields{body, fields, nameIndex}
 }
 
 func getSubv(rv reflect.Value, index []int, allowCreate bool) (reflect.Value, error) {
@@ -189,6 +200,44 @@ func getSubv(rv reflect.Value, index []int, allowCreate bool) (reflect.Value, er
 		subv = subv.Field(i)
 	}
 	return subv, nil
+}
+
+func getBodyInterface(rv reflect.Value, index []int) (interface{}, error) {
+	v, err := getSubv(rv, index, true)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v.Kind() {
+	case reflect.Ptr:
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		return v.Elem().Interface(), nil
+	case reflect.Struct, reflect.Slice:
+		return v.Interface(), nil
+	default:
+		return nil, fmt.Errorf("Invalid body type %s", v.Kind())
+	}
+}
+
+func getBodyPtr(rv reflect.Value, index []int) (interface{}, error) {
+	v, err := getSubv(rv, index, true)
+	if err != nil {
+		return nil, err
+	}
+
+	switch v.Kind() {
+	case reflect.Ptr:
+		if v.IsNil() {
+			v.Set(reflect.New(v.Type().Elem()))
+		}
+		return v.Interface(), nil
+	case reflect.Struct, reflect.Slice:
+		return v.Addr().Interface(), nil
+	default:
+		return nil, fmt.Errorf("Invalid body type %s", v.Kind())
+	}
 }
 
 // tagOptions is the string following a comma in a struct field's "json"
@@ -258,7 +307,7 @@ func getTagOpt(sf reflect.StructField) (opt tagOpt) {
 		opt.key = strings.ToLower(sf.Name)
 	case HeaderType:
 		opt.key = strings.ToUpper(sf.Name)
-	case QueryType, DataType:
+	case QueryType:
 		opt.key = util.LowerCamelCasedName(sf.Name)
 	default:
 		panicType(sf.Type, "unknown param type")

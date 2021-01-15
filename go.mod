@@ -12,7 +12,7 @@ require (
 	github.com/fortytw2/leaktest v1.3.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-ldap/ldap v3.0.3+incompatible
-	github.com/go-openapi/spec v0.19.9
+	github.com/go-openapi/spec v0.20.0
 	github.com/go-sql-driver/mysql v1.5.0
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
@@ -41,17 +41,17 @@ require (
 	github.com/yubo/goswagger v0.0.0-20201106023337-d7a3106aa8e3
 	go.uber.org/zap v1.13.0
 	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
-	golang.org/x/net v0.0.0-20200822124328-c89045814202
-	golang.org/x/sys v0.0.0-20201009025420-dfb3f7c4e634
+	golang.org/x/net v0.0.0-20201224014010-6772e930b67b
+	golang.org/x/sys v0.0.0-20201119102817-f84b799fce68
+	golang.org/x/text v0.3.5 // indirect
 	google.golang.org/genproto v0.0.0-20200305110556-506484158171
 	google.golang.org/grpc v1.29.1
 	google.golang.org/protobuf v1.23.0
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
-	gopkg.in/yaml.v2 v2.3.0
+	gopkg.in/yaml.v2 v2.4.0
 	gotest.tools v2.2.0+incompatible
-	k8s.io/klog v1.0.0
 	k8s.io/klog/v2 v2.3.0
 )
 

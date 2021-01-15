@@ -19,7 +19,7 @@ const (
 )
 
 func createUser(db *orm.Db, in *CreateUserInput) (int64, error) {
-	return db.InsertLastId("user", in)
+	return db.InsertLastId("user", in.Body)
 }
 
 func genUserSql(in *GetUsersInput) (where string, args []interface{}) {

@@ -12,7 +12,7 @@ import (
 	"github.com/yubo/golib/openapi"
 	"github.com/yubo/golib/proc"
 	"github.com/yubo/golib/rpc"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

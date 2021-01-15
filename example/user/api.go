@@ -9,12 +9,15 @@ import (
 type User struct {
 	Id    int    `json:"id"`
 	Name  string `json:"name"`
+	Age   int    `json:"age"`
 	Phone string `json:"phone"`
 }
 
 type CreateUserInput struct {
-	Name  string `param:"data" json:"name"`
-	Phone string `param:"data" json:"phone"`
+	Body struct {
+		Name  string `json:"name"`
+		Phone string `json:"phone"`
+	}
 }
 
 type CreateUserOutput struct {
@@ -63,8 +66,10 @@ type GetUserOutput struct {
 }
 
 type UpdateUserInput struct {
-	Name  string `param:"path" name:"user-name"`
-	Phone string `param:"data" json:"phone"`
+	Name string `param:"path" sql:",where" name:"user-name"`
+	Body struct {
+		Phone string `json:"phone"`
+	} `sql:",inline"`
 }
 
 type UpdateUserOutput struct {

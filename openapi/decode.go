@@ -84,16 +84,20 @@ func (p *Decoder) Decode(r *restful.Request, dst interface{}) error {
 	}
 
 	fields := cachedTypeFields(rt)
-	if fields.hasData {
+	if body := fields.body; body != nil {
+		ptr, err := getBodyPtr(rv, body.index)
+		if err != nil {
+			return err
+		}
 		if data, ok := r.Attribute(RshDataKey).([]byte); ok && len(data) > 0 {
 			//klog.V(3).Infof(">>>> %s", string(data))
-			if err := json.Unmarshal(data, dst); err != nil {
+			if err := json.Unmarshal(data, ptr); err != nil {
 				klog.V(5).Infof("rsh data json.Unmarshal() error %s", err)
 				return err
 			}
 			//klog.V(3).Infof(">>> %s", dst)
 		} else {
-			if err := r.ReadEntity(dst); err != nil {
+			if err := r.ReadEntity(ptr); err != nil {
 				klog.V(5).Infof("restful.ReadEntity() error %s", err)
 				return err
 			}

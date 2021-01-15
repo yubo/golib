@@ -18,8 +18,7 @@ type Encoder struct {
 	param  map[string][]string
 	header http.Header
 	url    string
-	data   interface{}            // store for struct direct param:",inbody"
-	data2  map[string]interface{} // store for param:"data"
+	data   interface{} // store for struct direct param:",inbody"
 }
 
 func NewEncoder() *Encoder {
@@ -27,7 +26,6 @@ func NewEncoder() *Encoder {
 		path:   map[string]string{},
 		param:  map[string][]string{},
 		header: make(http.Header),
-		data2:  map[string]interface{}{},
 	}
 }
 
@@ -58,10 +56,6 @@ func (p *Encoder) Encode(urlIn string, src interface{}) (urlOut string, data int
 
 		fields := cachedTypeFields(rt)
 
-		if fields.hasData && p.data == nil {
-			p.data = src
-		}
-
 		if err = p.scan(rv, fields); err != nil {
 			panic(err)
 		}
@@ -88,8 +82,14 @@ func (p *Encoder) Encode(urlIn string, src interface{}) (urlOut string, data int
 }
 
 // struct -> request's path, query, header, data
-func (p *Encoder) scan(rv reflect.Value, fields structFields) error {
+func (p *Encoder) scan(rv reflect.Value, fields structFields) (err error) {
 	klog.V(5).Info("entering openapi.scan()")
+
+	if fields.body != nil {
+		if p.data, err = getBodyInterface(rv, fields.body.index); err != nil {
+			return err
+		}
+	}
 
 	for i, f := range fields.list {
 		klog.V(11).Infof("%s[%d] %s", rv.Type(), i, f)
@@ -98,9 +98,6 @@ func (p *Encoder) scan(rv reflect.Value, fields structFields) error {
 			if f.required {
 				return fmt.Errorf("%v must be set", f.key)
 			}
-			continue
-		}
-		if f.paramType == DataType {
 			continue
 		}
 		if err := p.setValue(&f, subv); err != nil {

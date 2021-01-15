@@ -5,7 +5,7 @@ import (
 
 	"github.com/yubo/golib/mail"
 	"github.com/yubo/golib/proc"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

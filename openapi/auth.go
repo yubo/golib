@@ -7,7 +7,7 @@ import (
 	"github.com/emicklei/go-restful"
 	restfulspec "github.com/emicklei/go-restful-openapi"
 	"github.com/go-openapi/spec"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (

@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/uber-go/tally"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 // ExtendedMetricsType is a type of extended metrics to report.

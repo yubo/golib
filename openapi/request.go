@@ -130,7 +130,6 @@ func (p *Request) prepareInput() (err error) {
 		path:   map[string]string{},
 		param:  map[string][]string{},
 		header: p.header,
-		data2:  map[string]interface{}{},
 	}).Encode(p.Url, p.Input)
 	return err
 }

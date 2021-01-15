@@ -8,6 +8,7 @@ import (
 	"github.com/emicklei/go-restful"
 	restfulspec "github.com/emicklei/go-restful-openapi"
 	"github.com/yubo/golib/openapi/urlencoded"
+	"k8s.io/klog/v2"
 )
 
 func WsRouteBuild(opt *WsOption, in []WsRoute) {
@@ -90,9 +91,7 @@ func routeFilters(route *WsRoute, opt *WsOption) (filters []restful.FilterFuncti
 }
 
 type WsRoute struct {
-	//Action string
-	Acl string
-	//--
+	Acl         string
 	Method      string
 	SubPath     string
 	Desc        string
@@ -104,9 +103,6 @@ type WsRoute struct {
 	Filters     []restful.FilterFunction
 	ExtraOutput []ApiOutput
 	Tags        []string
-	// Input       interface{}
-	// Output      interface{}
-	// Handle      restful.RouteFunction
 }
 
 type ApiOutput struct {
@@ -302,13 +298,21 @@ func (p *RouteBuilder) buildParam(in interface{}, consume string) error {
 	}
 
 	fields := cachedTypeFields(rt)
-	if fields.hasData {
+	if fields.body != nil {
+		entity, err := getBodyInterface(rv, fields.body.index)
+		if err != nil {
+			return err
+		}
+
 		if consume == MIME_URL_ENCODED {
-			if err := urlencoded.RouteBuilderReads(p.b, rv); err != nil {
+			err := urlencoded.RouteBuilderReads(p.b, reflect.ValueOf(entity))
+			if err != nil {
 				panic(err)
 			}
 		} else {
-			p.b.Reads(rv.Interface())
+			klog.Infof("----entity struct %s %#v",
+				reflect.TypeOf(entity).String(), entity)
+			p.b.Reads(entity)
 		}
 	}
 

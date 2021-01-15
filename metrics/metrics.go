@@ -11,7 +11,7 @@ import (
 
 	"github.com/m3db/prometheus_client_golang/prometheus/promhttp"
 	"github.com/uber-go/tally"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const (
