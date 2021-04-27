@@ -172,46 +172,6 @@ func _ss2map(in []string) map[string]bool {
 	return ret
 }
 
-func TestDiff(t *testing.T) {
-	cases := []struct {
-		name string
-		src  []string
-		dst  []string
-		add  []string
-		del  []string
-	}{{
-		"1",
-		[]string{"1", "2"},
-		nil,
-		nil,
-		[]string{"1", "2"},
-	}, {
-		"2",
-		nil,
-		[]string{"1", "2"},
-		[]string{"1", "2"},
-		nil,
-	}, {
-		"3",
-		[]string{"1", "2"},
-		[]string{"3", "4"},
-		[]string{"3", "4"},
-		[]string{"1", "2"},
-	}, {
-		"4",
-		[]string{"1", "2"},
-		[]string{"2", "3"},
-		[]string{"3"},
-		[]string{"1"},
-	}}
-
-	for _, c := range cases {
-		add, del := Diff(c.src, c.dst)
-		require.Equal(t, _ss2map(c.add), _ss2map(add), c.name)
-		require.Equal(t, _ss2map(c.del), _ss2map(del), c.name)
-	}
-}
-
 func TestTitleCasedName(t *testing.T) {
 	cases := []struct {
 		in   string
@@ -355,8 +315,7 @@ func TestSubStr3(t *testing.T) {
 	}{
 		{"1234567890", 3, -3, "123...890"},
 		{"", 3, -3, ""},
-		{"1234567890", 8, -8, "12...90"},
-		{"1234567890", 3, 10, "123..."},
+		{"1234567890", 8, -8, "1234567890"},
 		{"1234567890", 20, 20, "1234567890"},
 	}
 

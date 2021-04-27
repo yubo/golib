@@ -1,65 +1,63 @@
 package proc
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"reflect"
-	"runtime"
+	"os/signal"
 	"sort"
-	"strconv"
-	"strings"
+	"sync"
 	"time"
 
-	"github.com/yubo/golib/configer"
+	systemd "github.com/coreos/go-systemd/daemon"
+	"github.com/spf13/pflag"
+	"github.com/yubo/golib/proc/config"
+	cliflag "github.com/yubo/golib/staging/cli/flag"
 	"k8s.io/klog/v2"
 )
 
 const (
 	serverGracefulCloseTimeout = 12 * time.Second
+	moduleName                 = "proc"
 )
 
-const (
-	moduleName = "proc"
+var (
+	_module *Module
 )
 
 type Module struct {
-	name     string
-	status   ProcessStatus
-	hookOps  [ACTION_SIZE]HookOpsBucket
-	configer *configer.Configer
-	options  Options
-	config   string
-	test     bool
+	name          string
+	options       *Options
+	status        ProcessStatus
+	hookOps       [ACTION_SIZE]HookOpsBucket
+	namedFlagSets cliflag.NamedFlagSets
+	configer      *config.Configer
+	wg            sync.WaitGroup
+	ctx           context.Context
 }
-
-var (
-	_module = &Module{name: moduleName}
-)
 
 func RegisterHooks(in []HookOps) error {
 	for i, _ := range in {
 		v := &in[i]
 		v.module = _module
+		v.priority = ProcessPriority(uint32(v.Priority)<<16 + uint32(v.SubPriority))
 
 		_module.hookOps[v.HookNum] = append(_module.hookOps[v.HookNum], v)
 	}
 	return nil
 }
 
-func RegisterHooksWithOptions(in []HookOps, opts Options) error {
-	if _module.options != nil {
-		return errAlreadySetted
-	}
-	for i, _ := range in {
-		v := &in[i]
-		v.module = _module
-		if v.HookNum < 0 || v.HookNum >= ACTION_SIZE {
-			return fmt.Errorf("invalid HookNum %d [0,%d]", v.HookNum, ACTION_SIZE)
-		}
-		_module.hookOps[v.HookNum] = append(_module.hookOps[v.HookNum], v)
-	}
-	_module.options = opts
+type addFlags interface {
+	AddFlags(fs *pflag.FlagSet)
+}
+
+func RegisterFlags(name string, in addFlags) error {
+	in.AddFlags(_module.namedFlagSets.FlagSet(name))
 	return nil
+}
+
+func NamedFlagSets() *cliflag.NamedFlagSets {
+	return &_module.namedFlagSets
 }
 
 // procInit
@@ -67,13 +65,16 @@ func RegisterHooksWithOptions(in []HookOps, opts Options) error {
 // parse configfile
 // validate config each module
 // sort hook options
-func (p *Module) procInit(configFile string) (cf *configer.Configer, err error) {
-	if cf, err = configer.NewConfiger(configFile); err != nil {
-		return nil, err
+func (p *Module) procInit() (err error) {
+	ctx := p.ctx
+	opts, _ := ConfigOptsFrom(ctx)
+
+	if p.configer, err = config.NewConfiger(p.options.configFile, opts...); err != nil {
+		return err
 	}
 
-	if err = cf.Prepare(); err != nil {
-		return nil, err
+	if err = p.configer.Prepare(); err != nil {
+		return err
 	}
 
 	p.status = STATUS_PENDING
@@ -82,7 +83,10 @@ func (p *Module) procInit(configFile string) (cf *configer.Configer, err error) 
 		sort.Sort(p.hookOps[i])
 	}
 
-	p.configer = cf
+	ctx = WithWg(ctx, &p.wg)
+	ctx = WithConfiger(ctx, p.configer)
+	p.ctx = ctx
+
 	return
 }
 
@@ -101,32 +105,21 @@ func hookNumName(n ProcessAction) string {
 	}
 }
 
-func nameOfFunction(f interface{}) string {
-	fun := runtime.FuncForPC(reflect.ValueOf(f).Pointer())
-	tokenized := strings.Split(fun.Name(), ".")
-	last := tokenized[len(tokenized)-1]
-	last = strings.TrimSuffix(last, ")·fm") // < Go 1.5
-	last = strings.TrimSuffix(last, ")-fm") // Go 1.5
-	last = strings.TrimSuffix(last, "·fm")  // < Go 1.5
-	last = strings.TrimSuffix(last, "-fm")  // Go 1.5
-	return last
-
-}
-
-func dbgOps(ops *HookOps) {
-	klog.V(5).Infof("hook %s %s[%d] %s",
+func logOps(ops *HookOps) {
+	klog.V(5).Infof("hook %s %s[%d.%d] %s",
 		hookNumName(ops.HookNum),
 		ops.Owner,
 		ops.Priority,
+		ops.SubPriority,
 		nameOfFunction(ops.Hook))
 }
 
 // only be called once
 func (p *Module) procStart() error {
 	for _, ops := range p.hookOps[ACTION_START] {
-		dbgOps(ops)
-		if err := ops.Hook(ops, p.configer); err != nil {
-			return err
+		logOps(ops)
+		if err := ops.Hook(ops); err != nil {
+			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
 		}
 	}
 	p.status.Set(STATUS_RUNNING)
@@ -136,9 +129,9 @@ func (p *Module) procStart() error {
 // reverse order
 func (p *Module) procStop() (err error) {
 	wgCh := make(chan struct{})
-	wg := p.options.Wg()
+
 	go func() {
-		wg.Wait()
+		p.wg.Wait()
 		wgCh <- struct{}{}
 	}()
 
@@ -146,9 +139,9 @@ func (p *Module) procStop() (err error) {
 	for i := len(ss) - 1; i >= 0; i-- {
 		ops := ss[i]
 
-		dbgOps(ops)
-		if err := ops.Hook(ops, p.configer); err != nil {
-			return err
+		logOps(ops)
+		if err := ops.Hook(ops); err != nil {
+			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
 		}
 	}
 	p.status.Set(STATUS_EXIT)
@@ -162,14 +155,15 @@ func (p *Module) procStop() (err error) {
 		err = fmt.Errorf("server closed after timeout %ds", closeTimeout/time.Second)
 
 	}
+
 	return err
 }
 
 func (p *Module) procTest() error {
 	for _, ops := range p.hookOps[ACTION_TEST] {
-		dbgOps(ops)
-		if err := ops.Hook(ops, p.configer); err != nil {
-			return err
+		logOps(ops)
+		if err := ops.Hook(ops); err != nil {
+			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
 		}
 	}
 	return nil
@@ -183,8 +177,8 @@ func (p *Module) procReload() error {
 	}
 
 	for _, ops := range p.hookOps[ACTION_RELOAD] {
-		dbgOps(ops)
-		if err := ops.Hook(ops, p.configer); err != nil {
+		logOps(ops)
+		if err := ops.Hook(ops); err != nil {
 			return err
 		}
 	}
@@ -192,25 +186,73 @@ func (p *Module) procReload() error {
 	return nil
 }
 
-func envOr(name string, defs ...string) string {
-	if v, ok := os.LookupEnv(name); ok {
-		return v
+// for general startCmd
+func (p *Module) testConfig() error {
+	if err := p.procInit(); err != nil {
+		klog.Error(err)
+		return err
 	}
-	for _, def := range defs {
-		if def != "" {
-			return def
-		}
+
+	klog.V(3).Infof("#### %s\n", p.options.configFile)
+	klog.V(3).Infof("%s\n", p.configer)
+
+	if err := p.procTest(); err != nil {
+		return err
 	}
-	return ""
+
+	fmt.Printf("%s: configuration file %s test is successful\n",
+		os.Args[0], p.options.configFile)
+	return nil
 }
 
-func getenvBool(str string) bool {
-	b, _ := strconv.ParseBool(os.Getenv(str))
-	return b
+func (p *Module) start() error {
+	if err := p.procInit(); err != nil {
+		return err
+	}
+
+	if err := p.procStart(); err != nil {
+		return err
+	}
+
+	sigs := make(chan os.Signal, 2)
+	signal.Notify(sigs, append(shutdownSignals, reloadSignals...)...)
+
+	if _, err := systemd.SdNotify(true, "READY=1\n"); err != nil {
+		klog.Errorf("Unable to send systemd daemon successful start message: %v\n", err)
+	}
+
+	shutdown := false
+	shutdownResult := make(chan error, 1)
+
+	for {
+		select {
+		case s := <-sigs:
+			if sigContains(s, shutdownSignals) {
+				if shutdown {
+					os.Exit(1)
+				}
+				shutdown = true
+				go func() {
+					shutdownResult <- p.procStop()
+				}()
+			} else if sigContains(s, reloadSignals) {
+				if err := p.procReload(); err != nil {
+					return err
+				}
+			}
+		case err := <-shutdownResult:
+			return err
+		}
+	}
 }
 
 func init() {
+	hookOps := [ACTION_SIZE]HookOpsBucket{}
 	for i := ACTION_START; i < ACTION_SIZE; i++ {
-		_module.hookOps[i] = HookOpsBucket([]*HookOps{})
+		hookOps[i] = HookOpsBucket([]*HookOps{})
+	}
+
+	_module = &Module{
+		hookOps: hookOps,
 	}
 }

@@ -1,5 +1,0 @@
-sys:
-  include ./sys.yml
-
-auth:
-  name: "helo.auth"

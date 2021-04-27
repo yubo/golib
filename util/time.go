@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -138,4 +139,24 @@ func TimeOf(v string) int64 {
 		n = toInt64(v)
 	}
 	return n
+}
+
+type Duration time.Duration
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return []byte(time.Duration(d).String()), nil
+}
+
+func (d *Duration) UnmarshalJSON(data []byte) (err error) {
+	var s string
+	if err = json.Unmarshal(data, &s); err != nil {
+		return
+	}
+	td, err := time.ParseDuration(s)
+	*d = Duration(td)
+	return
+}
+
+func (d Duration) Duration() time.Duration {
+	return time.Duration(d)
 }

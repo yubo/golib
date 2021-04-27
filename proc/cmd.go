@@ -1,93 +1,72 @@
 package proc
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
-	"os"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	cliflag "github.com/yubo/golib/staging/cli/flag"
+	"github.com/yubo/golib/staging/cli/globalflag"
+	"github.com/yubo/golib/staging/util/term"
 	"k8s.io/klog/v2"
 )
 
-func NewRootCmd(args []string) *cobra.Command {
+func NewRootCmd(ctx context.Context, args []string) *cobra.Command {
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	if _module.options == nil {
-		panic(errNotSetted)
-	}
-
-	appName := _module.options.Name()
+	name := NameFrom(ctx)
+	_module.ctx = ctx
+	_module.options = newOptions(name)
 
 	cmd := &cobra.Command{
-		Use:          appName,
-		Short:        fmt.Sprintf("%s service", appName),
+		Use:          name,
+		Short:        fmt.Sprintf("%s service", name),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if klog.V(5).Enabled() {
+				fs := cmd.Flags()
+				cliflag.PrintFlags(fs)
+			}
 			return startCmd()
 		},
 	}
 
-	fs := cmd.PersistentFlags()
-
-	fs.StringVarP(&_module.config, "config", "c",
-		os.Getenv(strings.ToUpper(appName)+"_CONFIG"),
-		fmt.Sprintf("config file path of your %s server.", appName))
-	fs.BoolVarP(&_module.test, "test", "t", false,
-		fmt.Sprintf("test config file path of your %s server.", appName))
-
+	fs := cmd.Flags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
-	fs.Parse(args)
 
-	cmd.AddCommand(
-		newStartCmd(),
-		newVersionCmd(),
-	)
+	namedFlagSets := NamedFlagSets()
+	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)
+	_module.options.addFlags(namedFlagSets.FlagSet("global"), name)
 
-	return cmd
-}
-
-// handle
-func newStartCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "start",
-		Short: fmt.Sprintf("start %s service", _module.options.Name()),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return startCmd()
-		},
+	for _, f := range namedFlagSets.FlagSets {
+		fs.AddFlagSet(f)
 	}
+
+	usageFmt := "Usage:\n  %s\n"
+	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
+	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
+		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
+		cliflag.PrintSections(cmd.OutOrStderr(), *namedFlagSets, cols)
+		return nil
+	})
+	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
+		cliflag.PrintSections(cmd.OutOrStdout(), *namedFlagSets, cols)
+	})
+
 	return cmd
 }
 
 func startCmd() error {
-	klog.Infof("config file %s\n", _module.config)
+	klog.Infof("config file %s\n", _module.options.configFile)
 
-	if _module.test {
+	if _module.options.test {
 		return _module.testConfig()
 	}
 
 	return _module.start()
-}
-
-func newVersionCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "version",
-		Short: "show version, git commit",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Printf("Go Runtime version: %s\n", goVersion)
-			fmt.Printf("OS:                 %s\n", goOs)
-			fmt.Printf("Arch:               %s\n", goArch)
-			fmt.Printf("Build Version:      %s\n", Version)
-			fmt.Printf("Build Revision:     %s\n", Revision)
-			fmt.Printf("Build Branch:       %s\n", Branch)
-			fmt.Printf("Build User:         %s\n", Builder)
-			fmt.Printf("Build Date:         %s\n", BuildDate)
-			fmt.Printf("Build TimeUnix:     %s\n", BuildTimeUnix)
-			return nil
-		},
-	}
-	return cmd
 }

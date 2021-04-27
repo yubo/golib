@@ -9,26 +9,32 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
-	"github.com/yubo/golib/status"
-	"google.golang.org/grpc/codes"
+	"github.com/yubo/golib/staging/api/errors"
 	"k8s.io/klog/v2"
 )
+
+type RowsIter interface {
+	Close() error
+	Next() bool
+	Scan(dest ...interface{}) error
+}
 
 const (
 	MAX_ROWS = 1000
 )
 
-type db interface {
+type session interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 }
 
-type Db struct {
+type DB struct {
 	greatest string
 	tx       *sql.Tx
-	db       db      // cur db engine
-	Db       *sql.DB // origin db engine
+	session  session // sql.DB or sql.Tx
+	DB       *sql.DB // DB
 }
 
 func printString(b []byte) string {
@@ -68,13 +74,13 @@ func dlogSql(query string, args ...interface{}) {
 	}
 }
 
-func DbOpen(driverName, dataSourceName string) (*Db, error) {
+func DbOpen(driverName, dataSourceName string) (*DB, error) {
 	db, err := sql.Open(driverName, dataSourceName)
 	if err != nil {
 		return nil, err
 	}
 
-	ret := &Db{Db: db, db: db, greatest: "greatest"}
+	ret := &DB{DB: db, session: db, greatest: "greatest"}
 
 	if driverName == "sqlite3" {
 		ret.greatest = "max"
@@ -83,72 +89,71 @@ func DbOpen(driverName, dataSourceName string) (*Db, error) {
 	return ret, nil
 }
 
-func DbOpenWithCtx(driverName, dsn string, ctx context.Context) (*Db, error) {
-
+func DbOpenWithCtx(driverName, dsn string, ctx context.Context) (*DB, error) {
 	db, err := DbOpen(driverName, dsn)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "sql.Open() err: "+err.Error())
+		return nil, err
 	}
 
-	if err := db.Db.Ping(); err != nil {
-		db.Db.Close()
-		return nil, status.Errorf(codes.Internal, "db.Ping() err: "+err.Error())
+	if err := db.DB.Ping(); err != nil {
+		db.DB.Close()
+		return nil, err
 	}
 
 	go func() {
 		<-ctx.Done()
-		db.Db.Close()
+		db.DB.Close()
 	}()
 
 	return db, nil
 }
 
-func (p *Db) Tx() bool {
+func (p *DB) Tx() bool {
 	return p.tx != nil
 }
 
-func (p *Db) BeginWithCtx(ctx context.Context) (*Db, error) {
+func (p *DB) BeginWithCtx(ctx context.Context) (*DB, error) {
 	if p.Tx() {
-		return nil, status.Errorf(codes.Internal, "Already beginning a transaction")
+		return nil, fmt.Errorf("Already beginning a transaction")
 	}
-	if tx, err := p.Db.BeginTx(ctx, nil); err != nil {
+	if tx, err := p.DB.BeginTx(ctx, nil); err != nil {
 		return nil, err
 	} else {
-		return &Db{tx: tx, db: tx, greatest: p.greatest}, nil
+		return &DB{tx: tx, session: tx, greatest: p.greatest}, nil
 	}
 }
 
-func (p *Db) Rollback() error {
+func (p *DB) Rollback() error {
 	if p.tx != nil {
 		return p.tx.Rollback()
 	}
-	return status.Errorf(codes.Internal, "tx is nil")
+	return fmt.Errorf("tx is nil")
 }
 
-func (p *Db) Commit() error {
+func (p *DB) Commit() error {
 	if p.tx != nil {
 		return p.tx.Commit()
 	}
-	return status.Errorf(codes.Internal, "tx is nil")
+	return fmt.Errorf("tx is nil")
 }
 
-func (p *Db) Begin() (*Db, error) {
+func (p *DB) Begin() (*DB, error) {
 	return p.BeginWithCtx(context.Background())
 }
 
-func (p *Db) SetConns(maxIdleConns, maxOpenConns int) {
-	p.Db.SetMaxIdleConns(maxIdleConns)
-	p.Db.SetMaxOpenConns(maxOpenConns)
+func (p *DB) SetConns(maxIdleConns, maxOpenConns int) {
+	p.DB.SetMaxIdleConns(maxIdleConns)
+	p.DB.SetMaxOpenConns(maxOpenConns)
 }
 
-func (p *Db) Close() {
-	p.Db.Close()
+func (p *DB) Close() {
+	p.DB.Close()
 }
 
-func (p *Db) Query(query string, args ...interface{}) *Rows {
+func (p *DB) Query(query string, args ...interface{}) *Rows {
 	dlogSql(query, args...)
 	ret := &Rows{}
-	ret.rows, ret.err = p.db.Query(query, args...)
+	ret.rows, ret.err = p.session.Query(query, args...)
 	return ret
 }
 
@@ -176,7 +181,7 @@ func (p *Rows) Row(dst ...interface{}) error {
 		// klog.V(5).Infof("enter row scan")
 		return p.rows.Scan(dst...)
 	}
-	return status.Errorf(codes.NotFound, "sql: no rows in result set")
+	return errors.NewNotFound("rows")
 }
 
 // scanRow scan row result into dst struct
@@ -185,7 +190,7 @@ func (p *Rows) scanRow(dst interface{}) error {
 	row := reflect.Indirect(reflect.ValueOf(dst))
 
 	if !row.CanSet() {
-		return status.Errorf(codes.InvalidArgument, "scan target can not be set")
+		return fmt.Errorf("scan target can not be set")
 	}
 
 	b, err := p.genBinder(row.Type())
@@ -194,10 +199,18 @@ func (p *Rows) scanRow(dst interface{}) error {
 	}
 
 	if err := b.scan(row); err != nil {
-		return status.Errorf(codes.Internal, "Scan() err: "+err.Error())
+		return fmt.Errorf("rows.scan() err: %s", err)
 	}
 
 	return nil
+}
+
+func (p *Rows) Iter() (RowsIter, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+
+	return p.rows, nil
 }
 
 // Rows([]struct{})
@@ -233,7 +246,7 @@ func (p *Rows) Rows(dst interface{}, opts ...int) error {
 			row := reflect.New(sample).Elem()
 
 			if err := p.rows.Scan(row.Addr().Interface()); err != nil {
-				return status.Errorf(codes.Internal, "Scan() err: "+err.Error())
+				return fmt.Errorf("rows.scan() err: %s", err)
 			}
 
 			rv.Set(reflect.Append(rv, row))
@@ -268,103 +281,103 @@ func rowsInputValue(sample interface{}) (rv reflect.Value, err error) {
 	rv = reflect.Indirect(reflect.ValueOf(sample))
 
 	if !rv.CanSet() {
-		return rv, status.Errorf(codes.InvalidArgument, "scan target can not be set")
+		return rv, fmt.Errorf("scan target can not be set")
 	}
 
 	// for *[]struct{}
 	if rv.Kind() == reflect.Ptr {
 		if rv.IsNil() {
-			return rv, status.Errorf(codes.Internal, "needs a pointer to a slice")
+			return rv, fmt.Errorf("needs a pointer to a slice")
 		}
 		rv = rv.Elem()
 	}
 
 	if rv.Kind() != reflect.Slice {
-		return rv, status.Errorf(codes.Internal, "needs a pointer to a slice")
+		return rv, fmt.Errorf("needs a pointer to a slice")
 	}
 
 	return rv, nil
 }
 
-func (p *Db) Exec(sql string, args ...interface{}) (sql.Result, error) {
+func (p *DB) Exec(sql string, args ...interface{}) (sql.Result, error) {
 	dlogSql(sql, args...)
 
-	ret, err := p.db.Exec(sql, args...)
+	ret, err := p.session.Exec(sql, args...)
 	if err != nil {
 		klog.V(3).Info(1, err)
-		return nil, status.Errorf(codes.Internal, "Exec() err: "+err.Error())
+		return nil, fmt.Errorf("Exec() err: %s", err)
 	}
 
 	return ret, nil
 }
 
-func (p *Db) ExecErr(sql string, args ...interface{}) error {
+func (p *DB) ExecErr(sql string, args ...interface{}) error {
 	dlogSql(sql, args...)
 
-	_, err := p.db.Exec(sql, args...)
+	_, err := p.session.Exec(sql, args...)
 	if err != nil {
 		klog.InfoDepth(1, err)
 	}
 	return err
 }
 
-func (p *Db) ExecLastId(sql string, args ...interface{}) (int64, error) {
+func (p *DB) ExecLastId(sql string, args ...interface{}) (int64, error) {
 	dlogSql(sql, args...)
 
-	res, err := p.db.Exec(sql, args...)
+	res, err := p.session.Exec(sql, args...)
 	if err != nil {
 		klog.InfoDepth(1, err)
-		return 0, status.Errorf(codes.Internal, "Exec() err: "+err.Error())
+		return 0, fmt.Errorf("Exec() err: %s", err)
 	}
 
 	if ret, err := res.LastInsertId(); err != nil {
 		dlogSql("%v", err)
-		return 0, status.Errorf(codes.Internal, "LastInsertId() err: "+err.Error())
+		return 0, fmt.Errorf("LastInsertId() err: %s", err)
 	} else {
 		return ret, nil
 	}
 
 }
 
-func (p *Db) execNum(sql string, args ...interface{}) (int64, error) {
-	res, err := p.db.Exec(sql, args...)
+func (p *DB) execNum(sql string, args ...interface{}) (int64, error) {
+	res, err := p.session.Exec(sql, args...)
 	if err != nil {
 		dlogSql("%v", err)
-		return 0, status.Errorf(codes.Internal, "Exec() err: "+err.Error())
+		return 0, fmt.Errorf("Exec() err: %s", err)
 	}
 
 	if ret, err := res.RowsAffected(); err != nil {
 		dlogSql("%v", err)
-		return 0, status.Errorf(codes.Internal, "RowsAffected() err: "+err.Error())
+		return 0, fmt.Errorf("RowsAffected() err: %s", err)
 	} else {
 		return ret, nil
 	}
 }
 
-func (p *Db) ExecNum(sql string, args ...interface{}) (int64, error) {
+func (p *DB) ExecNum(sql string, args ...interface{}) (int64, error) {
 	dlogSql(sql, args...)
 	return p.execNum(sql, args...)
 }
 
-func (p *Db) ExecNumErr(s string, args ...interface{}) error {
+func (p *DB) ExecNumErr(s string, args ...interface{}) error {
 	dlogSql(s, args...)
 	if n, err := p.execNum(s, args...); err != nil {
 		return err
 	} else if n == 0 {
-		return status.Errorf(codes.NotFound, "no rows affected")
+		return errors.NewNotFound("rows")
 	} else {
 		return nil
 	}
 }
 
-func (p *Db) ExecRows(bytes []byte) (err error) {
+func (p *DB) ExecRows(bytes []byte) (err error) {
 	var (
 		cmds []string
 		tx   *sql.Tx
 	)
 
-	if tx, err = p.Db.Begin(); err != nil {
-		return status.Errorf(codes.Internal, "Begin() err: "+err.Error())
+	if tx, err = p.DB.Begin(); err != nil {
+		return fmt.Errorf("Begin() err: %s", err)
 	}
 
 	defer func() {
@@ -410,13 +423,13 @@ func (p *Db) ExecRows(bytes []byte) (err error) {
 		_, err := tx.Exec(cmds[i])
 		if err != nil {
 			klog.V(3).Infof("%v", err)
-			return status.Errorf(codes.Internal, "sql %s\nerr %s", cmds[i], err.Error())
+			return fmt.Errorf("sql %s\nerr %s", cmds[i], err)
 		}
 	}
 	return nil
 }
 
-func (p *Db) Update(table string, sample interface{}) error {
+func (p *DB) Update(table string, sample interface{}) error {
 	sql, args, err := GenUpdateSql(table, sample)
 	if err != nil {
 		dlog("%v", err)
@@ -424,44 +437,43 @@ func (p *Db) Update(table string, sample interface{}) error {
 	}
 
 	dlogSql(sql, args...)
-	_, err = p.db.Exec(sql, args...)
+	_, err = p.session.Exec(sql, args...)
 	if err != nil {
 		dlog("%v", err)
 	}
 	return err
 }
 
-func (p *Db) Insert(table string, sample interface{}) error {
+func (p *DB) Insert(table string, sample interface{}) error {
 	sql, args, err := GenInsertSql(table, sample)
 	if err != nil {
 		return err
 	}
 
 	dlogSql(sql, args...)
-	if _, err := p.db.Exec(sql, args...); err != nil {
+	if _, err := p.session.Exec(sql, args...); err != nil {
 		dlog("%v", err)
-		return status.Errorf(codes.Internal,
-			"Insert() err: "+err.Error())
+		return fmt.Errorf("Insert() err: %s", err)
 	}
 	return nil
 }
 
-func (p *Db) InsertLastId(table string, sample interface{}) (int64, error) {
+func (p *DB) InsertLastId(table string, sample interface{}) (int64, error) {
 	sql, args, err := GenInsertSql(table, sample)
 	if err != nil {
 		return 0, err
 	}
 
 	dlogSql(sql, args...)
-	res, err := p.db.Exec(sql, args...)
+	res, err := p.session.Exec(sql, args...)
 	if err != nil {
 		dlog("%v", err)
-		return 0, status.Errorf(codes.Internal, "Exec() err: "+err.Error())
+		return 0, fmt.Errorf("Exec() err: %s", err)
 	}
 
 	if ret, err := res.LastInsertId(); err != nil {
 		dlog("%v", err)
-		return 0, status.Errorf(codes.Internal, "LastInsertId() err: "+err.Error())
+		return 0, fmt.Errorf("LastInsertId() err: %s", err)
 	} else {
 		return ret, nil
 	}
@@ -548,10 +560,10 @@ func GenUpdateSql(table string, sample interface{}) (string, []interface{}, erro
 	}
 
 	if len(set) == 0 {
-		return "", nil, status.Errorf(codes.InvalidArgument, "update %s `set` is empty", table)
+		return "", nil, fmt.Errorf("Update %s `set` is empty", table)
 	}
 	if len(where) == 0 {
-		return "", nil, status.Errorf(codes.InvalidArgument, "update %s `where` is empty", table)
+		return "", nil, fmt.Errorf("update %s `where` is empty", table)
 	}
 
 	buf := &bytes.Buffer{}
@@ -614,7 +626,7 @@ func GenInsertSql(table string, sample interface{}) (string, []interface{}, erro
 	}
 
 	if len(values) == 0 {
-		return "", nil, status.Errorf(codes.InvalidArgument, "insert into %s `values` is empty", table)
+		return "", nil, fmt.Errorf("insert into %s `values` is empty", table)
 	}
 
 	buf := &bytes.Buffer{}
@@ -659,7 +671,7 @@ func genInsertSql(rv reflect.Value, values *[]kv) error {
 
 func (p *Rows) genBinder(rt reflect.Type) (*binder, error) {
 	if p.rows == nil {
-		return nil, status.Errorf(codes.Internal, "rows is nil")
+		return nil, fmt.Errorf("rows is nil")
 	}
 
 	fields, err := p.rows.Columns()
@@ -702,7 +714,7 @@ func (p binder) scan(sample reflect.Value) error {
 	}
 
 	if err := p.rows.Scan(p.dest...); err != nil {
-		return status.Errorf(codes.Internal, "Scan() err: "+err.Error())
+		return fmt.Errorf("Scan() err: %s", err)
 	}
 
 	for _, v := range tran {
@@ -726,11 +738,6 @@ func (p *transfer) unmarshal() error {
 		return nil
 	}
 
-	jsonStr, ok := p.dstProxy.([]byte)
-	if !ok {
-		return nil
-	}
-
 	rv := reflect.Indirect(reflect.ValueOf(p.dst))
 	if p.ptr {
 		if rv.IsNil() {
@@ -739,8 +746,19 @@ func (p *transfer) unmarshal() error {
 		rv = rv.Elem()
 	}
 
-	if err := json.Unmarshal(jsonStr, rv.Addr().Interface()); err != nil {
-		dlog("json.Unmarshal() error %s", err)
+	// time.Time
+	if i, ok := p.dstProxy.(int64); ok {
+		t := time.Unix(i, 0)
+		if dst, ok := rv.Addr().Interface().(*time.Time); ok {
+			*dst = t
+		}
+		return nil
+	}
+
+	if jsonStr, ok := p.dstProxy.([]byte); ok {
+		if err := json.Unmarshal(jsonStr, rv.Addr().Interface()); err != nil {
+			dlog("json.Unmarshal() error %s", err)
+		}
 	}
 
 	return nil
@@ -765,7 +783,9 @@ func (p *binder) bind(rv reflect.Value) ([]*transfer, error) {
 
 // sqlInterface: rv should not be ptr, return interface for use in sql's args
 func sqlInterface(rv reflect.Value) (interface{}, error) {
-	if rv.Kind() == reflect.Struct || rv.Kind() == reflect.Map ||
+	if rv.Type().String() == "time.Time" {
+		return rv.Interface().(time.Time).Unix(), nil
+	} else if rv.Kind() == reflect.Struct || rv.Kind() == reflect.Map ||
 		(rv.Kind() == reflect.Slice && rv.Type().Elem().Kind() != reflect.Uint8) {
 		if b, err := json.Marshal(rv.Interface()); err != nil {
 			return nil, err

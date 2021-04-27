@@ -97,20 +97,6 @@ func StructCopy(dst, src interface{}) error {
 	return nil
 }
 
-func KeyAttr(key []byte) (string, string, string, string, error) {
-	var err error
-	s := strings.Split(string(key), "/")
-	if len(s) != 4 {
-		err = EINVAL
-	}
-
-	return s[0], s[1], s[2], s[3], err
-}
-
-func AttrKey(endpoint, metric, tags, typ string) []byte {
-	return []byte(fmt.Sprintf("%s/%s/%s/%s", endpoint, metric, tags, typ))
-}
-
 func GetType(v interface{}) string {
 	t := reflect.TypeOf(v)
 	switch t.Kind() {
@@ -391,41 +377,6 @@ func Base64Encode(in []byte) string {
 	return base64.StdEncoding.EncodeToString(in)
 }
 
-func DirNameMap(dirName string) (map[string]string, error) {
-	var (
-		keyZone bool
-		i, j    int
-		k, v    string
-		ret     = make(map[string]string)
-	)
-
-	for keyZone, i, j = true, 0, 0; j < len(dirName); j++ {
-		if dirName[j] == '=' && keyZone {
-			k = strings.TrimSpace(dirName[i:j])
-			i = j + 1
-			keyZone = false
-		} else if dirName[j] == ',' && !keyZone {
-			v = strings.TrimSpace(dirName[i:j])
-			if len(k) > 0 && len(v) > 0 {
-				ret[k] = v
-				k, v = "", ""
-			} else {
-				return ret, ErrParam
-			}
-			i = j + 1
-			keyZone = true
-		}
-	}
-
-	v = strings.TrimSpace(dirName[i:])
-	if len(k) > 0 && len(v) > 0 {
-		ret[k] = v
-		return ret, nil
-	} else {
-		return ret, ErrParam
-	}
-}
-
 func FirstLine(in string) string {
 	in = strings.TrimSpace(in)
 	if n := strings.IndexByte(in, '\n'); n > 0 {
@@ -543,90 +494,6 @@ func ErrorString(err error) *string {
 		return nil
 	}
 	return String(err.Error())
-}
-
-func Diff(src, dst []string) (add, del []string) {
-	s := map[string]bool{}
-	d := map[string]bool{}
-
-	for _, v := range src {
-		s[v] = true
-	}
-
-	for _, v := range dst {
-		d[v] = true
-	}
-
-	for _, v := range dst {
-		if !s[v] {
-			add = append(add, v)
-		}
-	}
-
-	for _, v := range src {
-		if !d[v] {
-			del = append(del, v)
-		}
-	}
-
-	return
-}
-
-func Diff3(src, dst []string) (add, del, eq []string) {
-	s := map[string]bool{}
-	d := map[string]bool{}
-
-	for _, v := range src {
-		s[v] = true
-	}
-
-	for _, v := range dst {
-		d[v] = true
-		if !s[v] {
-			add = append(add, v)
-		} else {
-			eq = append(eq, v)
-		}
-	}
-
-	for _, v := range src {
-		if !d[v] {
-			del = append(del, v)
-		}
-	}
-
-	return
-}
-
-type DiffEntity interface {
-	Key() string
-}
-
-func Diff4(src, dst []DiffEntity) (add, del, eq []DiffEntity) {
-	s := map[string]bool{}
-	d := map[string]bool{}
-
-	for _, v := range src {
-		s[v.Key()] = true
-	}
-
-	for _, v := range dst {
-		d[v.Key()] = true
-		if !s[v.Key()] {
-			add = append(add, v)
-		} else {
-			eq = append(eq, v)
-		}
-	}
-
-	for _, v := range src {
-		if !d[v.Key()] {
-			del = append(del, v)
-		}
-	}
-
-	return
-
 }
 
 // convert like this: "HelloWorld" to "hello_world"

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/yubo/golib/status"
 	"github.com/yubo/golib/util"
 
 	_ "github.com/yubo/golib/orm/mysql"
@@ -34,7 +33,7 @@ func init() {
 	driver = envDef("TEST_DB_DRIVER", "sqlite3")
 	dsn = envDef("TEST_DB_DSN", "file:test2.db?cache=shared&mode=memory")
 	if db, err := DbOpen(driver, dsn); err == nil {
-		if err = db.Db.Ping(); err == nil {
+		if err = db.DB.Ping(); err == nil {
 			available = true
 		}
 		db.Close()
@@ -43,13 +42,13 @@ func init() {
 
 type DBTest struct {
 	*testing.T
-	db *Db
+	db *DB
 }
 
 func runTests(t *testing.T, dsn string, tests ...func(dbt *DBTest)) {
 	var (
 		err error
-		db  *Db
+		db  *DB
 		dbt *DBTest
 	)
 
@@ -77,7 +76,7 @@ func (dbt *DBTest) fail(method, query string, err error) {
 		query = "[query too large to print]"
 	}
 	dbt.Log(string(debug.Stack()))
-	dbt.Fatalf("error on %s %s: %s\n %s", method, query, err.Error(), status.GetDetail(err))
+	dbt.Fatalf("error on %s %s: %s", method, query, err.Error())
 }
 
 func (dbt *DBTest) queryRow(output interface{}, query string, args ...interface{}) {
@@ -155,6 +154,32 @@ func TestQueryRows(t *testing.T) {
 
 		dbt.mustExec("DROP TABLE IF EXISTS test")
 	})
+
+	runTests(t, dsn, func(dbt *DBTest) {
+		var v []*int
+		dbt.mustExec("CREATE TABLE test (value int)")
+
+		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+
+		iter, err := dbt.db.Query("SELECT value FROM test").Iter()
+		if err != nil {
+			t.Fatalf("query rows iter %s", err)
+		}
+		defer iter.Close()
+
+		for iter.Next() {
+			i := new(int)
+			iter.Scan(i)
+			v = append(v, i)
+		}
+
+		if len(v) != 3 {
+			t.Fatalf("query rows want 3 got %d", len(v))
+		}
+
+		dbt.mustExec("DROP TABLE IF EXISTS test")
+	})
+
 }
 
 func TestDelRows(t *testing.T) {
@@ -382,23 +407,40 @@ func TestQueryRowsStructPtr(t *testing.T) {
 
 func TestPing(t *testing.T) {
 	runTests(t, dsn, func(dbt *DBTest) {
-		if err := dbt.db.Db.Ping(); err != nil {
+		if err := dbt.db.DB.Ping(); err != nil {
 			dbt.fail("Ping", "Ping", err)
 		}
 	})
 }
 
-type User struct {
-	SQLModel `sql:",inline"`
-	Name     string `sql:"name" tname:"fn_group"`
-	Auth     int    `sql:"auth"`
-	age      int
-}
+func TestTime(t *testing.T) {
+	runTests(t, dsn, func(dbt *DBTest) {
+		type ts struct {
+			Time  time.Time
+			TimeP *time.Time
+			N     int
+		}
 
-type SQLModel struct {
-	Id       int       `beedb:"PK" sql:"id"`
-	Created  time.Time `sql:"created"`
-	Modified time.Time `sql:"modified"`
+		dbt.mustExec("CREATE TABLE test (time bigint, time_p bigint, n int)")
+
+		v, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
+		cases := []ts{
+			{v, &v, 0},
+			{time.Time{}, &time.Time{}, 1},
+			//{time.Time{}, nil, 2}, // FIXME: can't work
+		}
+
+		for _, c := range cases {
+			if err := dbt.db.Insert("test", c); err != nil {
+				t.Fatal(err)
+			}
+			got := ts{}
+			dbt.mustQueryRow(&got, "SELECT * FROM test where n = ?", c.N)
+			require.Equal(t, c.Time.Unix(), got.Time.Unix())
+			require.Equal(t, c.TimeP.Unix(), got.TimeP.Unix())
+		}
+		dbt.mustExec("DROP TABLE IF EXISTS test")
+	})
 }
 
 func TestUpdateSql(t *testing.T) {

@@ -16,6 +16,10 @@ import (
 	"time"
 )
 
+var (
+	ErrDryRun = errors.New("dry run")
+)
+
 func ReadFile(url string) ([]byte, error) {
 	if strings.HasPrefix(url, "http") {
 		resp, err := http.Get(url)
