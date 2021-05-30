@@ -19,7 +19,8 @@ import (
 type Configer struct {
 	*options
 
-	data map[string]interface{}
+	data       map[string]interface{}
+	configFile string
 }
 
 func newConfiger(yml []byte) (*Configer, error) {
@@ -55,11 +56,16 @@ func NewConfiger(configFile string, opts_ ...Option) (configer *Configer, err er
 	}
 
 	configer = &Configer{
-		data:    map[string]interface{}{},
-		options: opts,
+		data:       map[string]interface{}{},
+		options:    opts,
+		configFile: configFile,
 	}
 
 	return
+}
+
+func (p *Configer) ConfigFilePath() string {
+	return p.configFile
 }
 
 func (p *Configer) GetConfiger(path string) *Configer {
@@ -293,8 +299,8 @@ func (p *Configer) read(codec codec, path string, dest interface{}, opts_ ...Opt
 		}
 
 		err = codec.Unmarshal(data, dest)
-		klog.V(5).InfoS("unmarshal", "type", codec.Name(), "data", string(data), "err", err)
 		if err != nil {
+			klog.V(5).InfoS("unmarshal", "type", codec.Name(), "data", string(data), "err", err)
 			return err
 		}
 	}
@@ -308,15 +314,15 @@ func (p *Configer) read(codec codec, path string, dest interface{}, opts_ ...Opt
 			data = []byte(s)
 		} else {
 			data, err = codec.Marshal(v)
-			//klog.V(5).InfoS("marshal", "v", v, "data", string(data), "err", err)
 			if err != nil {
+				klog.V(5).InfoS("marshal", "v", v, "data", string(data), "err", err)
 				return err
 			}
 		}
 
 		err = codec.Unmarshal(data, dest)
-		klog.V(5).InfoS("unmarshal", "data", string(data), "dest", dest, "err", err)
 		if err != nil {
+			klog.V(5).InfoS("unmarshal", "data", string(data), "dest", dest, "err", err)
 			return err
 		}
 	}

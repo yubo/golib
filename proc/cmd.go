@@ -14,7 +14,30 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func NewRootCmd(ctx context.Context, args []string) *cobra.Command {
+func ApplyToCmd(ctx context.Context, cmd *cobra.Command) error {
+	name := NameFrom(ctx)
+	_module.ctx = ctx
+	_module.options = newOptions(name)
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		if klog.V(5).Enabled() {
+			fs := cmd.Flags()
+			cliflag.PrintFlags(fs)
+		}
+		return startCmd()
+	}
+
+	fs := cmd.Flags()
+	fs.ParseErrorsWhitelist.UnknownFlags = true
+
+	globalflag.AddGlobalFlags(fs, name)
+	_module.options.addFlags(fs, name)
+
+	return nil
+}
+
+// with cliflag section
+func NewRootCmd(ctx context.Context) *cobra.Command {
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
