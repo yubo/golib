@@ -23,8 +23,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/ghodss/yaml"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/yaml"
 )
 
 // ErrNoTable indicates that a chart does not have a matching table.

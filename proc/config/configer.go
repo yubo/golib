@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ghodss/yaml"
 	"github.com/yubo/golib/proc/strvals"
 	"github.com/yubo/golib/util/template"
 	yaml2 "gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/yaml"
 )
 
 type Configer struct {
@@ -34,9 +34,9 @@ func newConfiger(yml []byte) (*Configer, error) {
 
 func ToConfiger(in interface{}) *Configer {
 	if data, ok := in.(map[string]interface{}); ok {
-		return &Configer{data: data}
+		return &Configer{options: &options{}, data: data}
 	}
-	return &Configer{data: map[string]interface{}{}}
+	return &Configer{options: &options{}, data: map[string]interface{}{}}
 }
 
 func NewConfiger(configFile string, opts_ ...Option) (configer *Configer, err error) {

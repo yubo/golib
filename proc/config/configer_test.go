@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/yubo/golib/util"
-	yaml2 "gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
 )
 

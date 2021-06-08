@@ -19,8 +19,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/ghodss/yaml"
 	"github.com/yubo/golib/util"
+	"sigs.k8s.io/yaml"
 )
 
 var (
