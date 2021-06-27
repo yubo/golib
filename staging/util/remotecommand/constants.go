@@ -19,7 +19,7 @@ package remotecommand
 import (
 	"time"
 
-	metav1 "github.com/yubo/golib/staging/api/meta/v1"
+	"github.com/yubo/golib/api"
 )
 
 const (
@@ -46,8 +46,8 @@ const (
 	// adds support for exit codes.
 	StreamProtocolV4Name = "v4.channel.k8s.io"
 
-	NonZeroExitCodeReason = metav1.StatusReason("NonZeroExitCode")
-	ExitCodeCauseType     = metav1.CauseType("ExitCode")
+	NonZeroExitCodeReason = api.StatusReason("NonZeroExitCode")
+	ExitCodeCauseType     = api.CauseType("ExitCode")
 )
 
 var SupportedStreamingProtocols = []string{StreamProtocolV4Name, StreamProtocolV3Name, StreamProtocolV2Name, StreamProtocolV1Name}
