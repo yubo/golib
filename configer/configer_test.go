@@ -9,9 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
-	"k8s.io/klog/v2"
 )
 
 // get config  ParseConfigFile(values, config.yml)
@@ -55,17 +54,8 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, err := New("conf.yml")
-	if err != nil {
-		t.Error(t)
-	}
-
-	err = config.Prepare()
-	if err != nil {
-		t.Error(t)
-	}
-
-	klog.V(3).Infof("%s", config)
+	_, err := New(WithValueFile("conf.yml"))
+	assert.NoError(t, err)
 }
 
 func TestTimeDuration(t *testing.T) {
@@ -79,8 +69,7 @@ t4: 24h30m30s`},
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := New("conf.yml")
-	config.Prepare()
+	config, _ := New(WithValueFile("conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -95,8 +84,8 @@ t4: 24h30m30s`},
 
 	for _, c := range cases {
 		err := config.ReadYaml(c.path, &got)
-		require.Emptyf(t, err, "config.Readyaml(%s)", c.path)
-		require.Equalf(t, c.want, got, "configer read %s", c.path)
+		assert.NoErrorf(t, err, "config.Readyaml(%s)", c.path)
+		assert.Equalf(t, c.want, got, "configer read %s", c.path)
 	}
 }
 
@@ -113,8 +102,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := New("conf.yml")
-	config.Prepare()
+	config, _ := New(WithValueFile("conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -148,8 +136,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := New("conf.yml")
-	config.Prepare()
+	config, _ := New(WithValueFile("conf.yml"))
 
 	var (
 		got  []string
@@ -161,7 +148,7 @@ fooo:
 		t.Error(err)
 	}
 
-	require.Equalf(t, want, got, "configer read %s", path)
+	assert.Equalf(t, want, got, "configer read %s", path)
 }
 
 func TestRawType(t *testing.T) {
@@ -171,25 +158,24 @@ ctrl:
     google:
       client_id: "781171109477-10tu51e8bs1s677na46oct6hdefpntpu.apps.googleusercontent.com"
       client_secret: xpEoBFqkmI3KVN9pHt2VW-eN
-      redirect_url: http://auth.dev.pt.xiaomi.com/v1.0/auth/callback/google
+      redirect_url: http://auth.dev.pt.example.com/v1.0/auth/callback/google
 `
 
 	var cases = []struct {
 		path string
 		want string
 	}{
+		{"", "map[string]interface {}"},
 		{"ctrl", "map[string]interface {}"},
 		{"ctrl.auth", "map[string]interface {}"},
 		{"ctrl.auth.google", "map[string]interface {}"},
 		{"ctrl.auth.google.client_id", "string"},
 	}
 
-	conf, _ := newConfiger([]byte(yml))
-
+	conf, _ := New(WithDefaultYaml("", yml))
 	for _, c := range cases {
 		if got := util.GetType(conf.GetRaw(c.path)); got != c.want {
-			t.Fatalf("GetType(conf.GetRaw(%s)) got %s want %s",
-				c.path, got, c.want)
+			assert.Equalf(t, got, c.want, "data %+v", conf.data)
 		}
 	}
 
@@ -203,7 +189,7 @@ ctrl:
     google:
       client_id: "781171109477-10tu51e8bs1s677na46oct6hdefpntpu.apps.googleusercontent.com"
       client_secret: xpEoBFqkmI3KVN9pHt2VW-eN
-      redirect_url: http://auth.dev.pt.xiaomi.com/v1.0/auth/callback/google
+      redirect_url: http://auth.dev.pt.example.com/v1.0/auth/callback/google
 `
 	var cases = []struct {
 		path1 string
@@ -215,30 +201,27 @@ ctrl:
 		{"ctrl.auth.google", "client_id", "string"},
 	}
 
-	conf, _ := newConfiger([]byte(yml))
+	conf, _ := New(WithDefaultYaml("", yml))
 	for _, c := range cases {
-		cf := ToConfiger(conf.GetRaw(c.path1))
+		cf := conf.GetConfiger(c.path1)
 		if cf == nil {
 			t.Fatalf("get %s error", c.path1)
 		}
 
-		if got := util.GetType(cf.GetRaw(c.path2)); got != c.want {
-			t.Fatalf("GetType(ToConfiger(conf.GetRaw(%s)).GetRaw(%s)) got %s want %s",
-				c.path1, c.path2, got, c.want)
-		} else {
-			klog.V(3).Infof("%s %s got value %v", c.path1, c.path2, cf.GetRaw(c.path2))
-		}
+		got := util.GetType(cf.GetRaw(c.path2))
+		assert.Equal(t, got, c.want)
+
 	}
 }
 
-func TestToConfigerAsYaml(t *testing.T) {
+func TestGetConfiger(t *testing.T) {
 	yml := `
 ctrl:
   auth:
     google:
       client_id: "781171109477-10tu51e8bs1s677na46oct6hdefpntpu.apps.googleusercontent.com"
       client_secret: xpEoBFqkmI3KVN9pHt2VW-eN
-      redirect_url: http://auth.dev.pt.xiaomi.com/v1.0/auth/callback/google
+      redirect_url: http://auth.dev.pt.example.com/v1.0/auth/callback/google
 `
 
 	type auth struct {
@@ -250,18 +233,18 @@ ctrl:
 	want := auth{
 		ClientId:     "781171109477-10tu51e8bs1s677na46oct6hdefpntpu.apps.googleusercontent.com",
 		ClientSecret: "xpEoBFqkmI3KVN9pHt2VW-eN",
-		RedirectUrl:  "http://auth.dev.pt.xiaomi.com/v1.0/auth/callback/google",
+		RedirectUrl:  "http://auth.dev.pt.example.com/v1.0/auth/callback/google",
 	}
 
 	var got auth
 
-	conf, _ := newConfiger([]byte(yml))
-	cf := ToConfiger(conf.GetRaw("ctrl.auth"))
-	err := cf.ReadYaml("google", &got)
+	conf, _ := New(WithDefaultYaml("", yml))
+	conf2 := conf.GetConfiger("ctrl.auth")
+	err := conf2.ReadYaml("google", &got)
 	if err != nil {
 		t.Fatalf("error %s", err)
 	}
-	require.Equalf(t, want, got, "configer read yaml")
+	assert.Equalf(t, want, got, "configer read yaml %s", conf2)
 }
 
 func TestConfigWithBase(t *testing.T) {
@@ -273,8 +256,7 @@ func TestConfigWithBase(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := New("conf.yml", WithBaseFile("base.yml"))
-	cf.Prepare()
+	cf, _ := New(WithValueFile("base.yml", "conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -286,9 +268,8 @@ func TestConfigWithBase(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := cf.GetRaw(c.path); got != c.want {
-			t.Errorf("config.GetRaw(%s) expected %#v got %#v", c.path, c.want, got)
-		}
+		got := cf.GetRaw(c.path)
+		assert.Equal(t, got, c.want)
 	}
 }
 
@@ -300,8 +281,10 @@ func TestConfigWithBase2(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := New("conf.yml", WithBaseBytes2("foo", "foo1: base1"), WithBaseBytes2("foo", "foo3: base3"))
-	cf.Prepare()
+	cf, _ := New(
+		WithValueFile("conf.yml"),
+		WithDefaultYaml("foo", "foo1: base1"),
+		WithDefaultYaml("foo", "foo3: base3"))
 
 	var cases = []struct {
 		path string
@@ -313,9 +296,8 @@ func TestConfigWithBase2(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := cf.GetRaw(c.path); got != c.want {
-			t.Errorf("config.GetRaw(%s) expected %#v got %#v", c.path, c.want, got)
-		}
+		got := cf.GetRaw(c.path)
+		assert.Equal(t, got, c.want)
 	}
 }
 
@@ -348,18 +330,12 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := New("conf.yml",
-		WithBaseFile("base.yml"),
-		WithValueFile("v1.yml"),
-		WithValueFile("v2.yml"),
+	cf, _ := New(
+		WithValueFile("base.yml", "conf.yml", "v1.yml", "v2.yml"),
 		WithValues("e=v2_e"),
 		WithValues("f1=f1,f2=f2"),
 		WithStringValues("sv1=sv1,sv2=sv2"),
 	)
-	err := cf.Prepare()
-	if err != nil {
-		t.Errorf("prepare err %s", err)
-	}
 
 	var cases = []struct {
 		path string
@@ -377,9 +353,7 @@ e: v2_e
 	}
 
 	for _, c := range cases {
-		if got := cf.GetRaw(c.path); got != c.want {
-			t.Errorf("config.GetRaw(%s) expected %#v got %#v",
-				c.path, c.want, got)
-		}
+		got := cf.GetRaw(c.path)
+		assert.Equal(t, got, c.want)
 	}
 }

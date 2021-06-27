@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"path/filepath"
+	"os"
 	"strings"
 
 	"github.com/yubo/golib/util/strvals"
@@ -21,61 +21,42 @@ import (
 type Configer struct {
 	*options
 
-	data       map[string]interface{}
-	path       []string
-	configFile string
+	data     map[string]interface{}
+	path     []string
+	prepared bool
 }
 
-func New(configFile string, optsIn ...Option) (configer *Configer, err error) {
+func New(optsIn ...Option) (*Configer, error) {
 	opts := &options{}
 	for _, opt := range optsIn {
 		opt.apply(opts)
 	}
 
-	if configFile, err = filepath.Abs(configFile); err != nil {
+	if err := opts.Validate(); err != nil {
 		return nil, err
 	}
 
-	opts.valueFiles = append([]string{configFile}, opts.valueFiles...)
+	conf := &Configer{
+		data:    map[string]interface{}{},
+		options: opts,
+	}
 
-	if err = opts.Validate(); err != nil {
+	if err := conf.Prepare(); err != nil {
 		return nil, err
 	}
 
-	configer = &Configer{
-		data:       map[string]interface{}{},
-		options:    opts,
-		configFile: configFile,
+	return conf, nil
+}
+
+func (p *Configer) Prepare() (err error) {
+	if p.prepared {
+		return nil
 	}
 
-	return
-}
-
-func (p *Configer) ConfigFilePath() string {
-	return p.configFile
-}
-
-func (p *Configer) GetConfiger(path string) *Configer {
-	return ToConfiger(p.GetRaw(path))
-}
-
-// def < env < config < valueFile < value < flag
-func (p *Configer) Prepare() error {
 	base := map[string]interface{}{}
 
-	// base
-	if len(p.base) > 0 {
-		if err := yaml.Unmarshal(p.base, &base); err != nil {
-			return err
-		}
-	}
-
-	base, err := yaml2ValuesWithPath(base, p.base, "")
-	if err != nil {
-		return err
-	}
-
-	for path, b := range p.bases {
+	// base with path
+	for path, b := range p.pathsBase {
 		if base, err = yaml2ValuesWithPath(base, []byte(b), path); err != nil {
 			return err
 		}
@@ -83,18 +64,18 @@ func (p *Configer) Prepare() error {
 
 	// configFile & valueFile
 	for _, filePath := range p.valueFiles {
-		currentMap := map[string]interface{}{}
+		m := map[string]interface{}{}
 
 		bytes, err := template.ParseTemplateFile(nil, filePath)
 		if err != nil {
 			return err
 		}
 
-		if err := yaml.Unmarshal(bytes, &currentMap); err != nil {
+		if err := yaml.Unmarshal(bytes, &m); err != nil {
 			return fmt.Errorf("failed to parse %s: %s", filePath, err)
 		}
 		// Merge with the previous map
-		base = mergeValues(base, currentMap)
+		base = mergeValues(base, m)
 	}
 
 	// User specified a value via --set
@@ -123,19 +104,45 @@ func (p *Configer) Prepare() error {
 	}
 
 	p.data = base
+
+	p.parseFlag()
 	return nil
 }
 
-func (p *Configer) Read(path string, dest interface{}, opts_ ...Option) error {
-	return p.read(codecJson, path, dest, opts_...)
+func (p *Configer) ValueFiles() []string {
+	return p.options.valueFiles
+}
+
+func (p *Configer) GetConfiger(path string) *Configer {
+	if data, ok := p.GetRaw(path).(map[string]interface{}); ok {
+		return &Configer{
+			options: p.options,
+			path:    append(clonePath(p.path), parsePath(path)...),
+			data:    data,
+		}
+	}
+
+	return &Configer{
+		options: p.options,
+		path:    append(clonePath(p.path), parsePath(path)...),
+		data:    map[string]interface{}{},
+	}
+}
+
+func (p *Configer) Read(path string, dest interface{}, opts ...Option) error {
+	return p.read(codecJson, path, dest, opts...)
 }
 
 // ReadYaml use for yaml tags `yaml:"key"`
-func (p *Configer) ReadYaml(path string, dest interface{}, opts_ ...Option) error {
-	return p.read(codecYaml, path, dest, opts_...)
+func (p *Configer) ReadYaml(path string, dest interface{}, opts ...Option) error {
+	return p.read(codecYaml, path, dest, opts...)
 }
 
 func (p *Configer) GetRaw(path string) interface{} {
+	if path == "" {
+		return p.data
+	}
+
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
 		klog.V(3).Infof("get %s err %v", path, err)
@@ -262,9 +269,9 @@ type validator interface {
 	Validate() error
 }
 
-func (p *Configer) read(codec codec, path string, dest interface{}, opts_ ...Option) error {
+func (p *Configer) read(codec codec, path string, dest interface{}, optsIn ...Option) error {
 	opts := &options{}
-	for _, opt := range opts_ {
+	for _, opt := range optsIn {
 		opt.apply(opts)
 	}
 
@@ -292,28 +299,6 @@ func (p *Configer) read(codec codec, path string, dest interface{}, opts_ ...Opt
 		}
 	}
 
-	// check configer override
-	for _, v := range append(p.options.override, opts.override...) {
-		data := []byte{}
-		if b, ok := v.([]byte); ok {
-			data = b
-		} else if s, ok := v.(string); ok {
-			data = []byte(s)
-		} else {
-			data, err = codec.Marshal(v)
-			if err != nil {
-				klog.V(5).InfoS("marshal", "v", v, "data", string(data), "err", err)
-				return err
-			}
-		}
-
-		err = codec.Unmarshal(data, dest)
-		if err != nil {
-			klog.V(5).InfoS("unmarshal", "data", string(data), "dest", dest, "err", err)
-			return err
-		}
-	}
-
 	if v, ok := dest.(validator); ok {
 		return v.Validate()
 	}
@@ -326,6 +311,11 @@ func (p *Configer) String() string {
 		return err.Error()
 	}
 	return string(buf)
+}
+
+func (p *Configer) getEnv(key string) (string, bool) {
+	val, ok := os.LookupEnv(key)
+	return val, ok && (p.allowEmptyEnv || val != "")
 }
 
 // merge path.bytes -> dest
@@ -373,34 +363,8 @@ func mergeValues(dest map[string]interface{}, src map[string]interface{}) map[st
 	return dest
 }
 
-func newConfiger(yml []byte) (*Configer, error) {
-	var data map[string]interface{}
-	err := yaml.Unmarshal(yml, &data)
-	if err != nil {
-		return nil, err
-	}
-	return ToConfiger(data), nil
+func clonePath(path []string) []string {
+	ret := make([]string, len(path))
+	copy(ret, path)
+	return ret
 }
-
-func ToConfiger(in interface{}) *Configer {
-	if data, ok := in.(map[string]interface{}); ok {
-		return &Configer{options: &options{}, data: data}
-	}
-	return &Configer{options: &options{}, data: map[string]interface{}{}}
-}
-
-//func (p *Configer) Unmarshal(dest interface{}) error {
-//	data, err := json.Marshal(p.data)
-//	if err != nil {
-//		return err
-//	}
-//
-//	if err := json.Unmarshal(data, dest); err != nil {
-//		return err
-//	}
-//
-//	if v, ok := dest.(validator); ok {
-//		return v.Validate()
-//	}
-//	return nil
-//}

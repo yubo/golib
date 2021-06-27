@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
 
 	_ "github.com/yubo/golib/orm/mysql"
@@ -238,28 +238,28 @@ func TestQueryRowStruct(t *testing.T) {
 			got := vt{}
 			want := vt{1, 2, 0, 0}
 			dbt.mustQueryRow(&got, "SELECT * FROM test")
-			require.Equal(t, got, want)
+			assert.Equal(t, got, want)
 		}
 
 		{
 			got := vt2{}
 			want := vt2{util.Int64(1), util.Int64(2), nil, nil}
 			dbt.mustQueryRow(&got, "SELECT * FROM test")
-			require.Equal(t, got, want)
+			assert.Equal(t, got, want)
 		}
 
 		{
 			var got *vt2
 			var want *vt2
 			dbt.queryRow(&got, "SELECT * FROM test where point_x = 0")
-			require.Equal(t, got, want)
+			assert.Equal(t, got, want)
 		}
 
 		{
 			var got *vt2
 			want := &vt2{util.Int64(1), util.Int64(2), nil, nil}
 			dbt.mustQueryRow(&got, "SELECT * FROM test")
-			require.Equal(t, got, want)
+			assert.Equal(t, got, want)
 		}
 
 		{
@@ -343,7 +343,7 @@ func TestQueryRowStruct2(t *testing.T) {
 			}
 			got := vt{}
 			dbt.mustQueryRow(&got, "SELECT * FROM test where n = ?", c.N)
-			require.Equal(t, c, got)
+			assert.Equal(t, c, got)
 		}
 		dbt.mustExec("DROP TABLE IF EXISTS test")
 	})
@@ -436,8 +436,8 @@ func TestTime(t *testing.T) {
 			}
 			got := ts{}
 			dbt.mustQueryRow(&got, "SELECT * FROM test where n = ?", c.N)
-			require.Equal(t, c.Time.Unix(), got.Time.Unix())
-			require.Equal(t, c.TimeP.Unix(), got.TimeP.Unix())
+			assert.Equal(t, c.Time.Unix(), got.Time.Unix())
+			assert.Equal(t, c.TimeP.Unix(), got.TimeP.Unix())
 		}
 		dbt.mustExec("DROP TABLE IF EXISTS test")
 	})
@@ -466,8 +466,8 @@ func TestUpdateSql(t *testing.T) {
 		if sql, args, err := GenUpdateSql("vt", c.sample); err != nil {
 			t.Fatal(err)
 		} else {
-			require.Equal(t, c.sql, sql)
-			require.Equal(t, c.args, args)
+			assert.Equal(t, c.sql, sql)
+			assert.Equal(t, c.args, args)
 		}
 	}
 }
@@ -482,7 +482,7 @@ func TestSqlArg(t *testing.T) {
 		dbt.mustExec("INSERT INTO test VALUES (?);", a)
 
 		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", a)
-		require.Equal(t, 1, v)
+		assert.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
@@ -495,7 +495,7 @@ func TestSqlArg(t *testing.T) {
 		dbt.mustExec("INSERT INTO test VALUES (?);", &a)
 
 		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", &a)
-		require.Equal(t, 1, v)
+		assert.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
@@ -516,10 +516,10 @@ func TestSqlArg(t *testing.T) {
 
 		v := vt{}
 		dbt.mustQueryRow(&v, "SELECT * FROM test;")
-		require.Equal(t, v, vt{&pointX, nil, nil, nil})
+		assert.Equal(t, v, vt{&pointX, nil, nil, nil})
 
 		// dbt.mustQueryRow(&v, "SELECT value FROM test where b = ?;", 0)
-		// require.Equal(t, 1, v)
+		// assert.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
@@ -547,7 +547,7 @@ func TestTx(t *testing.T) {
 		}
 
 		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", &a)
-		require.Equal(t, 1, v)
+		assert.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
@@ -569,7 +569,7 @@ func TestTx(t *testing.T) {
 		}
 
 		dbt.queryRow(&v, "SELECT value FROM test where value=?;", &a)
-		require.Equal(t, 0, v)
+		assert.Equal(t, 0, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})

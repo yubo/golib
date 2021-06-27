@@ -172,7 +172,22 @@ func _ss2map(in []string) map[string]bool {
 	return ret
 }
 
-func TestTitleCasedName(t *testing.T) {
+func TestLowerCasedName(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"foo_bar", "fooBar"},
+		{"foo-bar", "fooBar"},
+	}
+
+	for _, c := range cases {
+		require.Equal(t, c.want, LowerCamelCasedName(c.in))
+	}
+
+}
+
+func TestCamelCasedName(t *testing.T) {
 	cases := []struct {
 		in   string
 		want string
@@ -182,7 +197,7 @@ func TestTitleCasedName(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		require.Equal(t, c.want, TitleCasedName(c.in, false))
+		require.Equal(t, c.want, CamelCasedName(c.in))
 	}
 
 }

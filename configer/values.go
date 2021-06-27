@@ -151,7 +151,7 @@ func (v Values) PathValue(path string) (interface{}, error) {
 func (v Values) pathValue(path []string) (interface{}, error) {
 	if len(path) == 1 {
 		// if exists must be root key not table
-		if _, ok := v[path[0]]; ok && !istable(v[path[0]]) {
+		if _, ok := v[path[0]]; ok /*&& !istable(v[path[0]])*/ {
 			return v[path[0]], nil
 		}
 		return nil, ErrNoValue{path[0]}
@@ -164,7 +164,7 @@ func (v Values) pathValue(path []string) (interface{}, error) {
 		return nil, ErrNoValue{key}
 	}
 	// check table for key and ensure value is not a table
-	if k, ok := t[key]; ok && !istable(k) {
+	if k, ok := t[key]; ok /*&& !istable(k)*/ {
 		return k, nil
 	}
 	return nil, ErrNoValue{key}

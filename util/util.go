@@ -98,6 +98,9 @@ func StructCopy(dst, src interface{}) error {
 }
 
 func GetType(v interface{}) string {
+	if v == nil {
+		return "nil"
+	}
 	t := reflect.TypeOf(v)
 	switch t.Kind() {
 	case reflect.Ptr:
@@ -517,10 +520,12 @@ func SnakeCasedName(name string) string {
 	return string(newstr)
 }
 
+// convert like this: "hello_world" to "helloWorld"
 func LowerCamelCasedName(in string) string {
 	return TitleCasedName(in, true)
 }
 
+// convert like this: "hello_world" to "HelloWorld"
 func CamelCasedName(in string) string {
 	return TitleCasedName(in, false)
 }
