@@ -1,4 +1,4 @@
-package config
+package configer
 
 import (
 	"io"
@@ -55,7 +55,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, err := NewConfiger("conf.yml")
+	config, err := New("conf.yml")
 	if err != nil {
 		t.Error(t)
 	}
@@ -79,7 +79,7 @@ t4: 24h30m30s`},
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := NewConfiger("conf.yml")
+	config, _ := New("conf.yml")
 	config.Prepare()
 
 	var cases = []struct {
@@ -113,7 +113,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := NewConfiger("conf.yml")
+	config, _ := New("conf.yml")
 	config.Prepare()
 
 	var cases = []struct {
@@ -148,7 +148,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := NewConfiger("conf.yml")
+	config, _ := New("conf.yml")
 	config.Prepare()
 
 	var (
@@ -273,7 +273,7 @@ func TestConfigWithBase(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := NewConfiger("conf.yml", WithBaseFile("base.yml"))
+	cf, _ := New("conf.yml", WithBaseFile("base.yml"))
 	cf.Prepare()
 
 	var cases = []struct {
@@ -300,7 +300,7 @@ func TestConfigWithBase2(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := NewConfiger("conf.yml", WithBaseBytes2("foo", "foo1: base1"), WithBaseBytes2("foo", "foo3: base3"))
+	cf, _ := New("conf.yml", WithBaseBytes2("foo", "foo1: base1"), WithBaseBytes2("foo", "foo3: base3"))
 	cf.Prepare()
 
 	var cases = []struct {
@@ -348,7 +348,7 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := NewConfiger("conf.yml",
+	cf, _ := New("conf.yml",
 		WithBaseFile("base.yml"),
 		WithValueFile("v1.yml"),
 		WithValueFile("v2.yml"),

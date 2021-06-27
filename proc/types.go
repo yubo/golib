@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/yubo/golib/proc/config"
+	"github.com/yubo/golib/configer"
 )
 
 type HookFn func(ops *HookOps) error
@@ -43,11 +43,11 @@ func (p HookOps) Context() context.Context {
 	return p.module.ctx
 }
 
-func (p HookOps) Configer() *config.Configer {
+func (p HookOps) Configer() *configer.Configer {
 	return ConfigerFrom(p.module.ctx)
 }
 
-func (p HookOps) ContextAndConfiger() (context.Context, *config.Configer) {
+func (p HookOps) ContextAndConfiger() (context.Context, *configer.Configer) {
 	return p.Context(), p.Configer()
 }
 

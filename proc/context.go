@@ -5,7 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/yubo/golib/proc/config"
+	"github.com/yubo/golib/configer"
 )
 
 // The key type is unexported to prevent collisions
@@ -39,20 +39,20 @@ func WgFrom(ctx context.Context) (*sync.WaitGroup, bool) {
 	return wg, ok
 }
 
-func WithConfiger(parent context.Context, cf *config.Configer) context.Context {
+func WithConfiger(parent context.Context, cf *configer.Configer) context.Context {
 	return WithValue(parent, configerKey, cf)
 }
 
-func ConfigerFrom(ctx context.Context) *config.Configer {
-	cf, ok := ctx.Value(configerKey).(*config.Configer)
+func ConfigerFrom(ctx context.Context) *configer.Configer {
+	cf, ok := ctx.Value(configerKey).(*configer.Configer)
 	if !ok {
 		panic("unable to get configer from context")
 	}
 	return cf
 }
 
-func WithConfigOps(parent context.Context, opts_ ...config.Option) context.Context {
-	opts, ok := parent.Value(configOptsKey).(*[]config.Option)
+func WithConfigOps(parent context.Context, opts_ ...configer.Option) context.Context {
+	opts, ok := parent.Value(configOptsKey).(*[]configer.Option)
 	if ok {
 		*opts = append(*opts, opts_...)
 		return parent
@@ -61,8 +61,8 @@ func WithConfigOps(parent context.Context, opts_ ...config.Option) context.Conte
 	return WithValue(parent, configOptsKey, &opts_)
 }
 
-func ConfigOptsFrom(ctx context.Context) ([]config.Option, bool) {
-	opts, ok := ctx.Value(configOptsKey).(*[]config.Option)
+func ConfigOptsFrom(ctx context.Context) ([]configer.Option, bool) {
+	opts, ok := ctx.Value(configOptsKey).(*[]configer.Option)
 	if ok {
 		return *opts, true
 	}

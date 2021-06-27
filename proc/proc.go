@@ -11,7 +11,7 @@ import (
 
 	systemd "github.com/coreos/go-systemd/daemon"
 	"github.com/spf13/pflag"
-	"github.com/yubo/golib/proc/config"
+	"github.com/yubo/golib/configer"
 	cliflag "github.com/yubo/golib/staging/cli/flag"
 	"k8s.io/klog/v2"
 )
@@ -31,7 +31,7 @@ type Module struct {
 	status        ProcessStatus
 	hookOps       [ACTION_SIZE]HookOpsBucket
 	namedFlagSets cliflag.NamedFlagSets
-	configer      *config.Configer
+	configer      *configer.Configer
 	wg            sync.WaitGroup
 	ctx           context.Context
 }
@@ -69,7 +69,7 @@ func (p *Module) procInit() (err error) {
 	ctx := p.ctx
 	opts, _ := ConfigOptsFrom(ctx)
 
-	if p.configer, err = config.NewConfiger(p.options.configFile, opts...); err != nil {
+	if p.configer, err = configer.New(p.options.configFile, opts...); err != nil {
 		return err
 	}
 

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yubo/golib/staging/api/errors"
+	"github.com/yubo/golib/api/errors"
 	"github.com/yubo/golib/staging/util/clock"
 	"github.com/yubo/golib/util"
 )

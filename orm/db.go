@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yubo/golib/staging/api/errors"
+	"github.com/yubo/golib/api/errors"
 	"k8s.io/klog/v2"
 )
 

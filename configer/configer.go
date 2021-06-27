@@ -1,6 +1,8 @@
 // the configer is not thread safe,
 // make sure not use it after call process.Start()
-package config
+package configer
+
+// def < env < config < valueFile < value < flag
 
 import (
 	"encoding/json"
@@ -9,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yubo/golib/proc/strvals"
+	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	yaml2 "gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
@@ -20,28 +22,13 @@ type Configer struct {
 	*options
 
 	data       map[string]interface{}
+	path       []string
 	configFile string
 }
 
-func newConfiger(yml []byte) (*Configer, error) {
-	var data map[string]interface{}
-	err := yaml.Unmarshal(yml, &data)
-	if err != nil {
-		return nil, err
-	}
-	return ToConfiger(data), nil
-}
-
-func ToConfiger(in interface{}) *Configer {
-	if data, ok := in.(map[string]interface{}); ok {
-		return &Configer{options: &options{}, data: data}
-	}
-	return &Configer{options: &options{}, data: map[string]interface{}{}}
-}
-
-func NewConfiger(configFile string, opts_ ...Option) (configer *Configer, err error) {
+func New(configFile string, optsIn ...Option) (configer *Configer, err error) {
 	opts := &options{}
-	for _, opt := range opts_ {
+	for _, opt := range optsIn {
 		opt.apply(opts)
 	}
 
@@ -72,7 +59,7 @@ func (p *Configer) GetConfiger(path string) *Configer {
 	return ToConfiger(p.GetRaw(path))
 }
 
-// base < config < valueFile < value
+// def < env < config < valueFile < value < flag
 func (p *Configer) Prepare() error {
 	base := map[string]interface{}{}
 
@@ -83,7 +70,7 @@ func (p *Configer) Prepare() error {
 		}
 	}
 
-	base, err := yaml2Values(base, p.base)
+	base, err := yaml2ValuesWithPath(base, p.base, "")
 	if err != nil {
 		return err
 	}
@@ -137,6 +124,15 @@ func (p *Configer) Prepare() error {
 
 	p.data = base
 	return nil
+}
+
+func (p *Configer) Read(path string, dest interface{}, opts_ ...Option) error {
+	return p.read(codecJson, path, dest, opts_...)
+}
+
+// ReadYaml use for yaml tags `yaml:"key"`
+func (p *Configer) ReadYaml(path string, dest interface{}, opts_ ...Option) error {
+	return p.read(codecYaml, path, dest, opts_...)
 }
 
 func (p *Configer) GetRaw(path string) interface{} {
@@ -239,10 +235,6 @@ func (p *Configer) GetIntDef(path string, def int) int {
 	return v
 }
 
-type validator interface {
-	Validate() error
-}
-
 type codec interface {
 	Marshal(v interface{}) ([]byte, error)
 	Unmarshal(data []byte, v interface{}) error
@@ -266,13 +258,8 @@ var (
 	codecYaml = yamlCodec{}
 )
 
-func (p *Configer) Read(path string, dest interface{}, opts_ ...Option) error {
-	return p.read(codecJson, path, dest, opts_...)
-}
-
-// ReadYaml use for yaml tags `yaml:"key"`
-func (p *Configer) ReadYaml(path string, dest interface{}, opts_ ...Option) error {
-	return p.read(codecYaml, path, dest, opts_...)
+type validator interface {
+	Validate() error
 }
 
 func (p *Configer) read(codec codec, path string, dest interface{}, opts_ ...Option) error {
@@ -333,60 +320,18 @@ func (p *Configer) read(codec codec, path string, dest interface{}, opts_ ...Opt
 	return nil
 }
 
-// just for yaml
-func readYaml(obj, dest interface{}) error {
-	data, err := yaml2.Marshal(obj)
-	if err != nil {
-		return err
-	}
-
-	if err := yaml2.Unmarshal(data, dest); err != nil {
-		return err
-	}
-
-	if v, ok := dest.(validator); ok {
-		return v.Validate()
-	}
-
-	return nil
-}
-
-func (p *Configer) Unmarshal(dest interface{}) error {
-	data, err := json.Marshal(p.data)
-	if err != nil {
-		return err
-	}
-
-	if err := json.Unmarshal(data, dest); err != nil {
-		return err
-	}
-
-	if v, ok := dest.(validator); ok {
-		return v.Validate()
-	}
-	return nil
-}
-
-// just for dump
-func _yaml(v map[string]interface{}) string {
-	buf, err := yaml.Marshal(v)
+func (p *Configer) String() string {
+	buf, err := yaml.Marshal(p.data)
 	if err != nil {
 		return err.Error()
 	}
 	return string(buf)
 }
 
-func (p *Configer) String() string {
-	return _yaml(p.data)
-}
-
-func yaml2Values(dest map[string]interface{}, bytes []byte) (map[string]interface{}, error) {
-	return yaml2ValuesWithPath(dest, bytes, "")
-}
-
-func yaml2ValuesWithPath(dest map[string]interface{}, bytes []byte, path string) (map[string]interface{}, error) {
+// merge path.bytes -> dest
+func yaml2ValuesWithPath(dest map[string]interface{}, data []byte, path string) (map[string]interface{}, error) {
 	currentMap := map[string]interface{}{}
-	if err := yaml.Unmarshal(bytes, &currentMap); err != nil {
+	if err := yaml.Unmarshal(data, &currentMap); err != nil {
 		return dest, err
 	}
 
@@ -401,7 +346,7 @@ func yaml2ValuesWithPath(dest map[string]interface{}, bytes []byte, path string)
 	return dest, nil
 }
 
-// Merges source and destination map, preferring values from the source map
+// Merges source and destination map, preferring values from the source map ( src > dest)
 func mergeValues(dest map[string]interface{}, src map[string]interface{}) map[string]interface{} {
 	for k, v := range src {
 		// If the key doesn't exist already, then just set the key to that value
@@ -427,3 +372,35 @@ func mergeValues(dest map[string]interface{}, src map[string]interface{}) map[st
 	}
 	return dest
 }
+
+func newConfiger(yml []byte) (*Configer, error) {
+	var data map[string]interface{}
+	err := yaml.Unmarshal(yml, &data)
+	if err != nil {
+		return nil, err
+	}
+	return ToConfiger(data), nil
+}
+
+func ToConfiger(in interface{}) *Configer {
+	if data, ok := in.(map[string]interface{}); ok {
+		return &Configer{options: &options{}, data: data}
+	}
+	return &Configer{options: &options{}, data: map[string]interface{}{}}
+}
+
+//func (p *Configer) Unmarshal(dest interface{}) error {
+//	data, err := json.Marshal(p.data)
+//	if err != nil {
+//		return err
+//	}
+//
+//	if err := json.Unmarshal(data, dest); err != nil {
+//		return err
+//	}
+//
+//	if v, ok := dest.(validator); ok {
+//		return v.Validate()
+//	}
+//	return nil
+//}

@@ -3,8 +3,8 @@ package session
 import (
 	"sync"
 
+	"github.com/yubo/golib/api/errors"
 	"github.com/yubo/golib/util"
-	"github.com/yubo/golib/staging/api/errors"
 )
 
 func newMemStorage(cf *Config, opts *options) (storage, error) {

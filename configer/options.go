@@ -1,13 +1,16 @@
-package config
+package configer
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 
+	"github.com/spf13/pflag"
 	"github.com/yubo/golib/util/template"
 )
 
 type options struct {
+	configFile   string
 	baseFile     string
 	base         []byte
 	bases        map[string]string
@@ -16,6 +19,15 @@ type options struct {
 	stringValues []string      // values, --set-string
 	fileValues   []string      // values from file, --set-file
 	override     []interface{} // string, []byte is used as the content after encoding
+	enableEnv    bool
+	enableFlag   bool
+}
+
+func (o *options) addFlags(fs *pflag.FlagSet, name string) {
+	fs.StringVarP(&o.configFile, "config", "c", o.configFile, fmt.Sprintf("config file path of your %s server.", name))
+	fs.StringArrayVar(&o.valueFiles, "set-file", o.valueFiles, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
+	fs.StringArrayVar(&o.values, "set", o.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
+	fs.StringArrayVar(&o.stringValues, "set-string", o.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 }
 
 func (p *options) Validate() (err error) {
@@ -121,5 +133,17 @@ func WithFileValues(values ...string) Option {
 func WithOverride(override interface{}) Option {
 	return newFuncOption(func(o *options) {
 		o.override = append(o.override, override)
+	})
+}
+
+func WithEnv() Option {
+	return newFuncOption(func(o *options) {
+		o.enableEnv = true
+	})
+}
+
+func WithFlag() Option {
+	return newFuncOption(func(o *options) {
+		o.enableFlag = true
 	})
 }

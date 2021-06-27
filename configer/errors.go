@@ -1,5 +1,5 @@
 /*
-Copyright 2014 The Kubernetes Authors.
+Copyright The Helm Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,5 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package errors provides detailed error types for api field validation.
-package errors // import "github.com/yubo/golib/staging/api/errors"
+package configer
+
+import (
+	"fmt"
+)
+
+// ErrNoTable indicates that a chart does not have a matching table.
+type ErrNoTable struct {
+	Key string
+}
+
+func (e ErrNoTable) Error() string { return fmt.Sprintf("%q is not a table", e.Key) }
+
+// ErrNoValue indicates that Values does not contain a key with a value
+type ErrNoValue struct {
+	Key string
+}
+
+func (e ErrNoValue) Error() string { return fmt.Sprintf("%q is not a value", e.Key) }
