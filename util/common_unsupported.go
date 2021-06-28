@@ -1,8 +1,15 @@
 // +build !linux,!darwin
 
-package common
+package util
 
-import "syscall"
+import (
+	"errors"
+	"syscall"
+)
+
+var (
+	ErrUnsupported = errors.New("unsupported")
+)
 
 func Kill(pid int, sig syscall.Signal) (err error) {
 	return ErrUnsupported
