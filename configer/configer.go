@@ -11,12 +11,31 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/pflag"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	yaml2 "gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
+
+var (
+	Setting setting
+)
+
+type setting struct {
+	valueFiles   []string // files, -f/--values
+	values       []string // values, --set
+	stringValues []string // values, --set-string
+	fileValues   []string // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
+}
+
+func (s *setting) AddFlags(f *pflag.FlagSet) {
+	f.StringSliceVarP(&s.valueFiles, "values", "f", s.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
+	f.StringArrayVar(&s.values, "set", s.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
+	f.StringArrayVar(&s.stringValues, "set-string", s.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
+	f.StringArrayVar(&s.fileValues, "set-file", s.fileValues, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
+}
 
 type Configer struct {
 	*options
@@ -63,7 +82,7 @@ func (p *Configer) Prepare() (err error) {
 	}
 
 	// configFile & valueFile
-	for _, filePath := range p.valueFiles {
+	for _, filePath := range append(p.options.valueFiles, Setting.valueFiles...) {
 		m := map[string]interface{}{}
 
 		bytes, err := template.ParseTemplateFile(nil, filePath)
@@ -79,21 +98,21 @@ func (p *Configer) Prepare() (err error) {
 	}
 
 	// User specified a value via --set
-	for _, value := range p.values {
+	for _, value := range Setting.values {
 		if err := strvals.ParseInto(value, base); err != nil {
 			return fmt.Errorf("failed parsing --set data: %s", err)
 		}
 	}
 
 	// User specified a value via --set-string
-	for _, value := range p.stringValues {
+	for _, value := range Setting.stringValues {
 		if err := strvals.ParseIntoString(value, base); err != nil {
 			return fmt.Errorf("failed parsing --set-string data: %s", err)
 		}
 	}
 
 	// User specified a value via --set-file
-	for _, value := range p.fileValues {
+	for _, value := range Setting.fileValues {
 		reader := func(rs []rune) (interface{}, error) {
 			bytes, err := ioutil.ReadFile(string(rs))
 			return string(bytes), err
@@ -110,7 +129,7 @@ func (p *Configer) Prepare() (err error) {
 }
 
 func (p *Configer) ValueFiles() []string {
-	return p.options.valueFiles
+	return Setting.valueFiles
 }
 
 func (p *Configer) GetConfiger(path string) *Configer {
