@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cast"
 	"github.com/spf13/pflag"
+	cliflag "github.com/yubo/golib/staging/cli/flag"
 )
 
 var (
@@ -301,4 +302,8 @@ func addFlagCall(fs *pflag.FlagSet, path string, opt *tagOpt, varFn, varPFn, def
 			env:      opt.env,
 		})
 	}
+}
+
+func NamedFlagSets() *cliflag.NamedFlagSets {
+	return &Setting.namedFlagSets
 }

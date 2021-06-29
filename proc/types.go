@@ -68,7 +68,6 @@ const (
 	ACTION_START ProcessAction = iota
 	ACTION_RELOAD
 	ACTION_STOP
-	ACTION_TEST
 	ACTION_SIZE
 )
 

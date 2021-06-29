@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
+	cliflag "github.com/yubo/golib/staging/cli/flag"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	yaml2 "gopkg.in/yaml.v2"
@@ -24,10 +25,11 @@ var (
 )
 
 type setting struct {
-	valueFiles   []string // files, -f/--values
-	values       []string // values, --set
-	stringValues []string // values, --set-string
-	fileValues   []string // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
+	valueFiles    []string // files, -f/--values
+	values        []string // values, --set
+	stringValues  []string // values, --set-string
+	fileValues    []string // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
+	namedFlagSets cliflag.NamedFlagSets
 }
 
 func (s *setting) AddFlags(f *pflag.FlagSet) {

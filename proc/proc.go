@@ -27,13 +27,13 @@ var (
 
 type Module struct {
 	name          string
-	options       *Options
 	status        ProcessStatus
 	hookOps       [ACTION_SIZE]HookOpsBucket
 	namedFlagSets cliflag.NamedFlagSets
 	configer      *configer.Configer
 	wg            sync.WaitGroup
 	ctx           context.Context
+	//options       *Options
 }
 
 func RegisterHooks(in []HookOps) error {
@@ -51,10 +51,10 @@ type addFlags interface {
 	AddFlags(fs *pflag.FlagSet)
 }
 
-func RegisterFlags(name string, in addFlags) error {
-	in.AddFlags(_module.namedFlagSets.FlagSet(name))
-	return nil
-}
+//func RegisterFlags(name string, in addFlags) error {
+//	in.AddFlags(_module.namedFlagSets.FlagSet(name))
+//	return nil
+//}
 
 func NamedFlagSets() *cliflag.NamedFlagSets {
 	return &_module.namedFlagSets
@@ -69,7 +69,7 @@ func (p *Module) procInit() (err error) {
 	ctx := p.ctx
 	opts, _ := ConfigOptsFrom(ctx)
 
-	if p.configer, err = configer.New(p.options.configFile, opts...); err != nil {
+	if p.configer, err = configer.New(opts...); err != nil {
 		return err
 	}
 
@@ -98,8 +98,6 @@ func hookNumName(n ProcessAction) string {
 		return "reload"
 	case ACTION_STOP:
 		return "stop"
-	case ACTION_TEST:
-		return "test"
 	default:
 		return "unknown"
 	}
@@ -159,16 +157,6 @@ func (p *Module) procStop() (err error) {
 	return err
 }
 
-func (p *Module) procTest() error {
-	for _, ops := range p.hookOps[ACTION_TEST] {
-		logOps(ops)
-		if err := ops.Hook(ops); err != nil {
-			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
-		}
-	}
-	return nil
-}
-
 func (p *Module) procReload() error {
 	p.status.Set(STATUS_RELOADING)
 
@@ -183,25 +171,6 @@ func (p *Module) procReload() error {
 		}
 	}
 	p.status.Set(STATUS_RUNNING)
-	return nil
-}
-
-// for general startCmd
-func (p *Module) testConfig() error {
-	if err := p.procInit(); err != nil {
-		klog.Error(err)
-		return err
-	}
-
-	klog.V(3).Infof("#### %s\n", p.options.configFile)
-	klog.V(3).Infof("%s\n", p.configer)
-
-	if err := p.procTest(); err != nil {
-		return err
-	}
-
-	fmt.Printf("%s: configuration file %s test is successful\n",
-		os.Args[0], p.options.configFile)
 	return nil
 }
 

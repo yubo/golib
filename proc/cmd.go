@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/yubo/golib/configer"
 	cliflag "github.com/yubo/golib/staging/cli/flag"
 	"github.com/yubo/golib/staging/cli/globalflag"
 	"github.com/yubo/golib/staging/util/term"
@@ -17,7 +18,7 @@ import (
 func ApplyToCmd(ctx context.Context, cmd *cobra.Command) error {
 	name := NameFrom(ctx)
 	_module.ctx = ctx
-	_module.options = newOptions(name)
+	//_module.options = newOptions(name)
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if klog.V(5).Enabled() {
@@ -31,7 +32,7 @@ func ApplyToCmd(ctx context.Context, cmd *cobra.Command) error {
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 
 	globalflag.AddGlobalFlags(fs, name)
-	_module.options.addFlags(fs, name)
+	//_module.options.addFlags(fs, name)
 
 	return nil
 }
@@ -43,7 +44,7 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 
 	name := NameFrom(ctx)
 	_module.ctx = ctx
-	_module.options = newOptions(name)
+	//_module.options = newOptions(name)
 
 	cmd := &cobra.Command{
 		Use:          name,
@@ -63,7 +64,9 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 
 	namedFlagSets := NamedFlagSets()
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)
-	_module.options.addFlags(namedFlagSets.FlagSet("global"), name)
+
+	//_module.options.addFlags(namedFlagSets.FlagSet("global"), name)
+	configer.Setting.AddFlags(namedFlagSets.FlagSet("global"))
 
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
@@ -84,12 +87,10 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 	return cmd
 }
 
+func RegisterFlags(path, groupName string, sample interface{}) {
+	configer.AddFlags(NamedFlagSets().FlagSet(groupName), path, sample)
+}
+
 func startCmd() error {
-	klog.Infof("config file %s\n", _module.options.configFile)
-
-	if _module.options.test {
-		return _module.testConfig()
-	}
-
 	return _module.start()
 }

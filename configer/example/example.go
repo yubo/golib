@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/yubo/golib/configer"
@@ -19,8 +20,9 @@ type Config struct {
 }
 
 type Http struct {
-	Address    string `json:"address" flag:"address" default:"127.0.0.1:80" description:"address desc"`
-	ServerName string `json:"serverName" flag:"server-name,s" env:"SERVER_NAME" default:"localhost" description:"server name"`
+	Address    string        `json:"address" flag:"address" default:"127.0.0.1:80" description:"address desc"`
+	ServerName string        `json:"serverName" flag:"server-name,s" env:"SERVER_NAME" default:"localhost" description:"server name"`
+	Timeout    time.Duration `json:"timeout" flag:"timeout" default:"5s" description:"connction timeout"`
 }
 
 type Ctrl struct {
