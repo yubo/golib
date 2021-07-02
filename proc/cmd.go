@@ -43,7 +43,6 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	name := NameFrom(ctx)
-	_module.ctx = ctx
 	//_module.options = newOptions(name)
 
 	cmd := &cobra.Command{
@@ -61,6 +60,8 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 
 	fs := cmd.Flags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
+
+	ctx = WithConfigOps(ctx, configer.WithFlag(fs, true, false, 5)) //config.WithBaseBytes2("http", app.DefaultOptions),
 
 	namedFlagSets := NamedFlagSets()
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)
@@ -83,6 +84,8 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStdout(), *namedFlagSets, cols)
 	})
+
+	_module.ctx = ctx
 
 	return cmd
 }

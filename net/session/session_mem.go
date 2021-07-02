@@ -15,7 +15,7 @@ func newMemStorage(cf *Config, opts *options) (storage, error) {
 	}
 
 	util.UntilWithTick(st.gc,
-		opts.clock.NewTicker(cf.GcInterval).C(),
+		opts.clock.NewTicker(cf.gcInterval).C(),
 		opts.ctx.Done())
 
 	return st, nil
@@ -73,7 +73,7 @@ func (p *mStorage) gc() {
 	p.Lock()
 	defer p.Unlock()
 
-	expiresAt := p.opts.clock.Now().Unix() - int64(p.config.MaxIdleTime.Seconds())
+	expiresAt := p.opts.clock.Now().Unix() - int64(p.config.maxIdleTime.Seconds())
 	keys := []string{}
 	for k, v := range p.data {
 		if v.UpdatedAt < expiresAt {

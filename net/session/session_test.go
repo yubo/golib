@@ -46,8 +46,8 @@ func mustExec(t *testing.T, db *orm.DB, query string, args ...interface{}) (res 
 
 func TestDbSession(t *testing.T) {
 	var (
-		sess  *SessionManager
-		store *Session
+		sess  SessionManager
+		store Session
 		err   error
 		sid   string
 	)
@@ -62,14 +62,14 @@ func TestDbSession(t *testing.T) {
 		HttpOnly:       true,
 		Domain:         "",
 		Dsn:            dsn,
-		GcInterval:     time.Minute,
-		CookieLifetime: 24 * time.Hour,
+		gcInterval:     time.Minute,
+		cookieLifetime: 24 * time.Hour,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	db, _ := orm.DbOpenWithCtx(driver, dsn, ctx)
 
-	if sess, err = StartSession(cf, WithCtx(ctx), WithDb(db)); err != nil {
+	if sess, err = StartSession(cf, WithCtx(ctx), WithDB(db)); err != nil {
 		t.Fatalf("error NewSession: %s", err.Error())
 	}
 	defer cancel()
@@ -107,7 +107,7 @@ func TestDbSession(t *testing.T) {
 		Domain:   cf.Domain,
 	}
 	if cf.CookieLifetime > 0 {
-		cookie.Expires = time.Now().Add(cf.CookieLifetime)
+		cookie.Expires = time.Now().Add(cf.cookieLifetime)
 	}
 	http.SetCookie(w, cookie)
 	r.AddCookie(cookie)
@@ -138,7 +138,7 @@ func TestDbSession(t *testing.T) {
 
 func TestDbSessionGC(t *testing.T) {
 	var (
-		sess *SessionManager
+		sess SessionManager
 		err  error
 	)
 
@@ -152,8 +152,8 @@ func TestDbSessionGC(t *testing.T) {
 		HttpOnly:       true,
 		Domain:         "",
 		Dsn:            dsn,
-		GcInterval:     time.Second,
-		CookieLifetime: 24 * time.Hour,
+		gcInterval:     time.Second,
+		cookieLifetime: 24 * time.Hour,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -161,7 +161,7 @@ func TestDbSessionGC(t *testing.T) {
 	clock := &clock.FakeClock{}
 	clock.SetTime(time.Now())
 
-	if sess, err = StartSession(cf, WithCtx(ctx), WithDb(db), WithClock(clock)); err != nil {
+	if sess, err = StartSession(cf, WithCtx(ctx), WithDB(db), WithClock(clock)); err != nil {
 		t.Fatalf("error NewSession: %s", err.Error())
 	}
 	defer cancel()
@@ -191,8 +191,8 @@ func TestDbSessionGC(t *testing.T) {
 
 func TestMemSession(t *testing.T) {
 	var (
-		sess  *SessionManager
-		store *Session
+		sess  SessionManager
+		store Session
 		err   error
 		sid   string
 	)
@@ -204,8 +204,8 @@ func TestMemSession(t *testing.T) {
 		HttpOnly:       true,
 		Domain:         "",
 		Dsn:            dsn,
-		GcInterval:     time.Minute,
-		CookieLifetime: 24 * time.Hour,
+		gcInterval:     time.Minute,
+		cookieLifetime: 24 * time.Hour,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -244,7 +244,7 @@ func TestMemSession(t *testing.T) {
 		Domain:   cf.Domain,
 	}
 	if cf.CookieLifetime > 0 {
-		cookie.Expires = time.Now().Add(cf.CookieLifetime)
+		cookie.Expires = time.Now().Add(cf.cookieLifetime)
 	}
 	http.SetCookie(w, cookie)
 	r.AddCookie(cookie)
@@ -275,7 +275,7 @@ func TestMemSession(t *testing.T) {
 
 func TestMemSessionGC(t *testing.T) {
 	var (
-		sess *SessionManager
+		sess SessionManager
 		err  error
 	)
 
@@ -286,8 +286,8 @@ func TestMemSessionGC(t *testing.T) {
 		HttpOnly:       true,
 		Domain:         "",
 		Dsn:            dsn,
-		GcInterval:     time.Second,
-		CookieLifetime: 24 * time.Hour,
+		gcInterval:     time.Second,
+		cookieLifetime: 24 * time.Hour,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

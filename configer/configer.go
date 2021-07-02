@@ -5,7 +5,6 @@ package configer
 // def < env < config < valueFile < value < flag
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -15,7 +14,6 @@ import (
 	cliflag "github.com/yubo/golib/staging/cli/flag"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
-	yaml2 "gopkg.in/yaml.v2"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/yaml"
 )
@@ -150,15 +148,6 @@ func (p *Configer) GetConfiger(path string) *Configer {
 	}
 }
 
-func (p *Configer) Read(path string, dest interface{}, opts ...Option) error {
-	return p.read(codecJson, path, dest, opts...)
-}
-
-// ReadYaml use for yaml tags `yaml:"key"`
-func (p *Configer) ReadYaml(path string, dest interface{}, opts ...Option) error {
-	return p.read(codecYaml, path, dest, opts...)
-}
-
 func (p *Configer) GetRaw(path string) interface{} {
 	if path == "" {
 		return p.data
@@ -263,59 +252,45 @@ func (p *Configer) GetIntDef(path string, def int) int {
 	return v
 }
 
-type codec interface {
-	Marshal(v interface{}) ([]byte, error)
-	Unmarshal(data []byte, v interface{}) error
-	Name() string
-}
-
-type jsonCodec struct{}
-
-func (c jsonCodec) Marshal(v interface{}) ([]byte, error)      { return json.Marshal(v) }
-func (c jsonCodec) Unmarshal(data []byte, v interface{}) error { return json.Unmarshal(data, v) }
-func (c jsonCodec) Name() string                               { return "json" }
-
-type yamlCodec struct{}
-
-func (c yamlCodec) Marshal(v interface{}) ([]byte, error)      { return yaml2.Marshal(v) }
-func (c yamlCodec) Unmarshal(data []byte, v interface{}) error { return yaml2.Unmarshal(data, v) }
-func (c yamlCodec) Name() string                               { return "yaml" }
-
-var (
-	codecJson = jsonCodec{}
-	codecYaml = yamlCodec{}
-)
-
 type validator interface {
 	Validate() error
 }
 
-func (p *Configer) read(codec codec, path string, dest interface{}, optsIn ...Option) error {
+func (p *Configer) Read(path string, dest interface{}, optsIn ...Option) error {
+	if dest == nil {
+		return nil
+	}
+
 	opts := &options{}
 	for _, opt := range optsIn {
 		opt.apply(opts)
 	}
 
-	// ignore error
-	v, err := Values(p.data).PathValue(path)
-	if err != nil {
-		klog.V(5).InfoS("get pathValue err, ignored", "path", path, "v", v, "err", err)
-	}
-
-	if dest == nil {
-		return nil
+	var err error
+	var v interface{}
+	if path == "" {
+		v = Values(p.data)
+	} else {
+		// ignore error
+		v, err = Values(p.data).PathValue(path)
+		if err != nil {
+			klog.V(5).InfoS("get pathValue err, ignored", "path", path, "v", v, "err", err)
+		}
 	}
 
 	if v != nil {
-		data, err := codec.Marshal(v)
+		data, err := yaml.Marshal(v)
 		//klog.V(5).InfoS("marshal", "v", v, "data", string(data), "err", err)
 		if err != nil {
 			return err
 		}
 
-		err = codec.Unmarshal(data, dest)
+		err = yaml.Unmarshal(data, dest)
 		if err != nil {
-			klog.V(5).InfoS("unmarshal", "type", codec.Name(), "data", string(data), "err", err)
+			klog.V(5).InfoS("unmarshal", "data", string(data), "err", err)
+			if klog.V(5).Enabled() {
+				panic(err)
+			}
 			return err
 		}
 	}

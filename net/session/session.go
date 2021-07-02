@@ -31,28 +31,38 @@ type Config struct {
 	SidLength      int
 	HttpOnly       bool
 	Domain         string
-	GcInterval     time.Duration
-	CookieLifetime time.Duration
-	MaxIdleTime    time.Duration `description:"session timeout"`
+	GcInterval     int `json:"gcInterval" description:"second"`
+	CookieLifetime int `json:"cookieLifetime" description:"second"`
+	MaxIdleTime    int `json:"maxIdletime" description:"session timeout"`
 	DbDriver       string
 	Dsn            string
 	Storage        string `description:"mem|db(defualt)"`
+
+	gcInterval     time.Duration
+	cookieLifetime time.Duration
+	maxIdleTime    time.Duration
+}
+
+func second2duration(second int, def time.Duration) time.Duration {
+	if second == 0 {
+		return def
+	}
+
+	return time.Duration(second) * time.Second
+
 }
 
 func (p *Config) Validate() error {
 	if p == nil {
 		return nil
 	}
-	if p.CookieLifetime == 0 {
-		p.CookieLifetime = 24 * time.Hour
-	}
+
+	p.gcInterval = second2duration(p.GcInterval, 10*time.Minute)
+	p.cookieLifetime = second2duration(p.CookieLifetime, 24*time.Hour)
+	p.maxIdleTime = second2duration(p.MaxIdleTime, time.Hour)
 
 	if p.SidLength == 0 {
 		p.SidLength = 32
-	}
-
-	if p.MaxIdleTime == 0 {
-		p.MaxIdleTime = time.Hour
 	}
 
 	if p.Storage == "" {
@@ -167,7 +177,7 @@ func (p *sessionManager) Start(w http.ResponseWriter, r *http.Request) (store Se
 		Domain:   p.config.Domain,
 	}
 	if p.config.CookieLifetime > 0 {
-		cookie.MaxAge = int(p.config.CookieLifetime.Seconds())
+		cookie.MaxAge = int(p.config.cookieLifetime.Seconds())
 	}
 	http.SetCookie(w, cookie)
 	r.AddCookie(cookie)

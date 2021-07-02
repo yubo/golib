@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yubo/golib/configer"
+	"github.com/yubo/golib/staging/cli/globalflag"
 	"k8s.io/klog/v2"
 )
 
@@ -44,9 +45,10 @@ func main() {
 
 func newRootCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "example",
-		Short: "example",
-		RunE:  rootCmd,
+		Use:          "example",
+		Short:        "example",
+		SilenceUsage: true,
+		RunE:         rootCmd,
 	}
 
 	fs := cmd.Flags()
@@ -59,6 +61,7 @@ func newRootCmd() *cobra.Command {
 	}
 
 	configer.Setting.AddFlags(fs)
+	globalflag.AddGlobalFlags(fs, "example")
 
 	return cmd
 }
@@ -70,7 +73,6 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("%+v\n", conf)
-
 	return nil
 }
 

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
@@ -56,37 +55,6 @@ fooo:
 
 	_, err := New(WithValueFile("conf.yml"))
 	assert.NoError(t, err)
-}
-
-func TestTimeDuration(t *testing.T) {
-	dir := createTestDir([]templateFile{
-		{"conf.yml", `t1: 1s
-t2: 1m
-t3: 1h
-t4: 24h30m30s`},
-	})
-	// Clean up after the test; another quirk of running as an example.
-	defer os.RemoveAll(dir)
-	os.Chdir(dir)
-
-	config, _ := New(WithValueFile("conf.yml"))
-
-	var cases = []struct {
-		path string
-		want time.Duration
-	}{
-		{"t1", time.Second},
-		{"t2", time.Minute},
-		{"t3", time.Hour},
-		{"t4", 24*time.Hour + 30*time.Minute + 30*time.Second},
-	}
-	var got time.Duration
-
-	for _, c := range cases {
-		err := config.ReadYaml(c.path, &got)
-		assert.NoErrorf(t, err, "config.Readyaml(%s)", c.path)
-		assert.Equalf(t, c.want, got, "configer read %s", c.path)
-	}
 }
 
 func TestRaw(t *testing.T) {
@@ -225,9 +193,9 @@ ctrl:
 `
 
 	type auth struct {
-		ClientId     string `yaml:"client_id"`
-		ClientSecret string `yaml:"client_secret"`
-		RedirectUrl  string `yaml:"redirect_url"`
+		ClientId     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+		RedirectUrl  string `json:"redirect_url"`
 	}
 
 	want := auth{
@@ -240,11 +208,11 @@ ctrl:
 
 	conf, _ := New(WithDefaultYaml("", yml))
 	conf2 := conf.GetConfiger("ctrl.auth")
-	err := conf2.ReadYaml("google", &got)
+	err := conf2.Read("google", &got)
 	if err != nil {
 		t.Fatalf("error %s", err)
 	}
-	assert.Equalf(t, want, got, "configer read yaml %s", conf2)
+	assert.Equalf(t, want, got, "configer read %s", conf2)
 }
 
 func TestConfigWithBase(t *testing.T) {
@@ -330,12 +298,11 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := New(
-		WithValueFile("base.yml", "conf.yml", "v1.yml", "v2.yml"),
-		WithValues("e=v2_e"),
-		WithValues("f1=f1,f2=f2"),
-		WithStringValues("sv1=sv1,sv2=sv2"),
-	)
+	cf, _ := New()
+	Setting.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
+	Setting.values = []string{"e=v2_e", "f1=f1,f2=f2"}
+	Setting.stringValues = []string{"sv1=sv1,sv2=sv2"}
+	defer func() { Setting = setting{} }()
 
 	var cases = []struct {
 		path string

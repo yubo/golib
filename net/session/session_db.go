@@ -53,9 +53,9 @@ func newDbStorage(cf *Config, opts *options) (storage, error) {
 
 	util.UntilWithTick(func() {
 		st.db.Exec("delete from session where updated_at<? and cookie_name=?",
-			opts.clock.Now().Unix()-int64(cf.MaxIdleTime.Seconds()), cf.CookieName)
+			opts.clock.Now().Unix()-int64(cf.maxIdleTime.Seconds()), cf.CookieName)
 	},
-		opts.clock.NewTicker(cf.GcInterval).C(),
+		opts.clock.NewTicker(cf.gcInterval).C(),
 		opts.ctx.Done())
 
 	return st, nil
