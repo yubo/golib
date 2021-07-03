@@ -52,17 +52,22 @@ func WithValueFile(valueFiles ...string) Option {
 	})
 }
 
-func WithFlag(fs *pflag.FlagSet, allowEnv, allowEmptyEnv bool, maxDepth int) Option {
+func WithFlagOptions(allowEnv, allowEmptyEnv bool, maxDepth int) Option {
 	return newFuncOption(func(o *options) {
-		if maxDepth == 0 {
-			maxDepth = 5
-		}
-		if fs != nil {
-			o.enableFlag = true
-		}
 		o.enableEnv = allowEnv
 		o.maxDepth = maxDepth
 		o.allowEmptyEnv = allowEmptyEnv
+	})
+}
+
+func WithFlag(fs *pflag.FlagSet) Option {
+	return newFuncOption(func(o *options) {
+		if fs != nil {
+			o.enableFlag = true
+		}
+		if o.maxDepth == 0 {
+			o.maxDepth = 5
+		}
 		o.fs = fs
 	})
 }

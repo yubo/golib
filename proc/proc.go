@@ -40,7 +40,7 @@ func RegisterHooks(in []HookOps) error {
 	for i, _ := range in {
 		v := &in[i]
 		v.module = _module
-		v.priority = ProcessPriority(uint32(v.Priority)<<16 + uint32(v.SubPriority))
+		v.priority = ProcessPriority(uint32(v.Priority)<<(16-3) + uint32(v.SubPriority))
 
 		_module.hookOps[v.HookNum] = append(_module.hookOps[v.HookNum], v)
 	}
@@ -60,13 +60,14 @@ func NamedFlagSets() *cliflag.NamedFlagSets {
 	return &_module.namedFlagSets
 }
 
-// procInit
+// init
 // alloc configer
 // parse configfile
 // validate config each module
 // sort hook options
-func (p *Module) procInit() (err error) {
+func (p *Module) init() (err error) {
 	ctx := p.ctx
+
 	opts, _ := ConfigOptsFrom(ctx)
 
 	if p.configer, err = configer.New(opts...); err != nil {
@@ -83,6 +84,7 @@ func (p *Module) procInit() (err error) {
 		sort.Sort(p.hookOps[i])
 	}
 
+	ctx = WithAttr(ctx, make(map[interface{}]interface{}))
 	ctx = WithWg(ctx, &p.wg)
 	ctx = WithConfiger(ctx, p.configer)
 	p.ctx = ctx
@@ -104,19 +106,21 @@ func hookNumName(n ProcessAction) string {
 }
 
 func logOps(ops *HookOps) {
-	klog.V(5).Infof("hook %s %s[%d.%d] %s",
-		hookNumName(ops.HookNum),
-		ops.Owner,
-		ops.Priority,
-		ops.SubPriority,
-		nameOfFunction(ops.Hook))
+	if klog.V(5).Enabled() {
+		klog.InfoSDepth(1, "dispatch hook",
+			"hookName", hookNumName(ops.HookNum),
+			"owner", ops.Owner,
+			"priority", fmt.Sprintf("0x%08x", ops.priority),
+			"nameOfFunction", nameOfFunction(ops.Hook))
+	}
 }
 
 // only be called once
 func (p *Module) procStart() error {
 	for _, ops := range p.hookOps[ACTION_START] {
 		logOps(ops)
-		if err := ops.Hook(ops); err != nil {
+
+		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
 			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
 		}
 	}
@@ -138,7 +142,7 @@ func (p *Module) procStop() (err error) {
 		ops := ss[i]
 
 		logOps(ops)
-		if err := ops.Hook(ops); err != nil {
+		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
 			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
 		}
 	}
@@ -166,7 +170,7 @@ func (p *Module) procReload() error {
 
 	for _, ops := range p.hookOps[ACTION_RELOAD] {
 		logOps(ops)
-		if err := ops.Hook(ops); err != nil {
+		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
 			return err
 		}
 	}
@@ -175,7 +179,7 @@ func (p *Module) procReload() error {
 }
 
 func (p *Module) start() error {
-	if err := p.procInit(); err != nil {
+	if err := p.init(); err != nil {
 		return err
 	}
 

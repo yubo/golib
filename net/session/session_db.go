@@ -75,12 +75,12 @@ func (p *dbStorage) all() (ret int) {
 	return
 }
 
-func (p *dbStorage) get(sid string) (ret *session, err error) {
+func (p *dbStorage) get(sid string) (ret *sessionConn, err error) {
 	err = p.db.Query("select * from session where sid=?", sid).Row(&ret)
 	return
 }
 
-func (p *dbStorage) insert(s *session) error {
+func (p *dbStorage) insert(s *sessionConn) error {
 	return p.db.Insert("session", s)
 }
 
@@ -88,6 +88,6 @@ func (p *dbStorage) del(sid string) error {
 	return p.db.ExecNumErr("DELETE FROM session where sid=?", sid)
 }
 
-func (p *dbStorage) update(s *session) error {
+func (p *dbStorage) update(s *sessionConn) error {
 	return p.db.Update("session", s)
 }

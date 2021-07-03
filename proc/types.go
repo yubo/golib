@@ -7,7 +7,7 @@ import (
 	"github.com/yubo/golib/configer"
 )
 
-type HookFn func(ops *HookOps) error
+type HookFn func(context.Context) error
 
 type HookOps struct {
 	Hook        HookFn

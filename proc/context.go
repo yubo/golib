@@ -17,6 +17,7 @@ const (
 	configerKey
 	configOptsKey
 	hookOptsKey
+	attrKey // attributes
 )
 
 func NewContext() context.Context {
@@ -28,6 +29,19 @@ func WithValue(parent context.Context, key interface{}, val interface{}) context
 	return context.WithValue(parent, key, val)
 }
 
+func WithName(ctx context.Context, name string) context.Context {
+	return WithValue(ctx, nameKey, name)
+}
+
+// NameFrom returns the value of the name key on the ctx
+func NameFrom(ctx context.Context) string {
+	name, ok := ctx.Value(nameKey).(string)
+	if !ok {
+		return os.Args[0]
+	}
+	return name
+}
+
 // WithWg returns a copy of parent in which the user value is set
 func WithWg(parent context.Context, wg *sync.WaitGroup) context.Context {
 	return WithValue(parent, wgKey, wg)
@@ -37,6 +51,14 @@ func WithWg(parent context.Context, wg *sync.WaitGroup) context.Context {
 func WgFrom(ctx context.Context) (*sync.WaitGroup, bool) {
 	wg, ok := ctx.Value(wgKey).(*sync.WaitGroup)
 	return wg, ok
+}
+
+func MustWgFrom(ctx context.Context) *sync.WaitGroup {
+	wg, ok := ctx.Value(wgKey).(*sync.WaitGroup)
+	if !ok {
+		panic("unable to get waitGroup from context")
+	}
+	return wg
 }
 
 func WithConfiger(parent context.Context, cf *configer.Configer) context.Context {
@@ -51,14 +73,14 @@ func ConfigerFrom(ctx context.Context) *configer.Configer {
 	return cf
 }
 
-func WithConfigOps(parent context.Context, opts_ ...configer.Option) context.Context {
+func WithConfigOps(parent context.Context, optsInput ...configer.Option) context.Context {
 	opts, ok := parent.Value(configOptsKey).(*[]configer.Option)
 	if ok {
-		*opts = append(*opts, opts_...)
+		*opts = append(*opts, optsInput...)
 		return parent
 	}
 
-	return WithValue(parent, configOptsKey, &opts_)
+	return WithValue(parent, configOptsKey, &optsInput)
 }
 
 func ConfigOptsFrom(ctx context.Context) ([]configer.Option, bool) {
@@ -69,24 +91,23 @@ func ConfigOptsFrom(ctx context.Context) ([]configer.Option, bool) {
 	return nil, false
 }
 
-func MustWgFrom(ctx context.Context) *sync.WaitGroup {
-	wg, ok := ctx.Value(wgKey).(*sync.WaitGroup)
-	if !ok {
-		panic("unable to get waitGroup from context")
-	}
-	return wg
+func WithHookOps(parent context.Context, ops *HookOps) context.Context {
+	return WithValue(parent, hookOptsKey, ops)
 }
 
-// WithName returns a copy of parent in which the user value is set
-func WithName(parent context.Context, name string) context.Context {
-	return WithValue(parent, nameKey, name)
+func HookOpsFrom(ctx context.Context) (*HookOps, bool) {
+	ops, ok := ctx.Value(hookOptsKey).(*HookOps)
+	return ops, ok
 }
 
-// NameFrom returns the value of the name key on the ctx
-func NameFrom(ctx context.Context) string {
-	name, ok := ctx.Value(nameKey).(string)
+func WithAttr(ctx context.Context, attributes map[interface{}]interface{}) context.Context {
+	return context.WithValue(ctx, attrKey, attributes)
+}
+
+func AttrFrom(ctx context.Context) map[interface{}]interface{} {
+	attr, ok := ctx.Value(attrKey).(map[interface{}]interface{})
 	if !ok {
-		return os.Args[0]
+		panic("unable to get attribute from context")
 	}
-	return name
+	return attr
 }

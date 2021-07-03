@@ -12,6 +12,7 @@ import (
 	"github.com/yubo/golib/api/errors"
 	"github.com/yubo/golib/staging/util/clock"
 	"github.com/yubo/golib/util"
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -20,10 +21,10 @@ const (
 
 type storage interface {
 	all() int
-	get(sid string) (*session, error)
-	insert(*session) error
+	get(sid string) (*sessionConn, error)
+	insert(*sessionConn) error
 	del(sid string) error
-	update(*session) error
+	update(*sessionConn) error
 }
 
 type Config struct {
@@ -98,10 +99,10 @@ type Session interface {
 	Update(w http.ResponseWriter) error
 }
 
-func StartSession(cf *Config, opts_ ...Option) (SessionManager, error) {
+func StartSession(cf *Config, optsInput ...Option) (SessionManager, error) {
 	opts := &options{}
 
-	for _, opt := range opts_ {
+	for _, opt := range optsInput {
 		opt.apply(opts)
 	}
 
@@ -132,7 +133,7 @@ func StartSession(cf *Config, opts_ ...Option) (SessionManager, error) {
 	}, nil
 }
 
-type session struct {
+type sessionConn struct {
 	Sid        string `sql:"sid,where"`
 	UserName   string
 	Data       map[string]string
@@ -149,7 +150,7 @@ type sessionManager struct {
 
 // SessionStart generate or read the session id from http request.
 // if session id exists, return SessionStore with this id.
-func (p *sessionManager) Start(w http.ResponseWriter, r *http.Request) (store Session, err error) {
+func (p *sessionManager) Start(w http.ResponseWriter, r *http.Request) (sess Session, err error) {
 	var sid string
 
 	if sid, err = p.getSid(r); err != nil {
@@ -157,15 +158,15 @@ func (p *sessionManager) Start(w http.ResponseWriter, r *http.Request) (store Se
 	}
 
 	if sid != "" {
-		if store, err := p.getSessionStore(sid, false); err == nil {
-			return store, nil
+		if sess, err := p.getSessionStore(sid, false); err == nil {
+			return sess, nil
 		}
 	}
 
 	// Generate a new session
 	sid = util.RandString(p.config.SidLength)
 
-	store, err = p.getSessionStore(sid, true)
+	sess, err = p.getSessionStore(sid, true)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +239,7 @@ func (p *sessionManager) getSessionStore(sid string, create bool) (Session, erro
 	sc, err := p.get(sid)
 	if errors.IsNotFound(err) && create {
 		ts := p.clock.Now().Unix()
-		sc = &session{
+		sc = &sessionConn{
 			Sid:        sid,
 			CookieName: p.config.CookieName,
 			CreatedAt:  ts,
@@ -250,107 +251,77 @@ func (p *sessionManager) getSessionStore(sid string, create bool) (Session, erro
 	if err != nil {
 		return nil, err
 	}
-	return &sessionStore{manager: p, connect: sc}, nil
+	return &session{manager: p, conn: sc}, nil
 }
 
-// sessionStore mysql session store
-type sessionStore struct {
+// session mysql session store
+type session struct {
 	sync.RWMutex
-	connect *session
+	conn    *sessionConn
 	manager *sessionManager
 }
 
 // Set value in mysql session.
 // it is temp value in map.
-func (p *sessionStore) Set(key, value string) error {
+func (p *session) Set(key, value string) error {
 	p.Lock()
 	defer p.Unlock()
+	klog.Infof("entering set key %s v %s", key, value)
 
 	switch strings.ToLower(key) {
 	case "username":
-		p.connect.UserName = value
+		p.conn.UserName = value
 	default:
-		p.connect.Data[key] = value
+		p.conn.Data[key] = value
 	}
 	return nil
 }
 
 // Get value from mysql session
-func (p *sessionStore) Get(key string) string {
+func (p *session) Get(key string) string {
 	p.RLock()
 	defer p.RUnlock()
+	klog.Infof("entering get key %s", key)
 
 	switch strings.ToLower(key) {
 	case "username":
-		return p.connect.UserName
+		return p.conn.UserName
 	default:
-		return p.connect.Data[key]
+		return p.conn.Data[key]
 	}
 }
 
-func (p *sessionStore) CreatedAt() int64 {
-	return p.connect.CreatedAt
+func (p *session) CreatedAt() int64 {
+	return p.conn.CreatedAt
 }
 
 // Delete value in mysql session
-func (p *sessionStore) Delete(key string) error {
+func (p *session) Delete(key string) error {
 	p.Lock()
 	defer p.Unlock()
-	delete(p.connect.Data, key)
+	klog.Infof("entering delete")
+	delete(p.conn.Data, key)
 	return nil
 }
 
 // Reset clear all values in mysql session
-func (p *sessionStore) Reset() error {
+func (p *session) Reset() error {
 	p.Lock()
 	defer p.Unlock()
-	p.connect.UserName = ""
-	p.connect.Data = make(map[string]string)
+	klog.Infof("entering reset")
+
+	p.conn.UserName = ""
+	p.conn.Data = make(map[string]string)
 	return nil
 }
 
 // Sid get session id of this mysql session store
-func (p *sessionStore) Sid() string {
-	return p.connect.Sid
+func (p *session) Sid() string {
+	return p.conn.Sid
 }
 
-func (p *sessionStore) Update(w http.ResponseWriter) error {
-	p.connect.UpdatedAt = p.manager.clock.Now().Unix()
-	return p.manager.update(p.connect)
+func (p *session) Update(w http.ResponseWriter) error {
+	klog.Infof("entering update")
+	p.conn.UpdatedAt = p.manager.clock.Now().Unix()
+	return p.manager.update(p.conn)
 }
-
-type key int
-
-const (
-	sessionKey key = iota
-)
-
-// WithSession returns a copy of the parent context
-// and associates it with an sessionStore.
-func WithSession(ctx context.Context, session Session) context.Context {
-	return context.WithValue(ctx, sessionKey, session)
-}
-
-// SessionFrom returns the sessionStore bound to the context, if any.
-func SessionFrom(ctx context.Context) (session Session, ok bool) {
-	session, ok = ctx.Value(sessionKey).(Session)
-	return
-}
-
-/*
-func Filter(manager SessionManager) restful.FilterFunction {
-	return func(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
-		session, err := manager.Start(resp, req.Request)
-		if err != nil {
-			openapi.HttpWriteErr(resp, fmt.Errorf("session start err %s", err))
-			return
-		}
-		ctx := WithSession(req.Request.Context(), session)
-		req.Request.WithContext(ctx)
-
-		chain.ProcessFilter(req, resp)
-
-		session.Update(resp)
-	}
-}
-*/

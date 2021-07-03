@@ -179,6 +179,8 @@ func addFlag(fs *pflag.FlagSet, path []string, rt reflect.Type) error {
 			addFlagCall(fs, ps, opt, fs.StringArray, fs.StringArrayP, cast.ToStringSlice(opt.def))
 		case []int:
 			addFlagCall(fs, ps, opt, fs.IntSlice, fs.IntSliceP, cast.ToIntSlice(opt.def))
+		case map[string]string:
+			addFlagCall(fs, ps, opt, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(opt.def))
 		default:
 			panic(fmt.Sprintf("unsupported type %s", ft.Name()))
 

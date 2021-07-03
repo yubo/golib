@@ -61,7 +61,8 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 	fs := cmd.Flags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 
-	ctx = WithConfigOps(ctx, configer.WithFlag(fs, true, false, 5)) //config.WithBaseBytes2("http", app.DefaultOptions),
+	// configerOps will be used at proc.start() -> procInit()
+	ctx = WithConfigOps(ctx, configer.WithFlag(fs))
 
 	namedFlagSets := NamedFlagSets()
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)

@@ -8,8 +8,8 @@ import (
 )
 
 func newMemStorage(cf *Config, opts *options) (storage, error) {
-	st := &mStorage{
-		data:   make(map[string]*session),
+	st := &memStorage{
+		data:   make(map[string]*sessionConn),
 		opts:   opts,
 		config: cf,
 	}
@@ -21,21 +21,21 @@ func newMemStorage(cf *Config, opts *options) (storage, error) {
 	return st, nil
 }
 
-type mStorage struct {
+type memStorage struct {
 	sync.RWMutex
-	data map[string]*session
+	data map[string]*sessionConn
 
 	opts   *options
 	config *Config
 }
 
-func (p *mStorage) all() int {
+func (p *memStorage) all() int {
 	p.RLock()
 	defer p.RUnlock()
 	return len(p.data)
 }
 
-func (p *mStorage) get(sid string) (*session, error) {
+func (p *memStorage) get(sid string) (*sessionConn, error) {
 	p.RLock()
 	defer p.RUnlock()
 	s, ok := p.data[sid]
@@ -45,7 +45,7 @@ func (p *mStorage) get(sid string) (*session, error) {
 	return s, nil
 }
 
-func (p *mStorage) insert(s *session) error {
+func (p *memStorage) insert(s *sessionConn) error {
 	p.Lock()
 	defer p.Unlock()
 
@@ -53,7 +53,7 @@ func (p *mStorage) insert(s *session) error {
 	return nil
 }
 
-func (p *mStorage) del(sid string) error {
+func (p *memStorage) del(sid string) error {
 	p.Lock()
 	defer p.Unlock()
 
@@ -61,7 +61,7 @@ func (p *mStorage) del(sid string) error {
 	return nil
 }
 
-func (p *mStorage) update(s *session) error {
+func (p *memStorage) update(s *sessionConn) error {
 	p.Lock()
 	defer p.Unlock()
 
@@ -69,7 +69,7 @@ func (p *mStorage) update(s *session) error {
 	return nil
 }
 
-func (p *mStorage) gc() {
+func (p *memStorage) gc() {
 	p.Lock()
 	defer p.Unlock()
 
