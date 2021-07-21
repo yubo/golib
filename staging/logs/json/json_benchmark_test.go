@@ -47,11 +47,11 @@ var record = struct {
 		"request": struct {
 			Method  string `json:"method"`
 			Timeout int    `json:"timeout"`
-			secret  string `json:"secret"`
+			Secret  string `json:"secret"`
 		}{
 			Method:  "GET",
 			Timeout: 10,
-			secret:  "pony",
+			Secret:  "pony",
 		},
 	},
 }
@@ -73,11 +73,11 @@ func BenchmarkInfoLoggerInfo(b *testing.B) {
 				"request", struct {
 					Method  string `json:"method"`
 					Timeout int    `json:"timeout"`
-					secret  string `json:"secret"`
+					Secret  string `json:"secret"`
 				}{
 					Method:  "GET",
 					Timeout: 10,
-					secret:  "pony",
+					Secret:  "pony",
 				},
 			)
 		}
@@ -111,11 +111,11 @@ func BenchmarkZapLoggerError(b *testing.B) {
 				"request", struct {
 					Method  string `json:"method"`
 					Timeout int    `json:"timeout"`
-					secret  string `json:"secret"`
+					Secret  string `json:"secret"`
 				}{
 					Method:  "GET",
 					Timeout: 10,
-					secret:  "pony",
+					Secret:  "pony",
 				},
 			)
 		}
@@ -147,11 +147,11 @@ func BenchmarkZapLoggerV(b *testing.B) {
 				"request", struct {
 					Method  string `json:"method"`
 					Timeout int    `json:"timeout"`
-					secret  string `json:"secret"`
+					Secret  string `json:"secret"`
 				}{
 					Method:  "GET",
 					Timeout: 10,
-					secret:  "pony",
+					Secret:  "pony",
 				},
 			)
 		}
