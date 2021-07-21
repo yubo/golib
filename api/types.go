@@ -3,7 +3,7 @@ package api
 import (
 	"time"
 
-	"github.com/yubo/apiserver/staging/labels"
+	"github.com/yubo/golib/staging/labels"
 	"k8s.io/apimachinery/pkg/fields"
 )
 

@@ -18,7 +18,6 @@ import (
 func ApplyToCmd(ctx context.Context, cmd *cobra.Command) error {
 	name := NameFrom(ctx)
 	_module.ctx = ctx
-	//_module.options = newOptions(name)
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if klog.V(5).Enabled() {
@@ -32,7 +31,6 @@ func ApplyToCmd(ctx context.Context, cmd *cobra.Command) error {
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 
 	globalflag.AddGlobalFlags(fs, name)
-	//_module.options.addFlags(fs, name)
 
 	return nil
 }
@@ -43,7 +41,6 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	name := NameFrom(ctx)
-	//_module.options = newOptions(name)
 
 	cmd := &cobra.Command{
 		Use:          name,
@@ -66,8 +63,6 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 
 	namedFlagSets := NamedFlagSets()
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)
-
-	//_module.options.addFlags(namedFlagSets.FlagSet("global"), name)
 	configer.Setting.AddFlags(namedFlagSets.FlagSet("global"))
 
 	for _, f := range namedFlagSets.FlagSets {

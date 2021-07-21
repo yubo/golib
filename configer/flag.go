@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cast"
 	"github.com/spf13/pflag"
 	cliflag "github.com/yubo/golib/staging/cli/flag"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -21,6 +22,7 @@ type param struct {
 	shothand string      // flag shothand
 	path     string      // json path
 	value    interface{} // flag's value
+	def      interface{} // flag's default value
 	env      string
 }
 
@@ -35,6 +37,7 @@ func (p *Configer) parseFlag() {
 		if val == nil {
 			continue
 		}
+		klog.V(10).Infof("flag merge %s %v", joinPath(append(p.path, f.path)...), val)
 		mergeValues(p.data, pathValueToTable(joinPath(append(p.path, f.path)...), val))
 	}
 }
@@ -49,7 +52,23 @@ func pathValueToTable(path string, val interface{}) map[string]interface{} {
 	return p.(map[string]interface{})
 }
 
+func (p *Configer) mergeFlagDefaultValues(dest map[string]interface{}, flags []*param) {
+	if !p.enableFlag {
+		return
+	}
+	for _, f := range flags {
+		if f.def == nil {
+			continue
+		}
+		mergeValues(dest, pathValueToTable(joinPath(append(p.path, f.path)...), f.def))
+	}
+}
+
 func (p *Configer) getFlagValue(f *param) interface{} {
+	if f.flag == "" {
+		return nil
+	}
+
 	if p.fs.Changed(f.flag) {
 		return reflect.ValueOf(f.value).Elem().Interface()
 	}
@@ -210,28 +229,33 @@ func getTagOpt(sf reflect.StructField) (opt *tagOpt) {
 		return
 	}
 
-	if json, opts := parseTag(sf.Tag.Get("json")); json == "-" {
-		opt.skip = true
-		return
-	} else if json != "" {
-		opt.json = json
-	} else if opts.Contains("inline") {
-		return
-	} else {
+	json, opts := parseTag(sf.Tag.Get("json"))
+	if json == "-" {
 		opt.skip = true
 		return
 	}
 
-	if flag := strings.Split(strings.TrimSpace(sf.Tag.Get("flag")), ","); len(flag) == 0 || flag[0] == "" {
-		opt.skip = true
-	} else {
+	if json != "" {
+		opt.json = json
+	}
+
+	if opts.Contains("inline") {
+		return
+	}
+
+	if flag := strings.Split(strings.TrimSpace(sf.Tag.Get("flag")), ","); len(flag) > 0 && flag[0] != "" {
 		opt.flag = flag
 	}
+
 	opt.def = sf.Tag.Get("default")
 	opt.description = sf.Tag.Get("description")
 	opt.env = sf.Tag.Get("env")
 	if opt.env != "" {
 		opt.description = fmt.Sprintf("%s (env %s)", opt.description, opt.env)
+	}
+
+	if opt.def == "" && len(opt.flag) == 0 {
+		opt.skip = true
 	}
 
 	return
@@ -274,20 +298,29 @@ func (o tagOptions) Contains(optionName string) bool {
 
 func addFlagCall(fs *pflag.FlagSet, path string, opt *tagOpt, varFn, varPFn, def interface{}) {
 	var ret []reflect.Value
-	if len(opt.flag) == 1 {
+	switch len(opt.flag) {
+	case 0:
+		// just save default value
+		flags = append(flags, &param{
+			path: path,
+			def:  def,
+		})
+		return
+	case 1:
 		ret = reflect.ValueOf(varFn).Call([]reflect.Value{
 			reflect.ValueOf(opt.flag[0]),
 			reflect.ValueOf(def),
 			reflect.ValueOf(opt.description),
 		})
-	}
-	if len(opt.flag) > 1 {
+	case 2:
 		ret = reflect.ValueOf(varPFn).Call([]reflect.Value{
 			reflect.ValueOf(opt.flag[0]),
 			reflect.ValueOf(opt.flag[1]),
 			reflect.ValueOf(def),
 			reflect.ValueOf(opt.description),
 		})
+	default:
+		panic("invalid flag value")
 	}
 
 	var val interface{}
@@ -301,6 +334,7 @@ func addFlagCall(fs *pflag.FlagSet, path string, opt *tagOpt, varFn, varPFn, def
 			shothand: "",
 			path:     path,
 			value:    val,
+			def:      def,
 			env:      opt.env,
 		})
 	}

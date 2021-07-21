@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/yubo/golib/configer"
@@ -21,9 +20,10 @@ type Config struct {
 }
 
 type Http struct {
-	Address    string        `json:"address" flag:"address" default:"127.0.0.1:80" description:"address desc"`
-	ServerName string        `json:"serverName" flag:"server-name,s" env:"SERVER_NAME" default:"localhost" description:"server name"`
-	Timeout    time.Duration `json:"timeout" flag:"timeout" default:"5s" description:"connction timeout"`
+	Address    string `json:"address" flag:"address" default:"127.0.0.1:80" description:"address desc"`
+	ServerName string `json:"serverName" flag:"server-name,s" env:"SERVER_NAME" default:"localhost" description:"server name"`
+	Timeout    int    `json:"timeout" flag:"timeout" default:"5" description:"connction timeout(Second)"`
+	Alias      string `json:"alias" default:"test" description:"set defualt value without flag"`
 }
 
 type Ctrl struct {
@@ -67,7 +67,7 @@ func newRootCmd() *cobra.Command {
 }
 
 func rootCmd(cmd *cobra.Command, args []string) error {
-	conf, err := configer.New(configer.WithFlag(cmd.Flags(), true, false, 5))
+	conf, err := configer.New(configer.WithFlagOptions(true, false, 5), configer.WithFlag(cmd.Flags()))
 	if err != nil {
 		klog.Fatal(err)
 	}
@@ -86,7 +86,9 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 //       redirectUrl: http://auth.example.com/v1/auth/callback
 // http:
 //   address: 127.0.0.1:80
+//   alias: test
 //   serverName: localhost
+//   timeout: 5
 //
 // ./example  -f ./example.yaml  --address=1.1.1.1
 // ctrl:
@@ -108,7 +110,9 @@ func rootCmd(cmd *cobra.Command, args []string) error {
 //       redirectUrl: http://auth.example.com/v1/auth/callback
 // http:
 //   address: 127.0.0.1:80
+//   alias: test
 //   serverName: a.com
+//   timeout: 5
 //
 
 // ./example  -h

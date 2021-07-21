@@ -74,10 +74,6 @@ func (p *Module) init() (err error) {
 		return err
 	}
 
-	if err = p.configer.Prepare(); err != nil {
-		return err
-	}
-
 	p.status = STATUS_PENDING
 
 	for i := ACTION_START; i < ACTION_SIZE; i++ {

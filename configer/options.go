@@ -11,6 +11,7 @@ type options struct {
 	enableEnv     bool
 	maxDepth      int
 	allowEmptyEnv bool
+	cb            func(o Options)
 	fs            *pflag.FlagSet
 }
 
@@ -60,6 +61,12 @@ func WithFlagOptions(allowEnv, allowEmptyEnv bool, maxDepth int) Option {
 	})
 }
 
+func WithCallback(cb func(Options)) Option {
+	return newFuncOption(func(o *options) {
+		o.cb = cb
+	})
+}
+
 func WithFlag(fs *pflag.FlagSet) Option {
 	return newFuncOption(func(o *options) {
 		if fs != nil {
@@ -70,4 +77,12 @@ func WithFlag(fs *pflag.FlagSet) Option {
 		}
 		o.fs = fs
 	})
+}
+
+type Options interface {
+	AppendValueFile(file string)
+}
+
+func (p *options) AppendValueFile(file string) {
+	p.valueFiles = append(p.valueFiles, file)
 }

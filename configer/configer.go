@@ -74,6 +74,14 @@ func (p *Configer) Prepare() (err error) {
 
 	base := map[string]interface{}{}
 
+	// cb
+	if p.cb != nil {
+		p.cb(p.options)
+	}
+
+	// init base from flag default
+	p.mergeFlagDefaultValues(base, flags)
+
 	// base with path
 	for path, b := range p.pathsBase {
 		if base, err = yaml2ValuesWithPath(base, []byte(b), path); err != nil {
@@ -125,6 +133,7 @@ func (p *Configer) Prepare() (err error) {
 	p.data = base
 
 	p.parseFlag()
+	p.prepared = true
 	return nil
 }
 
