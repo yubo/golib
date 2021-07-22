@@ -156,6 +156,10 @@ func addFlag(fs *pflag.FlagSet, path []string, rt reflect.Type) error {
 			ft = ft.Elem()
 		}
 
+		if ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.Struct {
+			continue
+		}
+
 		if ft.Kind() == reflect.Struct {
 			if opt.json == "" {
 				// anonymous
@@ -186,6 +190,8 @@ func addFlag(fs *pflag.FlagSet, path []string, rt reflect.Type) error {
 			addFlagCall(fs, ps, opt, fs.Uint, fs.UintP, cast.ToUint(opt.def))
 		case uint8:
 			addFlagCall(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint8(opt.def))
+		case uint16:
+			addFlagCall(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint16(opt.def))
 		case uint32:
 			addFlagCall(fs, ps, opt, fs.Uint32, fs.Uint32P, cast.ToUint32(opt.def))
 		case uint64:
@@ -201,7 +207,7 @@ func addFlag(fs *pflag.FlagSet, path []string, rt reflect.Type) error {
 		case map[string]string:
 			addFlagCall(fs, ps, opt, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(opt.def))
 		default:
-			panic(fmt.Sprintf("unsupported type %s", ft.Name()))
+			panic(fmt.Sprintf("unsupported type %s %v %s", ft.Name(), path, ft.Kind()))
 
 		}
 	}
