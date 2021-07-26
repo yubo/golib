@@ -11,7 +11,7 @@ import (
 	"github.com/yubo/golib/configer"
 	cliflag "github.com/yubo/golib/staging/cli/flag"
 	"github.com/yubo/golib/staging/cli/globalflag"
-	"github.com/yubo/golib/staging/util/term"
+	"github.com/yubo/golib/util/term"
 	"k8s.io/klog/v2"
 )
 
@@ -70,7 +70,7 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 	}
 
 	usageFmt := "Usage:\n  %s\n"
-	cols, _, _ := term.TerminalSize(cmd.OutOrStdout())
+	cols, _, _ := term.GetTerminalSize(cmd.OutOrStdout())
 	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
 		cliflag.PrintSections(cmd.OutOrStderr(), *namedFlagSets, cols)
