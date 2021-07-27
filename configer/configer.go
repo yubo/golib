@@ -305,7 +305,14 @@ func (p *Configer) Read(path string, dest interface{}, optsIn ...Option) error {
 	}
 
 	if v, ok := dest.(validator); ok {
-		return v.Validate()
+		if err := v.Validate(); err != nil {
+			return err
+		}
+	}
+
+	if klog.V(10).Enabled() {
+		b, _ := yaml.Marshal(dest)
+		klog.Infof("Read \n[%s]\n%s", path, string(b))
 	}
 	return nil
 }
