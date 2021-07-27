@@ -69,7 +69,6 @@ func (p *Module) init() (err error) {
 	ctx := p.ctx
 
 	opts, _ := ConfigOptsFrom(ctx)
-
 	if p.configer, err = configer.New(opts...); err != nil {
 		return err
 	}
@@ -157,10 +156,11 @@ func (p *Module) procStop() (err error) {
 	return err
 }
 
-func (p *Module) procReload() error {
+func (p *Module) procReload() (err error) {
 	p.status.Set(STATUS_RELOADING)
 
-	if err := p.configer.Prepare(); err != nil {
+	opts, _ := ConfigOptsFrom(p.ctx)
+	if p.configer, err = configer.New(opts...); err != nil {
 		return err
 	}
 
