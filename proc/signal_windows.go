@@ -5,4 +5,4 @@ import (
 )
 
 var shutdownSignals = []os.Signal{os.Interrupt}
-var reloadSignals = []os.Signal{syscall.SIGUSR1}
+var reloadSignals = []os.Signal{}

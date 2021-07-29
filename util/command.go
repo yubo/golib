@@ -1,12 +1,17 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
 	"k8s.io/klog/v2"
+)
+
+var (
+	ErrUnsupported = errors.New("Unsupported")
 )
 
 type Cmd struct {
