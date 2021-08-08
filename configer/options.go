@@ -2,6 +2,7 @@ package configer
 
 import (
 	"github.com/spf13/pflag"
+	"sigs.k8s.io/yaml"
 )
 
 type options struct {
@@ -35,6 +36,15 @@ func newFuncOption(f func(*options)) *funcOption {
 	return &funcOption{
 		f: f,
 	}
+}
+
+func WithConfig(path string, config interface{}) Option {
+	b, err := yaml.Marshal(config)
+	if err != nil {
+		panic(err)
+	}
+
+	return WithDefaultYaml(path, string(b))
 }
 
 func WithDefaultYaml(path, yamlData string) Option {

@@ -67,6 +67,22 @@ func New(optsIn ...Option) (*Configer, error) {
 	return conf, nil
 }
 
+func (p *Configer) PrintFlags() {
+	printf := klog.V(1).Infof
+	for _, value := range append(p.options.valueFiles, Setting.valueFiles...) {
+		printf("FLAG: --values=%s\n", value)
+	}
+	for _, value := range Setting.values {
+		printf("FLAG: --set=%s\n", value)
+	}
+	for _, value := range Setting.stringValues {
+		printf("FLAG: --set-string=%s\n", value)
+	}
+	for _, value := range Setting.fileValues {
+		printf("FLAG: --set-file=%s\n", value)
+	}
+}
+
 func (p *Configer) Prepare() (err error) {
 	if p.prepared {
 		return nil
@@ -89,7 +105,7 @@ func (p *Configer) Prepare() (err error) {
 		}
 	}
 
-	// configFile & valueFile
+	// configFile & valueFile --values
 	for _, filePath := range append(p.options.valueFiles, Setting.valueFiles...) {
 		m := map[string]interface{}{}
 
@@ -132,7 +148,7 @@ func (p *Configer) Prepare() (err error) {
 
 	p.data = base
 
-	p.parseFlag()
+	p.parseFlagAndEnv()
 	p.prepared = true
 	return nil
 }
@@ -157,6 +173,27 @@ func (p *Configer) GetConfiger(path string) *Configer {
 	}
 }
 
+func (p *Configer) Set(path string, v interface{}) error {
+	if path == "" {
+		b, err := yaml.Marshal(v)
+		if err != nil {
+			return err
+		}
+		return yaml.Unmarshal(b, p.data)
+	}
+
+	ps := strings.Split(path, ".")
+	src := map[string]interface{}{ps[len(ps)-1]: v}
+
+	for i := len(ps) - 2; i >= 0; i-- {
+		src = map[string]interface{}{ps[i]: src}
+	}
+
+	p.data = mergeValues(p.data, src)
+
+	return nil
+}
+
 func (p *Configer) GetRaw(path string) interface{} {
 	if path == "" {
 		return p.data
@@ -170,7 +207,7 @@ func (p *Configer) GetRaw(path string) interface{} {
 	return v
 }
 
-func (p *Configer) GetStr(path string) string {
+func (p *Configer) GetString(path string) string {
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
 		return ""
@@ -263,6 +300,11 @@ func (p *Configer) GetIntDef(path string, def int) int {
 
 type validator interface {
 	Validate() error
+}
+
+func (p *Configer) IsSet(path string) bool {
+	_, err := Values(p.data).PathValue(path)
+	return err != nil
 }
 
 func (p *Configer) Read(path string, dest interface{}, optsIn ...Option) error {

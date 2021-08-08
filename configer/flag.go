@@ -27,7 +27,7 @@ type param struct {
 }
 
 // once called by Prepare
-func (p *Configer) parseFlag() {
+func (p *Configer) parseFlagAndEnv() {
 	if !p.enableFlag {
 		return
 	}

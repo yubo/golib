@@ -56,6 +56,60 @@ fooo:
 	_, err := New(WithValueFile("conf.yml"))
 	assert.NoError(t, err)
 }
+func TestConfigWithConfig(t *testing.T) {
+	type Foo struct {
+		A int `json:"a"`
+	}
+	type Bar struct {
+		Foo Foo `json:"foo"`
+	}
+	v := Bar{Foo{2}}
+
+	{
+		c, err := New(WithConfig("foo", v.Foo))
+		assert.NoError(t, err)
+
+		var v2 Bar
+		err = c.Read("foo", &v2.Foo)
+		assert.NoError(t, err)
+		assert.Equalf(t, v, v2, "configer read \"foo\"")
+	}
+
+	{
+		c, err := New(WithConfig("", v))
+		assert.NoError(t, err)
+
+		var v2 Bar
+		err = c.Read("", &v2)
+		assert.NoError(t, err)
+		assert.Equalf(t, v, v2, "configer read \"\" configer %s", c)
+	}
+}
+
+func TestConfigSet(t *testing.T) {
+	type Foo struct {
+		A int `json:"a"`
+	}
+	type Bar struct {
+		Foo Foo `json:"foo"`
+	}
+	v := Bar{Foo{2}}
+
+	{
+		c, _ := New(WithConfig("foo", v.Foo))
+		c.Set("foo", Foo{3})
+
+		var v2 Bar
+		c.Read("foo", &v2.Foo)
+		assert.Equalf(t, 3, v2.Foo.A, "configer read \"foo\"")
+
+		c.Set("foo.a", 4)
+		c.Read("foo", &v2.Foo)
+		assert.Equalf(t, 4, v2.Foo.A, "configer read \"foo.a\"")
+
+	}
+
+}
 
 func TestRaw(t *testing.T) {
 	dir := createTestDir([]templateFile{
