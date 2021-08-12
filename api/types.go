@@ -3,8 +3,20 @@ package api
 import (
 	"time"
 
+	"github.com/yubo/golib/staging/fields"
 	"github.com/yubo/golib/staging/labels"
-	"k8s.io/apimachinery/pkg/fields"
+)
+
+// Similarly to above, these are constants to support HTTP PATCH utilized by
+// both the client and server that didn't make sense for a whole package to be
+// dedicated to.
+type PatchType string
+
+const (
+	JSONPatchType           PatchType = "application/json-patch+json"
+	MergePatchType          PatchType = "application/merge-patch+json"
+	StrategicMergePatchType PatchType = "application/strategic-merge-patch+json"
+	ApplyPatchType          PatchType = "application/apply-patch+yaml"
 )
 
 const (
@@ -652,14 +664,14 @@ type UID string
 
 // ListOptions is the query options to a standard REST list call.
 type ListOptions struct {
-	TypeMeta
+	TypeMeta `param:"-"`
 
 	// A selector based on labels
-	LabelSelector labels.Selector
+	LabelSelector labels.Selector `param:"-"`
 	// A selector based on fields
-	FieldSelector fields.Selector
+	FieldSelector fields.Selector `param:"-"`
 	// If true, watch for changes to this list
-	Watch bool
+	Watch bool `param:"query"`
 	// allowWatchBookmarks requests watch events with type "BOOKMARK".
 	// Servers that do not implement bookmarks may ignore this flag and
 	// bookmarks are sent at the server's discretion. Clients should not
@@ -668,11 +680,11 @@ type ListOptions struct {
 	// If this is not a watch, this field is ignored.
 	// If the feature gate WatchBookmarks is not enabled in apiserver,
 	// this field is ignored.
-	AllowWatchBookmarks bool
+	AllowWatchBookmarks bool `param:"query"`
 	// resourceVersion sets a constraint on what resource versions a request may be served from.
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions for
 	// details.
-	ResourceVersion string
+	ResourceVersion string `param:"query"`
 	// resourceVersionMatch determines how resourceVersion is applied to list calls.
 	// It is highly recommended that resourceVersionMatch be set for list calls where
 	// resourceVersion is set.
@@ -681,16 +693,16 @@ type ListOptions struct {
 	//ResourceVersionMatch metav1.ResourceVersionMatch
 
 	// Timeout for the list/watch call.
-	TimeoutSeconds *int64
+	TimeoutSeconds *int64 `param:"query"`
 	// Limit specifies the maximum number of results to return from the server. The server may
 	// not support this field on all resource types, but if it does and more results remain it
 	// will set the continue field on the returned list object.
-	Limit int64
+	Limit int64 `param:"query"`
 	// Continue is a token returned by the server that lets a client retrieve chunks of results
 	// from the server by specifying limit. The server may reject requests for continuation tokens
 	// it does not recognize and will return a 410 error if the token can no longer be used because
 	// it has expired.
-	Continue string
+	Continue string `param:"query"`
 
-	Offset int64
+	Offset int64 `param:"query"`
 }
