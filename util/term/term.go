@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 
 	"github.com/moby/term"
-	"github.com/yubo/golib/staging/util/interrupt"
+
+	"github.com/yubo/golib/util/interrupt"
 )
 
 // SafeFunc is a function to be invoked by TTY.
@@ -70,6 +72,32 @@ func IsTerminal(i interface{}) bool {
 	return terminal
 }
 
+// AllowsColorOutput returns true if the specified writer is a terminal and
+// the process environment indicates color output is supported and desired.
+func AllowsColorOutput(w io.Writer) bool {
+	if !IsTerminal(w) {
+		return false
+	}
+
+	// https://en.wikipedia.org/wiki/Computer_terminal#Dumb_terminals
+	if os.Getenv("TERM") == "dumb" {
+		return false
+	}
+
+	// https://no-color.org/
+	if _, nocolor := os.LookupEnv("NO_COLOR"); nocolor {
+		return false
+	}
+
+	// On Windows WT_SESSION is set by the modern terminal component.
+	// Older terminals have poor support for UTF-8, VT escape codes, etc.
+	if runtime.GOOS == "windows" && os.Getenv("WT_SESSION") == "" {
+		return false
+	}
+
+	return true
+}
+
 // Safe invokes the provided function and will attempt to ensure that when the
 // function returns (or a termination signal is sent) that the terminal state
 // is reset to the condition it was in prior to the function being invoked. If
@@ -110,7 +138,7 @@ func (t TTY) Safe(fn SafeFunc) error {
 }
 
 // GetTerminalSize returns the current width and height of the user's terminal. If it isn't a terminal,
-// nil is returned. On error, zero values are returned for width and height.
+// nil isCommand returned. On error, zero values are returned for width and height.
 // Usually w must be the stdout of the process. Stderr won't work.
 func GetTerminalSize(w io.Writer) (int, int, error) {
 	outFd, isTerminal := term.GetFdInfo(w)

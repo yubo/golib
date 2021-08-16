@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/yubo/golib/api/errors"
-	"github.com/yubo/golib/staging/util/clock"
+	"github.com/yubo/golib/util/clock"
 	"github.com/yubo/golib/util"
 	"k8s.io/klog/v2"
 )

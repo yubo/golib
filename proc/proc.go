@@ -12,7 +12,7 @@ import (
 	systemd "github.com/coreos/go-systemd/daemon"
 	"github.com/spf13/pflag"
 	"github.com/yubo/golib/configer"
-	cliflag "github.com/yubo/golib/staging/cli/flag"
+	cliflag "github.com/yubo/golib/cli/flag"
 	"k8s.io/klog/v2"
 )
 

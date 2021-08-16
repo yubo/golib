@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yubo/golib/configer"
-	"github.com/yubo/golib/staging/cli/globalflag"
+	"github.com/yubo/golib/cli/globalflag"
 	"k8s.io/klog/v2"
 )
 

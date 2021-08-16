@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/yubo/golib/util/runtime"
 	"golang.org/x/sys/unix"
 )
 
@@ -30,7 +31,7 @@ import (
 // it to the resizeEvents channel. The goroutine stops when the stop channel is closed.
 func monitorResizeEvents(fd uintptr, resizeEvents chan<- TerminalSize, stop chan struct{}) {
 	go func() {
-		// defer runtime.HandleCrash()
+		defer runtime.HandleCrash()
 
 		winch := make(chan os.Signal, 1)
 		signal.Notify(winch, unix.SIGWINCH)

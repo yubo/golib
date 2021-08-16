@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
-	cliflag "github.com/yubo/golib/staging/cli/flag"
+	cliflag "github.com/yubo/golib/cli/flag"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	"k8s.io/klog/v2"

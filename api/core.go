@@ -124,7 +124,7 @@ const (
 	SecretTypeBootstrapToken SecretType = "bootstrap.kubernetes.io/token"
 )
 
-// +k8s:deepcopy-gen:interfaces=github.com/yubo/apiserver/staging/runtime.Object
+// +k8s:deepcopy-gen:interfaces=github.com/yubo/golib/runtime.Object
 
 // SecretList is a list of Secret.
 type SecretList struct {
@@ -141,7 +141,7 @@ type SecretList struct {
 
 // +genclient
 // +genclient:method=CreateToken,verb=create,subresource=token,input=github.com/yubo/apiserver/pkg/api/authentication/v1.TokenRequest,result=github.com/yubo/apiserver/pkg/api/authentication/v1.TokenRequest
-// +k8s:deepcopy-gen:interfaces=github.com/yubo/apiserver/staging/runtime.Object
+// +k8s:deepcopy-gen:interfaces=github.com/yubo/golib/runtime.Object
 
 // ServiceAccount binds together:
 // * a name, understood by users, and perhaps by peripheral systems, for an identity
@@ -174,7 +174,7 @@ type ServiceAccount struct {
 	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty" protobuf:"varint,4,opt,name=automountServiceAccountToken"`
 }
 
-// +k8s:deepcopy-gen:interfaces=github.com/yubo/apiserver/staging/runtime.Object
+// +k8s:deepcopy-gen:interfaces=github.com/yubo/golib/runtime.Object
 
 // ServiceAccountList is a list of ServiceAccount objects
 type ServiceAccountList struct {

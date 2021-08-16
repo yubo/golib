@@ -16,11 +16,17 @@ limitations under the License.
 
 package term
 
-import "github.com/moby/term"
+import (
+	"fmt"
 
+	"github.com/moby/term"
+	"github.com/yubo/golib/util/runtime"
+)
+
+// TerminalSize represents the width and height of a terminal.
 type TerminalSize struct {
-	Width  uint16 `json:"cols"` // col
-	Height uint16 `json:"rows"` // row
+	Width  uint16
+	Height uint16
 }
 
 // TerminalSizeQueue is capable of returning terminal resize events as they occur.
@@ -28,7 +34,6 @@ type TerminalSizeQueue interface {
 	// Next returns the new terminal size after the terminal has been resized. It returns nil when
 	// monitoring has been stopped.
 	Next() *TerminalSize
-	Ch() <-chan TerminalSize
 }
 
 // GetSize returns the current size of the user's terminal. If it isn't a terminal,
@@ -38,15 +43,14 @@ func (t TTY) GetSize() *TerminalSize {
 	if !isTerminal {
 		return nil
 	}
-	ret := GetSize(outFd)
-	return ret
+	return GetSize(outFd)
 }
 
 // GetSize returns the current size of the terminal associated with fd.
 func GetSize(fd uintptr) *TerminalSize {
 	winsize, err := term.GetWinsize(fd)
 	if err != nil {
-		// runtime.HandleError(fmt.Errorf("unable to get terminal size: %v", err))
+		runtime.HandleError(fmt.Errorf("unable to get terminal size: %v", err))
 		return nil
 	}
 
@@ -101,7 +105,7 @@ func (s *sizeQueue) monitorSize(outFd uintptr, initialSizes ...*TerminalSize) {
 
 	// listen for resize events in the background
 	go func() {
-		// defer runtime.HandleCrash()
+		defer runtime.HandleCrash()
 
 		for {
 			select {
@@ -137,8 +141,4 @@ func (s *sizeQueue) Next() *TerminalSize {
 // stop stops the background goroutine that is monitoring for terminal resizes.
 func (s *sizeQueue) stop() {
 	close(s.stopResizing)
-}
-
-func (s *sizeQueue) Ch() <-chan TerminalSize {
-	return s.resizeChan
 }

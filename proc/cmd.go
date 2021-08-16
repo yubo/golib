@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	cliflag "github.com/yubo/golib/cli/flag"
+	"github.com/yubo/golib/cli/globalflag"
 	"github.com/yubo/golib/configer"
-	cliflag "github.com/yubo/golib/staging/cli/flag"
-	"github.com/yubo/golib/staging/cli/globalflag"
 	"github.com/yubo/golib/util/term"
 	"k8s.io/klog/v2"
 )

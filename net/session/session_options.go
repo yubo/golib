@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/yubo/golib/orm"
-	"github.com/yubo/golib/staging/util/clock"
+	"github.com/yubo/golib/util/clock"
 )
 
 type options struct {

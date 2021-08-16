@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cast"
 	"github.com/spf13/pflag"
-	cliflag "github.com/yubo/golib/staging/cli/flag"
+	cliflag "github.com/yubo/golib/cli/flag"
 	"k8s.io/klog/v2"
 )
 

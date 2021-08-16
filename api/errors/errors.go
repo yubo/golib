@@ -21,9 +21,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	api "github.com/yubo/golib/api"
-	"github.com/yubo/golib/staging/util/validation/field"
+	"github.com/yubo/golib/util/validation/field"
 )
 
 // StatusError is an error intended for consumption by a REST API server; it can also be
@@ -400,6 +401,10 @@ func NewGenericServerResponse(code int, verb string, name, serverMessage string,
 			message = fmt.Sprintf("an error on the server (%q) has prevented the request from succeeding", serverMessage)
 		}
 	}
+	if len(name) > 0 {
+		message = fmt.Sprintf("%s (%s %s)", message, strings.ToLower(verb), name)
+	}
+
 	var causes []api.StatusCause
 	if isUnexpectedResponse {
 		causes = []api.StatusCause{
@@ -632,9 +637,16 @@ func NewClientErrorReporter(code int, verb string, reason string) *ErrorReporter
 // indicate that this was an unexpected server response.
 func (r *ErrorReporter) AsObject(err error) interface{} {
 	status := NewGenericServerResponse(r.code, r.verb, "", err.Error(), 0, true)
+	if status.ErrStatus.Details == nil {
+		status.ErrStatus.Details = &api.StatusDetails{}
+	}
 	reason := r.reason
 	if len(reason) == 0 {
 		reason = "ClientError"
 	}
+	status.ErrStatus.Details.Causes = append(status.ErrStatus.Details.Causes, api.StatusCause{
+		Type:    api.CauseType(reason),
+		Message: err.Error(),
+	})
 	return &status.ErrStatus
 }

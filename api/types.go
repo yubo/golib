@@ -3,8 +3,42 @@ package api
 import (
 	"time"
 
-	"github.com/yubo/golib/staging/fields"
-	"github.com/yubo/golib/staging/labels"
+	"github.com/yubo/golib/fields"
+	"github.com/yubo/golib/labels"
+)
+
+const (
+	// Enable stdin for remote command execution
+	ExecStdinParam = "input"
+	// Enable stdout for remote command execution
+	ExecStdoutParam = "output"
+	// Enable stderr for remote command execution
+	ExecStderrParam = "error"
+	// Enable TTY for remote command execution
+	ExecTTYParam = "tty"
+	// Command to run for remote command execution
+	ExecCommandParam = "command"
+
+	// Name of header that specifies stream type
+	StreamType = "streamType"
+	// Value for streamType header for stdin stream
+	StreamTypeStdin = "stdin"
+	// Value for streamType header for stdout stream
+	StreamTypeStdout = "stdout"
+	// Value for streamType header for stderr stream
+	StreamTypeStderr = "stderr"
+	// Value for streamType header for data stream
+	StreamTypeData = "data"
+	// Value for streamType header for error stream
+	StreamTypeError = "error"
+	// Value for streamType header for terminal resize stream
+	StreamTypeResize = "resize"
+
+	// Name of header that specifies the port being forwarded
+	PortHeader = "port"
+	// Name of header that specifies a request ID used to associate the error
+	// and data streams for a single forwarded connection
+	PortForwardRequestIDHeader = "requestID"
 )
 
 // Similarly to above, these are constants to support HTTP PATCH utilized by
@@ -287,7 +321,7 @@ type OwnerReference struct {
 	Name string `json:"name" protobuf:"bytes,3,opt,name=name"`
 	// UID of the referent.
 	// More info: http://kubernetes.io/docs/user-guide/identifiers#uids
-	UID UID `json:"uid" protobuf:"bytes,4,opt,name=uid,casttype=github.com/yubo/golib/staging/types.UID"`
+	UID UID `json:"uid" protobuf:"bytes,4,opt,name=uid,casttype=github.com/yubo/golib/types.UID"`
 	// If true, this reference points to the managing controller.
 	// +optional
 	Controller *bool `json:"controller,omitempty" protobuf:"varint,6,opt,name=controller"`
@@ -430,7 +464,7 @@ type StatusDetails struct {
 	// (when there is a single resource which can be described).
 	// More info: http://kubernetes.io/docs/user-guide/identifiers#uids
 	// +optional
-	UID UID `json:"uid,omitempty" protobuf:"bytes,6,opt,name=uid,casttype=github.com/yubo/apiserver/staging/types.UID"`
+	UID UID `json:"uid,omitempty" protobuf:"bytes,6,opt,name=uid,casttype=github.com/yubo/apiserver/pkg/types.UID"`
 	// The Causes array includes more details associated with the StatusReason
 	// failure. Not all StatusReasons may provide detailed causes.
 	// +optional

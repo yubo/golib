@@ -39,7 +39,7 @@ const (
 // +genclient
 // +genclient:nonNamespaced
 // +genclient:onlyVerbs=create
-// +k8s:deepcopy-gen:interfaces=github.com/yubo/apiserver/staging/runtime.Object
+// +k8s:deepcopy-gen:interfaces=github.com/yubo/golib/runtime.Object
 
 // TokenReview attempts to authenticate a token to a known user.
 // Note: TokenReview requests may be cached by the webhook token authenticator
@@ -123,7 +123,7 @@ func (t ExtraValue) String() string {
 	return fmt.Sprintf("%v", []string(t))
 }
 
-// +k8s:deepcopy-gen:interfaces=github.com/yubo/apiserver/staging/runtime.Object
+// +k8s:deepcopy-gen:interfaces=github.com/yubo/golib/runtime.Object
 
 // TokenRequest requests a token for a given service account.
 type TokenRequest struct {

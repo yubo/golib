@@ -6,23 +6,26 @@ require (
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/davecgh/go-spew v1.1.1
+	github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96
+	github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153
 	github.com/emicklei/go-restful v2.15.0+incompatible
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/go-ldap/ldap v3.0.3+incompatible
 	github.com/go-logr/logr v0.4.0
 	github.com/go-sql-driver/mysql v1.5.0
-	github.com/gogo/protobuf v1.3.2
+	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
 	github.com/golang/protobuf v1.5.2
 	github.com/google/go-cmp v0.5.5
-	github.com/google/gofuzz v1.1.0
+	github.com/google/gofuzz v1.1.0 // indirect
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/json-iterator/go v1.1.11 // indirect
 	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/moby/term v0.0.0-20201216013528-df9cb8a40635
+	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_model v0.2.0
@@ -39,6 +42,7 @@ require (
 	golang.org/x/lint v0.0.0-20200302205851-738671d3881b // indirect
 	golang.org/x/net v0.0.0-20210525063256-abc453219eb5
 	golang.org/x/sys v0.0.0-20210426230700-d19ff857e887
+	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
 	google.golang.org/genproto v0.0.0-20210204154452-deb828366460 // indirect
 	google.golang.org/grpc v1.27.1
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect

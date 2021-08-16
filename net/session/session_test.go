@@ -12,7 +12,7 @@ import (
 
 	"github.com/yubo/golib/orm"
 	_ "github.com/yubo/golib/orm/sqlite"
-	"github.com/yubo/golib/staging/util/clock"
+	"github.com/yubo/golib/util/clock"
 )
 
 var (
