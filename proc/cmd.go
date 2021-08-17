@@ -55,8 +55,6 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		},
 	}
 
-	// configer will be used at proc.start() -> procInit()
-
 	// add flags
 	fs := cmd.Flags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true

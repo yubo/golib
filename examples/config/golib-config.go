@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/proc"
 	"sigs.k8s.io/yaml"
 )
@@ -40,10 +39,9 @@ func main() {
 func newServerCmd() *cobra.Command {
 	proc.RegisterHooks(hookOps)
 	proc.RegisterFlags(moduleName, "golib examples", &config{})
+	ctx := proc.WithName(context.Background(), "golibConfig")
 
-	return proc.NewRootCmd(proc.WithConfigOps(
-		context.Background(),
-		configer.WithFlagOptions(true, false, 5)))
+	return proc.NewRootCmd(ctx)
 }
 
 func start(ctx context.Context) error {
