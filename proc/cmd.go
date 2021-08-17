@@ -17,7 +17,7 @@ import (
 
 func ApplyToCmd(ctx context.Context, cmd *cobra.Command) error {
 	name := NameFrom(ctx)
-	_module.ctx = ctx
+	proc.ctx = ctx
 
 	cmd.RunE = func(cmd *cobra.Command, args []string) error {
 		if klog.V(5).Enabled() {
@@ -55,14 +55,12 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		},
 	}
 
-	fs := cmd.Flags()
-	fs.ParseErrorsWhitelist.UnknownFlags = true
-
-	// configerOps will be used at proc.start() -> procInit()
-	//ctx = WithConfigOps(ctx, configer.WithFlag(fs))
-	configer.SetOptions(true, false, 5, fs)
+	// configer will be used at proc.start() -> procInit()
 
 	// add flags
+	fs := cmd.Flags()
+	fs.ParseErrorsWhitelist.UnknownFlags = true
+	configer.SetOptions(true, false, 5, fs)
 	namedFlagSets := NamedFlagSets()
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)
 	configer.Setting.AddFlags(namedFlagSets.FlagSet("global"))
@@ -82,7 +80,7 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		cliflag.PrintSections(cmd.OutOrStdout(), *namedFlagSets, cols)
 	})
 
-	_module.ctx = ctx
+	proc.ctx = ctx
 
 	return cmd
 }
@@ -92,5 +90,5 @@ func RegisterFlags(path, groupName string, sample interface{}) {
 }
 
 func startCmd() error {
-	return _module.start()
+	return proc.start()
 }

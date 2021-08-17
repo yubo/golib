@@ -43,30 +43,24 @@ func NameFrom(ctx context.Context) string {
 }
 
 // WithWg returns a copy of parent in which the user value is set
-func WithWg(parent context.Context, wg *sync.WaitGroup) context.Context {
-	return WithValue(parent, wgKey, wg)
+func WithWg(ctx context.Context, wg *sync.WaitGroup) {
+	AttrFrom(ctx)[wgKey] = wg
 }
 
-// WgFrom returns the value of the WaitGroup key on the ctx
-func WgFrom(ctx context.Context) (*sync.WaitGroup, bool) {
-	wg, ok := ctx.Value(wgKey).(*sync.WaitGroup)
-	return wg, ok
-}
-
-func MustWgFrom(ctx context.Context) *sync.WaitGroup {
-	wg, ok := ctx.Value(wgKey).(*sync.WaitGroup)
+func WgFrom(ctx context.Context) *sync.WaitGroup {
+	wg, ok := AttrFrom(ctx)[wgKey].(*sync.WaitGroup)
 	if !ok {
 		panic("unable to get waitGroup from context")
 	}
 	return wg
 }
 
-func WithConfiger(parent context.Context, cf *configer.Configer) context.Context {
-	return WithValue(parent, configerKey, cf)
+func WithConfiger(ctx context.Context, cf *configer.Configer) {
+	AttrFrom(ctx)[configerKey] = cf
 }
 
 func ConfigerFrom(ctx context.Context) *configer.Configer {
-	cf, ok := ctx.Value(configerKey).(*configer.Configer)
+	cf, ok := AttrFrom(ctx)[configerKey].(*configer.Configer)
 	if !ok {
 		panic("unable to get configer from context")
 	}

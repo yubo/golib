@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	systemd "github.com/coreos/go-systemd/daemon"
+	"github.com/coreos/go-systemd/daemon"
 	"github.com/spf13/pflag"
+	"github.com/yubo/golib/cli/flag"
 	"github.com/yubo/golib/configer"
-	cliflag "github.com/yubo/golib/cli/flag"
 	"k8s.io/klog/v2"
 )
 
@@ -22,27 +22,26 @@ const (
 )
 
 var (
-	_module *Module
+	proc *Process
 )
 
-type Module struct {
+type Process struct {
 	name          string
 	status        ProcessStatus
-	hookOps       [ACTION_SIZE]HookOpsBucket
-	namedFlagSets cliflag.NamedFlagSets
-	configer      *configer.Configer
-	wg            sync.WaitGroup
-	ctx           context.Context
-	//options       *Options
+	hookOps       [ACTION_SIZE][]*HookOps
+	namedFlagSets flag.NamedFlagSets
+	//configer      *configer.Configer
+	wg  sync.WaitGroup
+	ctx context.Context
 }
 
 func RegisterHooks(in []HookOps) error {
 	for i, _ := range in {
 		v := &in[i]
-		v.module = _module
+		v.process = proc
 		v.priority = ProcessPriority(uint32(v.Priority)<<(16-3) + uint32(v.SubPriority))
 
-		_module.hookOps[v.HookNum] = append(_module.hookOps[v.HookNum], v)
+		proc.hookOps[v.HookNum] = append(proc.hookOps[v.HookNum], v)
 	}
 	return nil
 }
@@ -51,40 +50,8 @@ type addFlags interface {
 	AddFlags(fs *pflag.FlagSet)
 }
 
-//func RegisterFlags(name string, in addFlags) error {
-//	in.AddFlags(_module.namedFlagSets.FlagSet(name))
-//	return nil
-//}
-
-func NamedFlagSets() *cliflag.NamedFlagSets {
-	return &_module.namedFlagSets
-}
-
-// init
-// alloc configer
-// parse configfile
-// validate config each module
-// sort hook options
-func (p *Module) init() (err error) {
-	ctx := p.ctx
-
-	opts, _ := ConfigOptsFrom(ctx)
-	if p.configer, err = configer.New(opts...); err != nil {
-		return err
-	}
-
-	p.status = STATUS_PENDING
-
-	for i := ACTION_START; i < ACTION_SIZE; i++ {
-		sort.Sort(p.hookOps[i])
-	}
-
-	ctx = WithAttr(ctx, make(map[interface{}]interface{}))
-	ctx = WithWg(ctx, &p.wg)
-	ctx = WithConfiger(ctx, p.configer)
-	p.ctx = ctx
-
-	return
+func NamedFlagSets() *flag.NamedFlagSets {
+	return &proc.namedFlagSets
 }
 
 func hookNumName(n ProcessAction) string {
@@ -100,18 +67,49 @@ func hookNumName(n ProcessAction) string {
 	}
 }
 
-func logOps(ops *HookOps) {
-	if klog.V(5).Enabled() {
-		klog.InfoSDepth(1, "dispatch hook",
-			"hookName", hookNumName(ops.HookNum),
-			"owner", ops.Owner,
-			"priority", fmt.Sprintf("0x%08x", ops.priority),
-			"nameOfFunction", nameOfFunction(ops.Hook))
+func (p *Process) start() error {
+	if err := p.init(); err != nil {
+		return err
 	}
+
+	if err := p.procStart(); err != nil {
+		return err
+	}
+
+	return p.loop()
+}
+
+// init
+// alloc configer
+// parse configfile
+// validate config each module
+// sort hook options
+func (p *Process) init() error {
+	ctx := p.ctx
+
+	opts, _ := ConfigOptsFrom(ctx)
+	configer, err := configer.New(opts...)
+	if err != nil {
+		return err
+	}
+
+	p.status = STATUS_PENDING
+
+	for i := ACTION_START; i < ACTION_SIZE; i++ {
+		x := p.hookOps[i]
+		sort.Slice(x, func(i, j int) bool { return x[i].priority < x[j].priority })
+	}
+
+	ctx = WithAttr(ctx, make(map[interface{}]interface{}))
+	WithWg(ctx, &p.wg)
+	WithConfiger(ctx, configer)
+	p.ctx = ctx
+
+	return nil
 }
 
 // only be called once
-func (p *Module) procStart() error {
+func (p *Process) procStart() error {
 	for _, ops := range p.hookOps[ACTION_START] {
 		logOps(ops)
 
@@ -123,8 +121,51 @@ func (p *Module) procStart() error {
 	return nil
 }
 
+func logOps(ops *HookOps) {
+	if klog.V(5).Enabled() {
+		klog.InfoSDepth(1, "dispatch hook",
+			"hookName", hookNumName(ops.HookNum),
+			"owner", ops.Owner,
+			"priority", fmt.Sprintf("0x%08x", ops.priority),
+			"nameOfFunction", nameOfFunction(ops.Hook))
+	}
+}
+
+func (p *Process) loop() error {
+	sigs := make(chan os.Signal, 2)
+	signal.Notify(sigs, append(shutdownSignals, reloadSignals...)...)
+
+	if _, err := daemon.SdNotify(true, "READY=1\n"); err != nil {
+		klog.Errorf("Unable to send systemd daemon successful start message: %v\n", err)
+	}
+
+	shutdown := false
+	shutdownResult := make(chan error, 1)
+
+	for {
+		select {
+		case s := <-sigs:
+			if sigContains(s, shutdownSignals) {
+				if shutdown {
+					os.Exit(1)
+				}
+				shutdown = true
+				go func() {
+					shutdownResult <- p.procStop()
+				}()
+			} else if sigContains(s, reloadSignals) {
+				if err := p.procReload(); err != nil {
+					return err
+				}
+			}
+		case err := <-shutdownResult:
+			return err
+		}
+	}
+}
+
 // reverse order
-func (p *Module) procStop() (err error) {
+func (p *Process) procStop() (err error) {
 	wgCh := make(chan struct{})
 
 	go func() {
@@ -156,13 +197,16 @@ func (p *Module) procStop() (err error) {
 	return err
 }
 
-func (p *Module) procReload() (err error) {
+func (p *Process) procReload() (err error) {
 	p.status.Set(STATUS_RELOADING)
 
 	opts, _ := ConfigOptsFrom(p.ctx)
-	if p.configer, err = configer.New(opts...); err != nil {
+	configer, err := configer.New(opts...)
+	if err != nil {
 		return err
 	}
+
+	WithConfiger(p.ctx, configer)
 
 	for _, ops := range p.hookOps[ACTION_RELOAD] {
 		logOps(ops)
@@ -174,54 +218,11 @@ func (p *Module) procReload() (err error) {
 	return nil
 }
 
-func (p *Module) start() error {
-	if err := p.init(); err != nil {
-		return err
-	}
-
-	if err := p.procStart(); err != nil {
-		return err
-	}
-
-	sigs := make(chan os.Signal, 2)
-	signal.Notify(sigs, append(shutdownSignals, reloadSignals...)...)
-
-	if _, err := systemd.SdNotify(true, "READY=1\n"); err != nil {
-		klog.Errorf("Unable to send systemd daemon successful start message: %v\n", err)
-	}
-
-	shutdown := false
-	shutdownResult := make(chan error, 1)
-
-	for {
-		select {
-		case s := <-sigs:
-			if sigContains(s, shutdownSignals) {
-				if shutdown {
-					os.Exit(1)
-				}
-				shutdown = true
-				go func() {
-					shutdownResult <- p.procStop()
-				}()
-			} else if sigContains(s, reloadSignals) {
-				if err := p.procReload(); err != nil {
-					return err
-				}
-			}
-		case err := <-shutdownResult:
-			return err
-		}
-	}
-}
-
 func init() {
-	hookOps := [ACTION_SIZE]HookOpsBucket{}
+	hookOps := [ACTION_SIZE][]*HookOps{}
 	for i := ACTION_START; i < ACTION_SIZE; i++ {
-		hookOps[i] = HookOpsBucket([]*HookOps{})
+		hookOps[i] = []*HookOps{}
 	}
 
-	_module = &Module{
-		hookOps: hookOps,
-	}
+	proc = &Process{hookOps: hookOps}
 }

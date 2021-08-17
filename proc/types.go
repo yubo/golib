@@ -18,33 +18,33 @@ type HookOps struct {
 	Data        interface{}
 
 	priority ProcessPriority
-	module   *Module
+	process  *Process
 }
 
-type HookOpsBucket []*HookOps
-
-func (p HookOpsBucket) Len() int {
-	return len(p)
-}
-
-func (p HookOpsBucket) Swap(i, j int) {
-	p[i], p[j] = p[j], p[i]
-}
-
-func (p HookOpsBucket) Less(i, j int) bool {
-	return p[i].priority < p[j].priority
-}
+//type HookOpsBucket []*HookOps
+//
+//func (p HookOpsBucket) Len() int {
+//	return len(p)
+//}
+//
+//func (p HookOpsBucket) Swap(i, j int) {
+//	p[i], p[j] = p[j], p[i]
+//}
+//
+//func (p HookOpsBucket) Less(i, j int) bool {
+//	return p[i].priority < p[j].priority
+//}
 
 func (p HookOps) SetContext(ctx context.Context) {
-	p.module.ctx = ctx
+	p.process.ctx = ctx
 }
 
 func (p HookOps) Context() context.Context {
-	return p.module.ctx
+	return p.process.ctx
 }
 
 func (p HookOps) Configer() *configer.Configer {
-	return ConfigerFrom(p.module.ctx)
+	return ConfigerFrom(p.process.ctx)
 }
 
 func (p HookOps) ContextAndConfiger() (context.Context, *configer.Configer) {
