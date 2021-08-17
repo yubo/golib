@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
-	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/cli/globalflag"
+	"github.com/yubo/golib/configer"
 	"k8s.io/klog/v2"
 )
 
@@ -27,7 +27,7 @@ type Http struct {
 }
 
 type Ctrl struct {
-	AuthProvider map[string]Provider `json"auth"`
+	AuthProvider map[string]Provider `json:"auth"`
 }
 
 type Provider struct {
@@ -52,11 +52,11 @@ func newRootCmd() *cobra.Command {
 	}
 
 	fs := cmd.Flags()
-	if err := configer.AddFlags(fs, "http", &Http{}); err != nil {
+	if err := configer.AddConfigs(fs, "http", &Http{}); err != nil {
 		klog.Infof("addflag err %s", err)
 	}
 
-	if err := configer.AddFlags(fs, "ctrl", &Ctrl{}); err != nil {
+	if err := configer.AddConfigs(fs, "ctrl", &Ctrl{}); err != nil {
 		klog.Infof("addflag err %s", err)
 	}
 
@@ -67,7 +67,8 @@ func newRootCmd() *cobra.Command {
 }
 
 func rootCmd(cmd *cobra.Command, args []string) error {
-	conf, err := configer.New(configer.WithFlagOptions(true, false, 5), configer.WithFlag(cmd.Flags()))
+	configer.SetOptions(true, false, 5, cmd.Flags())
+	conf, err := configer.New()
 	if err != nil {
 		klog.Fatal(err)
 	}

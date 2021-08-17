@@ -170,6 +170,11 @@ func (v Values) pathValue(path []string) (interface{}, error) {
 	return nil, ErrNoValue{key}
 }
 
-func parsePath(key string) []string { return strings.Split(key, ".") }
+func parsePath(key string) []string {
+	if key == "" {
+		return []string{}
+	}
+	return strings.Split(key, ".")
+}
 
 func joinPath(path ...string) string { return strings.Join(path, ".") }

@@ -1,6 +1,7 @@
 package configer
 
 import (
+	"flag"
 	"io"
 	"io/ioutil"
 	"log"
@@ -8,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
 )
@@ -139,9 +141,7 @@ fooo:
 	}
 
 	for _, c := range cases {
-		if got := config.GetRaw(c.path); got != c.want {
-			t.Errorf("config.GetRaw(%s) expected %#v got %#v", c.path, c.want, got)
-		}
+		assert.Equalf(t, c.want, config.GetRaw(c.path), "configer.GetRaw(%s)", c.path)
 	}
 }
 
@@ -197,7 +197,7 @@ ctrl:
 	conf, _ := New(WithDefaultYaml("", yml))
 	for _, c := range cases {
 		if got := util.GetType(conf.GetRaw(c.path)); got != c.want {
-			assert.Equalf(t, got, c.want, "data %+v", conf.data)
+			assert.Equalf(t, c.want, got, "data %+v", conf.data)
 		}
 	}
 
@@ -231,7 +231,7 @@ ctrl:
 		}
 
 		got := util.GetType(cf.GetRaw(c.path2))
-		assert.Equal(t, got, c.want)
+		assert.Equal(t, c.want, got)
 
 	}
 }
@@ -291,7 +291,7 @@ func TestConfigWithBase(t *testing.T) {
 
 	for _, c := range cases {
 		got := cf.GetRaw(c.path)
-		assert.Equal(t, got, c.want)
+		assert.Equal(t, c.want, got)
 	}
 }
 
@@ -319,7 +319,7 @@ func TestConfigWithBase2(t *testing.T) {
 
 	for _, c := range cases {
 		got := cf.GetRaw(c.path)
-		assert.Equal(t, got, c.want)
+		assert.Equal(t, c.want, got)
 	}
 }
 
@@ -352,11 +352,13 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := New()
 	Setting.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
 	Setting.values = []string{"e=v2_e", "f1=f1,f2=f2"}
 	Setting.stringValues = []string{"sv1=sv1,sv2=sv2"}
-	defer func() { Setting = setting{} }()
+	cf, err := New()
+	defer func() { Setting = newSetting() }()
+
+	assert.NoError(t, err)
 
 	var cases = []struct {
 		path string
@@ -374,7 +376,70 @@ e: v2_e
 	}
 
 	for _, c := range cases {
-		got := cf.GetRaw(c.path)
-		assert.Equal(t, got, c.want)
+		assert.Equalf(t, c.want, cf.GetRaw(c.path), "getRaw(%s)", c.path)
 	}
+}
+
+func TestConfigerPriority(t *testing.T) {
+	type Foo struct {
+		A string `json:"a" flag:"test-a" env:"TEST_A" default:"default-a"`
+	}
+	dir := createTestDir([]templateFile{{"base.yml", `a: base_a`}})
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	var cases = []struct {
+		flag string
+		env  string
+		file string
+		want interface{}
+	}{
+		{"flag-a", "", "", "flag-a"},
+		{"flag-a", "env-a", "", "flag-a"},
+		{"flag-a", "env-a", "file-a", "flag-a"},
+		{"", "env-a", "", "env-a"},
+		{"", "env-a", "file-a", "env-a"},
+		{"", "", "file-a", "file-a"},
+		{"", "", "", "default-a"},
+	}
+
+	for _, c := range cases {
+		teardown()
+
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		SetOptions(true, false, 5, fs)
+		err := AddConfigs(fs, "", &Foo{})
+		assert.NoError(t, err)
+
+		if c.flag != "" {
+			fs.VisitAll(func(flag *pflag.Flag) {
+				if flag.Name == "test-a" {
+					flag.Value.Set(c.flag)
+					flag.Changed = true
+				}
+			})
+		}
+		if c.env != "" {
+			os.Setenv("TEST_A", c.env)
+		} else {
+			os.Unsetenv("TEST_A")
+		}
+
+		if c.file != "" {
+			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("a: "+c.file), 0666)
+		} else {
+			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("#"), 0666)
+		}
+
+		Setting.valueFiles = []string{"base.yml"}
+		cf, err := New()
+		assert.NoError(t, err)
+
+		assert.Equalf(t, c.want, cf.GetRaw("a"), "flag [%s] env [%s] file [%s] config [%s]", c.flag, c.env, c.file, cf)
+	}
+}
+
+func teardown() {
+	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
+	Setting = newSetting()
 }

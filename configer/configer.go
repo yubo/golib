@@ -19,8 +19,16 @@ import (
 )
 
 var (
-	Setting setting
+	Setting = newSetting()
 )
+
+func newSetting() *setting {
+	return &setting{
+		enableFlag: true,
+		enableEnv:  true,
+		maxDepth:   5,
+	}
+}
 
 type setting struct {
 	valueFiles    []string // files, -f/--values
@@ -28,6 +36,30 @@ type setting struct {
 	stringValues  []string // values, --set-string
 	fileValues    []string // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
 	namedFlagSets cliflag.NamedFlagSets
+
+	enableFlag    bool
+	enableEnv     bool
+	maxDepth      int
+	allowEmptyEnv bool
+	flagSet       *pflag.FlagSet
+
+	//flags  []*param              // add to flags
+	params []*param // all of config fields
+}
+
+func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
+	Setting.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
+}
+
+func (s *setting) SetOptions(enableEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
+	s.enableEnv = enableEnv
+	s.maxDepth = maxDepth
+	s.allowEmptyEnv = allowEmptyEnv
+
+	if fs != nil {
+		s.enableFlag = true
+		s.flagSet = fs
+	}
 }
 
 func (s *setting) AddFlags(f *pflag.FlagSet) {
@@ -38,6 +70,7 @@ func (s *setting) AddFlags(f *pflag.FlagSet) {
 }
 
 type Configer struct {
+	*setting
 	*options
 
 	data     map[string]interface{}
@@ -58,6 +91,7 @@ func New(optsIn ...Option) (*Configer, error) {
 	conf := &Configer{
 		data:    map[string]interface{}{},
 		options: opts,
+		setting: Setting,
 	}
 
 	if err := conf.Prepare(); err != nil {
@@ -69,16 +103,16 @@ func New(optsIn ...Option) (*Configer, error) {
 
 func (p *Configer) PrintFlags() {
 	printf := klog.V(1).Infof
-	for _, value := range append(p.options.valueFiles, Setting.valueFiles...) {
+	for _, value := range append(p.options.valueFiles, p.setting.valueFiles...) {
 		printf("FLAG: --values=%s\n", value)
 	}
-	for _, value := range Setting.values {
+	for _, value := range p.setting.values {
 		printf("FLAG: --set=%s\n", value)
 	}
-	for _, value := range Setting.stringValues {
+	for _, value := range p.setting.stringValues {
 		printf("FLAG: --set-string=%s\n", value)
 	}
-	for _, value := range Setting.fileValues {
+	for _, value := range p.setting.fileValues {
 		printf("FLAG: --set-file=%s\n", value)
 	}
 }
@@ -96,17 +130,17 @@ func (p *Configer) Prepare() (err error) {
 	}
 
 	// init base from flag default
-	p.mergeFlagDefaultValues(base, flags)
+	p.mergeDefaultValues(base)
 
 	// base with path
 	for path, b := range p.pathsBase {
-		if base, err = yaml2ValuesWithPath(base, []byte(b), path); err != nil {
+		if base, err = yaml2ValuesWithPath(base, path, []byte(b)); err != nil {
 			return err
 		}
 	}
 
 	// configFile & valueFile --values
-	for _, filePath := range append(p.options.valueFiles, Setting.valueFiles...) {
+	for _, filePath := range append(p.options.valueFiles, p.setting.valueFiles...) {
 		m := map[string]interface{}{}
 
 		bytes, err := template.ParseTemplateFile(nil, filePath)
@@ -122,21 +156,21 @@ func (p *Configer) Prepare() (err error) {
 	}
 
 	// User specified a value via --set
-	for _, value := range Setting.values {
+	for _, value := range p.setting.values {
 		if err := strvals.ParseInto(value, base); err != nil {
 			return fmt.Errorf("failed parsing --set data: %s", err)
 		}
 	}
 
 	// User specified a value via --set-string
-	for _, value := range Setting.stringValues {
+	for _, value := range p.setting.stringValues {
 		if err := strvals.ParseIntoString(value, base); err != nil {
 			return fmt.Errorf("failed parsing --set-string data: %s", err)
 		}
 	}
 
 	// User specified a value via --set-file
-	for _, value := range Setting.fileValues {
+	for _, value := range p.setting.fileValues {
 		reader := func(rs []rune) (interface{}, error) {
 			bytes, err := ioutil.ReadFile(string(rs))
 			return string(bytes), err
@@ -146,15 +180,17 @@ func (p *Configer) Prepare() (err error) {
 		}
 	}
 
-	p.data = base
+	// override
+	p.mergeEnvValues(base)
+	p.mergeFlagValues(base)
 
-	p.parseFlagAndEnv()
+	p.data = base
 	p.prepared = true
 	return nil
 }
 
 func (p *Configer) ValueFiles() []string {
-	return Setting.valueFiles
+	return p.setting.valueFiles
 }
 
 func (p *Configer) GetConfiger(path string) *Configer {
@@ -196,12 +232,12 @@ func (p *Configer) Set(path string, v interface{}) error {
 
 func (p *Configer) GetRaw(path string) interface{} {
 	if path == "" {
-		return p.data
+		return Values(p.data)
 	}
 
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
-		klog.V(3).Infof("get %s err %v", path, err)
+		klog.V(5).InfoS("get pathValue err, ignored", "path", path, "v", v, "err", err)
 		return nil
 	}
 	return v
@@ -307,8 +343,8 @@ func (p *Configer) IsSet(path string) bool {
 	return err != nil
 }
 
-func (p *Configer) Read(path string, dest interface{}, optsIn ...Option) error {
-	if dest == nil {
+func (p *Configer) Read(path string, into interface{}, optsIn ...Option) error {
+	if into == nil {
 		return nil
 	}
 
@@ -317,26 +353,14 @@ func (p *Configer) Read(path string, dest interface{}, optsIn ...Option) error {
 		opt.apply(opts)
 	}
 
-	var err error
-	var v interface{}
-	if path == "" {
-		v = Values(p.data)
-	} else {
-		// ignore error
-		v, err = Values(p.data).PathValue(path)
-		if err != nil {
-			klog.V(5).InfoS("get pathValue err, ignored", "path", path, "v", v, "err", err)
-		}
-	}
-
-	if v != nil {
+	if v := p.GetRaw(path); v != nil {
 		data, err := yaml.Marshal(v)
 		//klog.V(5).InfoS("marshal", "v", v, "data", string(data), "err", err)
 		if err != nil {
 			return err
 		}
 
-		err = yaml.Unmarshal(data, dest)
+		err = yaml.Unmarshal(data, into)
 		if err != nil {
 			klog.V(5).InfoS("unmarshal", "data", string(data), "err", err)
 			if klog.V(5).Enabled() {
@@ -346,14 +370,14 @@ func (p *Configer) Read(path string, dest interface{}, optsIn ...Option) error {
 		}
 	}
 
-	if v, ok := dest.(validator); ok {
+	if v, ok := into.(validator); ok {
 		if err := v.Validate(); err != nil {
 			return err
 		}
 	}
 
 	if klog.V(10).Enabled() {
-		b, _ := yaml.Marshal(dest)
+		b, _ := yaml.Marshal(into)
 		klog.Infof("Read \n[%s]\n%s", path, string(b))
 	}
 	return nil
@@ -372,11 +396,11 @@ func (p *Configer) getEnv(key string) (string, bool) {
 	return val, ok && (p.allowEmptyEnv || val != "")
 }
 
-// merge path.bytes -> dest
-func yaml2ValuesWithPath(dest map[string]interface{}, data []byte, path string) (map[string]interface{}, error) {
+// merge path.bytes -> into
+func yaml2ValuesWithPath(into map[string]interface{}, path string, data []byte) (map[string]interface{}, error) {
 	currentMap := map[string]interface{}{}
 	if err := yaml.Unmarshal(data, &currentMap); err != nil {
-		return dest, err
+		return into, err
 	}
 
 	if len(path) > 0 {
@@ -386,35 +410,34 @@ func yaml2ValuesWithPath(dest map[string]interface{}, data []byte, path string) 
 		}
 	}
 
-	dest = mergeValues(dest, currentMap)
-	return dest, nil
+	into = mergeValues(into, currentMap)
+	return into, nil
 }
 
-// Merges source and destination map, preferring values from the source map ( src > dest)
-func mergeValues(dest map[string]interface{}, src map[string]interface{}) map[string]interface{} {
+// Merges source and into map, preferring values from the source map ( src > into)
+func mergeValues(into map[string]interface{}, src map[string]interface{}) map[string]interface{} {
 	for k, v := range src {
 		// If the key doesn't exist already, then just set the key to that value
-		if _, ok := dest[k]; !ok {
-			dest[k] = v
+		if _, ok := into[k]; !ok {
+			into[k] = v
 			continue
 		}
 		nextMap, ok := v.(map[string]interface{})
 		// If it isn't another map, overwrite the value
 		if !ok {
-			dest[k] = v
+			into[k] = v
 			continue
 		}
-		// Edge case: If the key exists in the destination, but isn't a map
-		destMap, isMap := dest[k].(map[string]interface{})
+		intoMap, isMap := into[k].(map[string]interface{})
 		// If the source map has a map for this key, prefer it
 		if !isMap {
-			dest[k] = v
+			into[k] = v
 			continue
 		}
 		// If we got to this point, it is a map in both, so merge them
-		dest[k] = mergeValues(destMap, nextMap)
+		into[k] = mergeValues(intoMap, nextMap)
 	}
-	return dest
+	return into
 }
 
 func clonePath(path []string) []string {

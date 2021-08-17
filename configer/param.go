@@ -9,37 +9,15 @@ import (
 	"github.com/spf13/cast"
 	"github.com/spf13/pflag"
 	cliflag "github.com/yubo/golib/cli/flag"
-	"k8s.io/klog/v2"
-)
-
-var (
-	flags    []*param
-	maxDepth = 5
 )
 
 type param struct {
-	flag     string      // flag
-	shothand string      // flag shothand
-	path     string      // json path
-	value    interface{} // flag's value
-	def      interface{} // flag's default value
-	env      string
-}
-
-// once called by Prepare
-func (p *Configer) parseFlagAndEnv() {
-	if !p.enableFlag {
-		return
-	}
-
-	for _, f := range flags {
-		val := p.getFlagValue(f)
-		if val == nil {
-			continue
-		}
-		klog.V(10).Infof("flag merge %s %v", joinPath(append(p.path, f.path)...), val)
-		mergeValues(p.data, pathValueToTable(joinPath(append(p.path, f.path)...), val))
-	}
+	envName      string      // env name
+	flag         string      // flag
+	shothand     string      // flag shothand
+	configPath   string      // config path
+	flagValue    interface{} // flag's value
+	defaultValue interface{} // flag's default value
 }
 
 func pathValueToTable(path string, val interface{}) map[string]interface{} {
@@ -52,15 +30,57 @@ func pathValueToTable(path string, val interface{}) map[string]interface{} {
 	return p.(map[string]interface{})
 }
 
-func (p *Configer) mergeFlagDefaultValues(dest map[string]interface{}, flags []*param) {
+func (p *Configer) Envs() (names []string) {
+	if !p.enableEnv {
+		return
+	}
+	for _, f := range p.params {
+		if f.envName != "" {
+			names = append(names, f.envName)
+		}
+	}
+	return
+}
+
+func (p *Configer) Flags() (names []string) {
 	if !p.enableFlag {
 		return
 	}
-	for _, f := range flags {
-		if f.def == nil {
-			continue
+	for _, f := range p.params {
+		if f.flag != "" {
+			names = append(names, f.flag)
 		}
-		mergeValues(dest, pathValueToTable(joinPath(append(p.path, f.path)...), f.def))
+	}
+	return
+}
+
+func (p *Configer) mergeDefaultValues(into map[string]interface{}) {
+	for _, f := range p.params {
+		if v := f.defaultValue; v != nil {
+			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
+		}
+	}
+}
+
+func (p *Configer) mergeFlagValues(into map[string]interface{}) {
+	if !p.enableFlag {
+		return
+	}
+	for _, f := range p.params {
+		if v := p.getFlagValue(f); v != nil {
+			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
+		}
+	}
+}
+
+func (p *Configer) mergeEnvValues(into map[string]interface{}) {
+	if !p.enableEnv {
+		return
+	}
+	for _, f := range p.params {
+		if v := p.getEnvValue(f); v != nil {
+			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
+		}
 	}
 }
 
@@ -69,20 +89,24 @@ func (p *Configer) getFlagValue(f *param) interface{} {
 		return nil
 	}
 
-	if p.fs.Changed(f.flag) {
-		return reflect.ValueOf(f.value).Elem().Interface()
+	if p.flagSet.Changed(f.flag) {
+		return reflect.ValueOf(f.flagValue).Elem().Interface()
 	}
 
-	if !p.enableEnv || f.env == "" {
+	return nil
+}
+
+func (p *Configer) getEnvValue(f *param) interface{} {
+	if f.envName == "" {
 		return nil
 	}
 
-	val, ok := p.getEnv(f.env)
+	val, ok := p.getEnv(f.envName)
 	if !ok {
 		return nil
 	}
 
-	switch reflect.ValueOf(f.value).Elem().Interface().(type) {
+	switch reflect.ValueOf(f.flagValue).Elem().Interface().(type) {
 	case bool:
 		return cast.ToBool(val)
 	case string:
@@ -108,11 +132,12 @@ func (p *Configer) getFlagValue(f *param) interface{} {
 	case []int:
 		return cast.ToIntSlice(val)
 	default:
-		panic(fmt.Sprintf("unsupported type %s", reflect.TypeOf(f.value).Name()))
+		panic(fmt.Sprintf("unsupported type %s", reflect.TypeOf(f.flagValue).Name()))
 	}
 }
 
-func AddFlags(fs *pflag.FlagSet, path string, sample interface{}) error {
+// addConfigs: add flags and env from sample's tags
+func AddConfigs(fs *pflag.FlagSet, path string, sample interface{}) error {
 	rv := reflect.Indirect(reflect.ValueOf(sample))
 	rt := rv.Type()
 
@@ -120,12 +145,12 @@ func AddFlags(fs *pflag.FlagSet, path string, sample interface{}) error {
 		return fmt.Errorf("Addflag: sample must be a struct, got %v/%v", rv.Kind(), rt)
 	}
 
-	return addFlag(fs, parsePath(path), rt)
+	return Setting.addConfigs(parsePath(path), fs, rt)
 }
 
-func addFlag(fs *pflag.FlagSet, path []string, rt reflect.Type) error {
-	if len(path) > maxDepth {
-		return fmt.Errorf("path.depth(%s) is larger than the maximum allowed depth of %d", path, maxDepth)
+func (p *setting) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
+	if len(path) > p.maxDepth {
+		return fmt.Errorf("path.depth(%s) is larger than the maximum allowed depth of %d", path, p.maxDepth)
 	}
 
 	for i := 0; i < rt.NumField(); i++ {
@@ -163,13 +188,13 @@ func addFlag(fs *pflag.FlagSet, path []string, rt reflect.Type) error {
 		if ft.Kind() == reflect.Struct {
 			if opt.json == "" {
 				// anonymous
-				if err := addFlag(fs, path, ft); err != nil {
+				if err := p.addConfigs(path, fs, ft); err != nil {
 					return err
 				}
 				continue
 			}
 
-			if err := addFlag(fs, append(path, opt.json), ft); err != nil {
+			if err := p.addConfigs(append(path, opt.json), fs, ft); err != nil {
 				return err
 			}
 			continue
@@ -179,49 +204,52 @@ func addFlag(fs *pflag.FlagSet, path []string, rt reflect.Type) error {
 
 		switch reflect.New(ft).Elem().Interface().(type) {
 		case bool:
-			addFlagCall(fs, ps, opt, fs.Bool, fs.BoolP, cast.ToBool(opt.def))
+			addConfigField(fs, ps, opt, fs.Bool, fs.BoolP, cast.ToBool(opt.def))
 		case string:
-			addFlagCall(fs, ps, opt, fs.String, fs.StringP, cast.ToString(opt.def))
+			addConfigField(fs, ps, opt, fs.String, fs.StringP, cast.ToString(opt.def))
 		case int32, int16, int8, int:
-			addFlagCall(fs, ps, opt, fs.Int, fs.IntP, cast.ToInt(opt.def))
+			addConfigField(fs, ps, opt, fs.Int, fs.IntP, cast.ToInt(opt.def))
 		case int64:
-			addFlagCall(fs, ps, opt, fs.Int64, fs.Int64P, cast.ToInt64(opt.def))
+			addConfigField(fs, ps, opt, fs.Int64, fs.Int64P, cast.ToInt64(opt.def))
 		case uint:
-			addFlagCall(fs, ps, opt, fs.Uint, fs.UintP, cast.ToUint(opt.def))
+			addConfigField(fs, ps, opt, fs.Uint, fs.UintP, cast.ToUint(opt.def))
 		case uint8:
-			addFlagCall(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint8(opt.def))
+			addConfigField(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint8(opt.def))
 		case uint16:
-			addFlagCall(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint16(opt.def))
+			addConfigField(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint16(opt.def))
 		case uint32:
-			addFlagCall(fs, ps, opt, fs.Uint32, fs.Uint32P, cast.ToUint32(opt.def))
+			addConfigField(fs, ps, opt, fs.Uint32, fs.Uint32P, cast.ToUint32(opt.def))
 		case uint64:
-			addFlagCall(fs, ps, opt, fs.Uint64, fs.Uint64P, cast.ToUint64(opt.def))
+			addConfigField(fs, ps, opt, fs.Uint64, fs.Uint64P, cast.ToUint64(opt.def))
 		case float32, float64:
-			addFlagCall(fs, ps, opt, fs.Float64, fs.Float64P, cast.ToFloat64(opt.def))
+			addConfigField(fs, ps, opt, fs.Float64, fs.Float64P, cast.ToFloat64(opt.def))
 		case time.Duration:
-			addFlagCall(fs, ps, opt, fs.Duration, fs.DurationP, cast.ToDuration(opt.def))
+			addConfigField(fs, ps, opt, fs.Duration, fs.DurationP, cast.ToDuration(opt.def))
 		case []string:
-			addFlagCall(fs, ps, opt, fs.StringArray, fs.StringArrayP, cast.ToStringSlice(opt.def))
+			addConfigField(fs, ps, opt, fs.StringArray, fs.StringArrayP, cast.ToStringSlice(opt.def))
 		case []int:
-			addFlagCall(fs, ps, opt, fs.IntSlice, fs.IntSliceP, cast.ToIntSlice(opt.def))
+			addConfigField(fs, ps, opt, fs.IntSlice, fs.IntSliceP, cast.ToIntSlice(opt.def))
 		case map[string]string:
-			addFlagCall(fs, ps, opt, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(opt.def))
+			addConfigField(fs, ps, opt, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(opt.def))
 		default:
-			panic(fmt.Sprintf("unsupported type %s %v %s", ft.Name(), path, ft.Kind()))
-
+			switch ft.Kind() {
+			case reflect.Slice, reflect.Array, reflect.Map:
+				return nil
+			default:
+				panic(fmt.Sprintf("unsupported type %s %v %s", ft.String(), path, ft.Kind()))
+			}
 		}
 	}
 	return nil
 }
 
 type tagOpt struct {
-	json        string // for path
-	flag        []string
-	def         string
-	flagShort   string
-	env         string
-	description string
-	skip        bool
+	json        string   // json:"{json}"
+	flag        []string // flag:"{long},{short}"
+	def         string   // default:"{default}"
+	env         string   // env:"{env}"
+	description string   // description:"{description}"
+	skip        bool     // if json:"-"
 }
 
 func (p tagOpt) String() string {
@@ -258,10 +286,6 @@ func getTagOpt(sf reflect.StructField) (opt *tagOpt) {
 	opt.env = sf.Tag.Get("env")
 	if opt.env != "" {
 		opt.description = fmt.Sprintf("%s (env %s)", opt.description, opt.env)
-	}
-
-	if opt.def == "" && len(opt.flag) == 0 {
-		opt.skip = true
 	}
 
 	return
@@ -302,48 +326,43 @@ func (o tagOptions) Contains(optionName string) bool {
 	return false
 }
 
-func addFlagCall(fs *pflag.FlagSet, path string, opt *tagOpt, varFn, varPFn, def interface{}) {
-	var ret []reflect.Value
-	switch len(opt.flag) {
-	case 0:
-		// just save default value
-		flags = append(flags, &param{
-			path: path,
-			def:  def,
-		})
+func addConfigField(fs *pflag.FlagSet, path string, opt *tagOpt, varFn, varPFn, def interface{}) {
+
+	v := &param{
+		configPath:   path,
+		defaultValue: def,
+		envName:      opt.env,
+	}
+
+	if len(opt.flag) == 0 {
 		return
+	}
+
+	// add flag
+	switch len(opt.flag) {
 	case 1:
-		ret = reflect.ValueOf(varFn).Call([]reflect.Value{
+		v.flag = opt.flag[0]
+		ret := reflect.ValueOf(varFn).Call([]reflect.Value{
 			reflect.ValueOf(opt.flag[0]),
 			reflect.ValueOf(def),
 			reflect.ValueOf(opt.description),
 		})
+		v.flagValue = ret[0].Interface()
 	case 2:
-		ret = reflect.ValueOf(varPFn).Call([]reflect.Value{
+		v.flag = opt.flag[0]
+		v.shothand = opt.flag[1]
+		ret := reflect.ValueOf(varPFn).Call([]reflect.Value{
 			reflect.ValueOf(opt.flag[0]),
 			reflect.ValueOf(opt.flag[1]),
 			reflect.ValueOf(def),
 			reflect.ValueOf(opt.description),
 		})
+		v.flagValue = ret[0].Interface()
 	default:
 		panic("invalid flag value")
 	}
 
-	var val interface{}
-	if ret[0].CanInterface() {
-		val = ret[0].Interface()
-	}
-
-	if val != nil {
-		flags = append(flags, &param{
-			flag:     opt.flag[0],
-			shothand: "",
-			path:     path,
-			value:    val,
-			def:      def,
-			env:      opt.env,
-		})
-	}
+	Setting.params = append(Setting.params, v)
 }
 
 func NamedFlagSets() *cliflag.NamedFlagSets {

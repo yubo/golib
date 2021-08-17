@@ -59,12 +59,13 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 
 	// configerOps will be used at proc.start() -> procInit()
-	ctx = WithConfigOps(ctx, configer.WithFlag(fs))
+	//ctx = WithConfigOps(ctx, configer.WithFlag(fs))
+	configer.SetOptions(true, false, 5, fs)
 
+	// add flags
 	namedFlagSets := NamedFlagSets()
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)
 	configer.Setting.AddFlags(namedFlagSets.FlagSet("global"))
-
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
 	}
@@ -87,7 +88,7 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 }
 
 func RegisterFlags(path, groupName string, sample interface{}) {
-	configer.AddFlags(NamedFlagSets().FlagSet(groupName), path, sample)
+	configer.AddConfigs(NamedFlagSets().FlagSet(groupName), path, sample)
 }
 
 func startCmd() error {
