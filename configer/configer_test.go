@@ -439,6 +439,24 @@ func TestConfigerPriority(t *testing.T) {
 	}
 }
 
+func TestConfigerDef(t *testing.T) {
+	type Foo struct {
+		A string `json:"a" default:"default-a"`
+	}
+	type Bar struct {
+		Foo *Foo `json:"foo"`
+	}
+
+	teardown()
+
+	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	err := AddConfigs(fs, "bar", &Bar{})
+	cf, err := New()
+	assert.NoError(t, err)
+
+	assert.Equalf(t, "default-a", cf.GetRaw("bar.foo.a"), "config [%s]", cf)
+}
+
 func teardown() {
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
 	Setting = newSetting()

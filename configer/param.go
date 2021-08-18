@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cast"
 	"github.com/spf13/pflag"
 	cliflag "github.com/yubo/golib/cli/flag"
+	"k8s.io/klog/v2"
 )
 
 type param struct {
@@ -57,6 +58,7 @@ func (p *Configer) Flags() (names []string) {
 func (p *Configer) mergeDefaultValues(into map[string]interface{}) {
 	for _, f := range p.params {
 		if v := f.defaultValue; v != nil {
+			klog.V(7).InfoS("def", "path", joinPath(append(p.path, f.configPath)...), "value", v)
 			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
 		}
 	}
@@ -68,6 +70,7 @@ func (p *Configer) mergeFlagValues(into map[string]interface{}) {
 	}
 	for _, f := range p.params {
 		if v := p.getFlagValue(f); v != nil {
+			klog.V(7).InfoS("flag", "path", joinPath(append(p.path, f.configPath)...), "value", v)
 			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
 		}
 	}
@@ -79,6 +82,7 @@ func (p *Configer) mergeEnvValues(into map[string]interface{}) {
 	}
 	for _, f := range p.params {
 		if v := p.getEnvValue(f); v != nil {
+			klog.V(7).InfoS("env", "path", joinPath(append(p.path, f.configPath)...), "value", v)
 			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
 		}
 	}
@@ -176,13 +180,9 @@ func (p *setting) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		}
 
 		ft := sf.Type
-		if ft.Name() == "" && ft.Kind() == reflect.Ptr {
+		if ft.Kind() == reflect.Ptr {
 			// Follow pointer.
 			ft = ft.Elem()
-		}
-
-		if ft.Kind() == reflect.Slice && ft.Elem().Kind() == reflect.Struct {
-			continue
 		}
 
 		if ft.Kind() == reflect.Struct {
@@ -202,7 +202,7 @@ func (p *setting) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 
 		ps := strings.Join(append(path, opt.json), ".")
 
-		switch reflect.New(ft).Elem().Interface().(type) {
+		switch t := reflect.New(ft).Elem().Interface(); t.(type) {
 		case bool:
 			addConfigField(fs, ps, opt, fs.Bool, fs.BoolP, cast.ToBool(opt.def))
 		case string:
@@ -232,12 +232,7 @@ func (p *setting) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		case map[string]string:
 			addConfigField(fs, ps, opt, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(opt.def))
 		default:
-			switch ft.Kind() {
-			case reflect.Slice, reflect.Array, reflect.Map:
-				return nil
-			default:
-				panic(fmt.Sprintf("unsupported type %s %v %s", ft.String(), path, ft.Kind()))
-			}
+			klog.V(6).InfoS("add config unsupported", "type", ft.String(), "path", joinPath(path...), "kind", ft.Kind())
 		}
 	}
 	return nil
@@ -323,19 +318,19 @@ func (o tagOptions) Contains(optionName string) bool {
 }
 
 func addConfigField(fs *pflag.FlagSet, path string, opt *tagOpt, varFn, varPFn, def interface{}) {
-
 	v := &param{
-		configPath:   path,
-		defaultValue: def,
-		envName:      opt.env,
+		configPath: path,
+		envName:    opt.env,
 	}
 
-	if len(opt.flag) == 0 {
-		return
+	if opt.def != "" {
+		v.defaultValue = def
 	}
 
 	// add flag
 	switch len(opt.flag) {
+	case 0:
+		// nothing
 	case 1:
 		v.flag = opt.flag[0]
 		ret := reflect.ValueOf(varFn).Call([]reflect.Value{
