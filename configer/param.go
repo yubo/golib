@@ -263,7 +263,7 @@ func getTagOpt(sf reflect.StructField) (opt *tagOpt) {
 		return
 	}
 
-	json, opts := parseTag(sf.Tag.Get("json"))
+	json, _ := parseTag(sf.Tag.Get("json"))
 	if json == "-" {
 		opt.skip = true
 		return
@@ -271,10 +271,6 @@ func getTagOpt(sf reflect.StructField) (opt *tagOpt) {
 
 	if json != "" {
 		opt.json = json
-	}
-
-	if opts.Contains("inline") {
-		return
 	}
 
 	if flag := strings.Split(strings.TrimSpace(sf.Tag.Get("flag")), ","); len(flag) > 0 && flag[0] != "" {

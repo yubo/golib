@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	proc *Process
+	proc = newProcess()
 )
 
 type Process struct {
@@ -33,6 +33,26 @@ type Process struct {
 	//configer      *configer.Configer
 	wg  sync.WaitGroup
 	ctx context.Context
+}
+
+func newProcess() *Process {
+	hookOps := [ACTION_SIZE][]*HookOps{}
+	for i := ACTION_START; i < ACTION_SIZE; i++ {
+		hookOps[i] = []*HookOps{}
+	}
+
+	return &Process{
+		hookOps: hookOps,
+		ctx:     context.Background(),
+	}
+}
+
+func WithContext(ctx context.Context) {
+	proc.ctx = ctx
+}
+
+func Start() error {
+	return proc.start()
 }
 
 func RegisterHooks(in []HookOps) error {
@@ -216,13 +236,4 @@ func (p *Process) procReload() (err error) {
 	}
 	p.status.Set(STATUS_RUNNING)
 	return nil
-}
-
-func init() {
-	hookOps := [ACTION_SIZE][]*HookOps{}
-	for i := ACTION_START; i < ACTION_SIZE; i++ {
-		hookOps[i] = []*HookOps{}
-	}
-
-	proc = &Process{hookOps: hookOps}
 }
