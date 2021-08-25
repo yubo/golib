@@ -352,11 +352,11 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	Setting.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
-	Setting.values = []string{"e=v2_e", "f1=f1,f2=f2"}
-	Setting.stringValues = []string{"sv1=sv1,sv2=sv2"}
+	Options.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
+	Options.values = []string{"e=v2_e", "f1=f1,f2=f2"}
+	Options.stringValues = []string{"sv1=sv1,sv2=sv2"}
 	cf, err := New()
-	defer func() { Setting = newSetting() }()
+	defer func() { Options = newOptions() }()
 
 	assert.NoError(t, err)
 
@@ -431,7 +431,7 @@ func TestConfigerPriority(t *testing.T) {
 			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("#"), 0666)
 		}
 
-		Setting.valueFiles = []string{"base.yml"}
+		Options.valueFiles = []string{"base.yml"}
 		cf, err := New()
 		assert.NoError(t, err)
 
@@ -459,5 +459,5 @@ func TestConfigerDef(t *testing.T) {
 
 func teardown() {
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	Setting = newSetting()
+	Options = newOptions()
 }

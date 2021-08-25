@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
-	cliflag "github.com/yubo/golib/cli/flag"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	"k8s.io/klog/v2"
@@ -19,67 +18,25 @@ import (
 )
 
 var (
-	Setting = newSetting()
+	Options = newOptions()
 )
 
-func newSetting() *setting {
-	return &setting{
-		enableFlag: true,
-		enableEnv:  true,
-		maxDepth:   5,
-	}
-}
-
-type setting struct {
-	valueFiles    []string // files, -f/--values
-	values        []string // values, --set
-	stringValues  []string // values, --set-string
-	fileValues    []string // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
-	namedFlagSets cliflag.NamedFlagSets
-
-	enableFlag    bool
-	enableEnv     bool
-	maxDepth      int
-	allowEmptyEnv bool
-	flagSet       *pflag.FlagSet
-
-	//flags  []*param              // add to flags
-	params []*param // all of config fields
-}
-
 func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
-	Setting.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
-}
-
-func (s *setting) SetOptions(enableEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
-	s.enableEnv = enableEnv
-	s.maxDepth = maxDepth
-	s.allowEmptyEnv = allowEmptyEnv
-
-	if fs != nil {
-		s.enableFlag = true
-		s.flagSet = fs
-	}
-}
-
-func (s *setting) AddFlags(f *pflag.FlagSet) {
-	f.StringSliceVarP(&s.valueFiles, "values", "f", s.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
-	f.StringArrayVar(&s.values, "set", s.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
-	f.StringArrayVar(&s.stringValues, "set-string", s.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
-	f.StringArrayVar(&s.fileValues, "set-file", s.fileValues, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
+	Options.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
 }
 
 type Configer struct {
-	*setting
 	*options
+	//*options // use setting instead of it
 
 	data     map[string]interface{}
 	path     []string
 	prepared bool
 }
 
+// must called after pflag parse
 func New(optsIn ...Option) (*Configer, error) {
-	opts := &options{}
+	opts := Options.DeepCopy()
 	for _, opt := range optsIn {
 		opt.apply(opts)
 	}
@@ -89,9 +46,9 @@ func New(optsIn ...Option) (*Configer, error) {
 	}
 
 	conf := &Configer{
-		data:    map[string]interface{}{},
+		data: map[string]interface{}{},
+		//options: opts,
 		options: opts,
-		setting: Setting,
 	}
 
 	if err := conf.Prepare(); err != nil {
@@ -103,16 +60,16 @@ func New(optsIn ...Option) (*Configer, error) {
 
 func (p *Configer) PrintFlags() {
 	printf := klog.V(1).Infof
-	for _, value := range append(p.options.valueFiles, p.setting.valueFiles...) {
+	for _, value := range p.valueFiles {
 		printf("FLAG: --values=%s\n", value)
 	}
-	for _, value := range p.setting.values {
+	for _, value := range p.values {
 		printf("FLAG: --set=%s\n", value)
 	}
-	for _, value := range p.setting.stringValues {
+	for _, value := range p.stringValues {
 		printf("FLAG: --set-string=%s\n", value)
 	}
-	for _, value := range p.setting.fileValues {
+	for _, value := range p.fileValues {
 		printf("FLAG: --set-file=%s\n", value)
 	}
 }
@@ -123,11 +80,6 @@ func (p *Configer) Prepare() (err error) {
 	}
 
 	base := map[string]interface{}{}
-
-	// cb
-	if p.cb != nil {
-		p.cb(p.options)
-	}
 
 	// init base from flag default
 	p.mergeDefaultValues(base)
@@ -140,7 +92,7 @@ func (p *Configer) Prepare() (err error) {
 	}
 
 	// configFile & valueFile --values
-	for _, filePath := range append(p.options.valueFiles, p.setting.valueFiles...) {
+	for _, filePath := range p.valueFiles {
 		m := map[string]interface{}{}
 
 		bytes, err := template.ParseTemplateFile(nil, filePath)
@@ -153,24 +105,27 @@ func (p *Configer) Prepare() (err error) {
 		}
 		// Merge with the previous map
 		base = mergeValues(base, m)
+		klog.V(1).InfoS("config load", "filePath", filePath)
 	}
 
 	// User specified a value via --set
-	for _, value := range p.setting.values {
+	for _, value := range p.values {
 		if err := strvals.ParseInto(value, base); err != nil {
 			return fmt.Errorf("failed parsing --set data: %s", err)
 		}
+		klog.V(1).InfoS("config load", "value", value)
 	}
 
 	// User specified a value via --set-string
-	for _, value := range p.setting.stringValues {
+	for _, value := range p.stringValues {
 		if err := strvals.ParseIntoString(value, base); err != nil {
 			return fmt.Errorf("failed parsing --set-string data: %s", err)
 		}
+		klog.V(1).InfoS("config load", "filepath(string)", value)
 	}
 
 	// User specified a value via --set-file
-	for _, value := range p.setting.fileValues {
+	for _, value := range p.fileValues {
 		reader := func(rs []rune) (interface{}, error) {
 			bytes, err := ioutil.ReadFile(string(rs))
 			return string(bytes), err
@@ -178,6 +133,7 @@ func (p *Configer) Prepare() (err error) {
 		if err := strvals.ParseIntoFile(value, base, reader); err != nil {
 			return fmt.Errorf("failed parsing --set-file data: %s", err)
 		}
+		klog.V(1).InfoS("config load", "set-file", value)
 	}
 
 	// override
@@ -190,7 +146,10 @@ func (p *Configer) Prepare() (err error) {
 }
 
 func (p *Configer) ValueFiles() []string {
-	return p.setting.valueFiles
+	if p == nil || p.options == nil {
+		return nil
+	}
+	return p.valueFiles
 }
 
 func (p *Configer) GetConfiger(path string) *Configer {
@@ -340,7 +299,7 @@ type validator interface {
 
 func (p *Configer) IsSet(path string) bool {
 	_, err := Values(p.data).PathValue(path)
-	return err != nil
+	return err == nil
 }
 
 func (p *Configer) Read(path string, into interface{}, optsIn ...Option) error {

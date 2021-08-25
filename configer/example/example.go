@@ -60,7 +60,7 @@ func newRootCmd() *cobra.Command {
 		klog.Infof("addflag err %s", err)
 	}
 
-	configer.Setting.AddFlags(fs)
+	configer.Options.AddFlags(fs)
 	globalflag.AddGlobalFlags(fs, "example")
 
 	return cmd

@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cast"
 	"github.com/spf13/pflag"
-	cliflag "github.com/yubo/golib/cli/flag"
 	"k8s.io/klog/v2"
 )
 
@@ -149,10 +148,10 @@ func AddConfigs(fs *pflag.FlagSet, path string, sample interface{}) error {
 		return fmt.Errorf("Addflag: sample must be a struct, got %v/%v", rv.Kind(), rt)
 	}
 
-	return Setting.addConfigs(parsePath(path), fs, rt)
+	return Options.addConfigs(parsePath(path), fs, rt)
 }
 
-func (p *setting) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
+func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
 	if len(path) > p.maxDepth {
 		return fmt.Errorf("path.depth(%s) is larger than the maximum allowed depth of %d", path, p.maxDepth)
 	}
@@ -353,9 +352,5 @@ func addConfigField(fs *pflag.FlagSet, path string, opt *tagOpt, varFn, varPFn, 
 		panic("invalid flag value")
 	}
 
-	Setting.params = append(Setting.params, v)
-}
-
-func NamedFlagSets() *cliflag.NamedFlagSets {
-	return &Setting.namedFlagSets
+	Options.params = append(Options.params, v)
 }
