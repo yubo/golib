@@ -140,6 +140,12 @@ func (p *Configer) Prepare() (err error) {
 	p.mergeEnvValues(base)
 	p.mergeFlagValues(base)
 
+	for path, b := range p.pathsOverride {
+		if base, err = yaml2ValuesWithPath(base, path, []byte(b)); err != nil {
+			return err
+		}
+	}
+
 	p.data = base
 	p.prepared = true
 	return nil

@@ -44,11 +44,16 @@ func NameFrom(ctx context.Context) string {
 
 // WithWg returns a copy of parent in which the user value is set
 func WithWg(ctx context.Context, wg *sync.WaitGroup) {
-	AttrFrom(ctx)[wgKey] = wg
+	AttrMustFrom(ctx)[wgKey] = wg
 }
 
-func WgFrom(ctx context.Context) *sync.WaitGroup {
-	wg, ok := AttrFrom(ctx)[wgKey].(*sync.WaitGroup)
+func WgFrom(ctx context.Context) (*sync.WaitGroup, bool) {
+	wg, ok := AttrMustFrom(ctx)[wgKey].(*sync.WaitGroup)
+	return wg, ok
+}
+
+func WgMustFrom(ctx context.Context) *sync.WaitGroup {
+	wg, ok := AttrMustFrom(ctx)[wgKey].(*sync.WaitGroup)
 	if !ok {
 		panic("unable to get waitGroup from context")
 	}
@@ -56,11 +61,19 @@ func WgFrom(ctx context.Context) *sync.WaitGroup {
 }
 
 func WithConfiger(ctx context.Context, cf *configer.Configer) {
-	AttrFrom(ctx)[configerKey] = cf
+	if _, ok := ConfigerFrom(ctx); ok {
+		panic("configer has been exist")
+	}
+	AttrMustFrom(ctx)[configerKey] = cf
 }
 
-func ConfigerFrom(ctx context.Context) *configer.Configer {
-	cf, ok := AttrFrom(ctx)[configerKey].(*configer.Configer)
+func ConfigerFrom(ctx context.Context) (*configer.Configer, bool) {
+	cf, ok := AttrMustFrom(ctx)[configerKey].(*configer.Configer)
+	return cf, ok
+}
+
+func ConfigerMustFrom(ctx context.Context) *configer.Configer {
+	cf, ok := AttrMustFrom(ctx)[configerKey].(*configer.Configer)
 	if !ok {
 		panic("unable to get configer from context")
 	}
@@ -98,7 +111,12 @@ func WithAttr(ctx context.Context, attributes map[interface{}]interface{}) conte
 	return context.WithValue(ctx, attrKey, attributes)
 }
 
-func AttrFrom(ctx context.Context) map[interface{}]interface{} {
+func AttrFrom(ctx context.Context) (map[interface{}]interface{}, bool) {
+	attr, ok := ctx.Value(attrKey).(map[interface{}]interface{})
+	return attr, ok
+}
+
+func AttrMustFrom(ctx context.Context) map[interface{}]interface{} {
 	attr, ok := ctx.Value(attrKey).(map[interface{}]interface{})
 	if !ok {
 		panic("unable to get attribute from context")

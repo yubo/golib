@@ -15,6 +15,7 @@ func newOptions() *options {
 
 type options struct {
 	pathsBase     map[string]string // data in yaml format with path
+	pathsOverride map[string]string // data in yaml format with path
 	valueFiles    []string          // files, -f/--values
 	values        []string          // values, --set
 	stringValues  []string          // values, --set-string
@@ -126,6 +127,16 @@ func WithDefaultYaml(path, yamlData string) Option {
 			o.pathsBase = map[string]string{path: yamlData}
 		} else {
 			o.pathsBase[path] = yamlData
+		}
+	})
+}
+
+func WithOverrideYaml(path, yamlData string) Option {
+	return newFuncOption(func(o *options) {
+		if o.pathsOverride == nil {
+			o.pathsOverride = map[string]string{path: yamlData}
+		} else {
+			o.pathsOverride[path] = yamlData
 		}
 	})
 }

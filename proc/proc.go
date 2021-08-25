@@ -107,10 +107,21 @@ func (p *Process) start() error {
 func (p *Process) init() error {
 	ctx := p.ctx
 
-	opts, _ := ConfigOptsFrom(ctx)
-	configer, err := configer.New(opts...)
-	if err != nil {
-		return err
+	if _, ok := AttrFrom(ctx); !ok {
+		ctx = WithAttr(ctx, make(map[interface{}]interface{}))
+	}
+
+	if _, ok := ConfigerFrom(ctx); !ok {
+		opts, _ := ConfigOptsFrom(ctx)
+		configer, err := configer.New(opts...)
+		if err != nil {
+			return err
+		}
+		WithConfiger(ctx, configer)
+
+	}
+	if _, ok := WgFrom(ctx); !ok {
+		WithWg(ctx, &p.wg)
 	}
 
 	p.status = STATUS_PENDING
@@ -120,9 +131,6 @@ func (p *Process) init() error {
 		sort.Slice(x, func(i, j int) bool { return x[i].priority < x[j].priority })
 	}
 
-	ctx = WithAttr(ctx, make(map[interface{}]interface{}))
-	WithWg(ctx, &p.wg)
-	WithConfiger(ctx, configer)
 	p.ctx = ctx
 
 	return nil

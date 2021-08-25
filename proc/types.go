@@ -44,7 +44,7 @@ func (p HookOps) Context() context.Context {
 }
 
 func (p HookOps) Configer() *configer.Configer {
-	return ConfigerFrom(p.process.ctx)
+	return ConfigerMustFrom(p.process.ctx)
 }
 
 func (p HookOps) ContextAndConfiger() (context.Context, *configer.Configer) {

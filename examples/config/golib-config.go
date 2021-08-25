@@ -45,7 +45,7 @@ func newServerCmd() *cobra.Command {
 }
 
 func start(ctx context.Context) error {
-	c := proc.ConfigerFrom(ctx)
+	c := proc.ConfigerMustFrom(ctx)
 
 	cf := &config{}
 	if err := c.Read(moduleName, cf); err != nil {
