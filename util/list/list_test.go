@@ -12,8 +12,8 @@ import (
 )
 
 type foo struct {
-	x    int
 	list ListHead
+	x    int
 }
 
 func (list *ListHead) entry() *foo {
@@ -42,5 +42,11 @@ func TestAdd(t *testing.T) {
 
 	for p, _p := h.Next, h.Next.Next; p != h; p, _p = _p, _p.Next {
 		fmt.Printf("del x:%d\n", p.entry().x)
+		p.Del()
+	}
+
+	// empty
+	for p := h.Next; p != h; p = p.Next {
+		fmt.Printf("list x:%d\n", p.entry().x)
 	}
 }

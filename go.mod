@@ -5,6 +5,7 @@ go 1.15
 require (
 	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
+	github.com/creack/pty v1.1.11
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96
 	github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153
