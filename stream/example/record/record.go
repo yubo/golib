@@ -37,7 +37,7 @@ func do() error {
 	if err := tty.AddTty(nativeTty); err != nil {
 		return err
 	}
-	if err := tty.AddRecorderStreams(recorder.Streams()); err != nil {
+	if err := tty.AddRecorder(recorder); err != nil {
 		return err
 	}
 

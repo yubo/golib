@@ -1,16 +1,19 @@
-// +build linux darwin
-
-//from github.com/yubo/gotty/rec
+// Copyright 2021 yubo. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 package stream
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"io"
 	"os"
+
+	"github.com/yubo/golib/util/term"
 )
 
 type RecorderStreams struct {
-	In     io.Writer // default: ioutil.Discard
+	In     io.Writer
 	Out    io.Writer
 	ErrOut io.Writer
 }
@@ -51,104 +54,43 @@ func NewRecorder(fileName string) (*Recorder, error) {
 	return r, nil
 }
 
-func (r *Recorder) WriteIn(d []byte) (n int, err error) {
-	if err := r.enc.Encode(RecData{
-		Time: Nanotime(),
-		Data: append([]byte{MsgInput}, d...),
-	}); err != nil {
+func (r *Recorder) WriteIn(d []byte) (int, error) {
+	if err := r.put(MsgInput, d); err != nil {
 		return 0, err
 	}
-	return len(d), nil
-}
-func (r *Recorder) WriteOut(d []byte) (n int, err error) {
-	if err := r.enc.Encode(RecData{
-		Time: Nanotime(),
-		Data: append([]byte{MsgOutput}, d...),
-	}); err != nil {
-		return 0, err
-	}
-	return len(d), nil
-}
-func (r *Recorder) WriteErrOut(d []byte) (n int, err error) {
-	if err := r.enc.Encode(RecData{
-		Time: Nanotime(),
-		Data: append([]byte{MsgErrOutput}, d...),
-	}); err != nil {
-		return 0, err
-	}
+
 	return len(d), nil
 }
 
-/*
-func RecordRun(cmd *exec.Cmd, fileName string, input bool) error {
-	cli := &Client{
-		IOStreams: IOStreams{
-			In:     os.Stdin,
-			Out:    os.Stdout,
-			ErrOut: nil,
-		},
-		Stdin: true,
-		TTY:   true,
+func (r *Recorder) WriteOut(d []byte) (int, error) {
+	if err := r.put(MsgOutput, d); err != nil {
+		return 0, err
 	}
 
-	t := cli.Setup()
-	cli.SizeQueue = t.MonitorSize(t.GetSize()).Ch()
+	return len(d), nil
 
-	return t.Safe(func() error {
-		cmd.Env = append(os.Environ(), "REC=[REC]")
+}
 
-		pty, err := NewPty()
-		defer pty.Close()
+func (r *Recorder) WriteErrOut(d []byte) (int, error) {
+	if err := r.put(MsgErrOutput, d); err != nil {
+		return 0, err
+	}
 
-		cmd.Stdout = pty.Tty
-		cmd.Stdin = pty.Tty
-		cmd.Stderr = pty.Tty
-		if cmd.SysProcAttr == nil {
-			cmd.SysProcAttr = &syscall.SysProcAttr{}
-		}
-		cmd.SysProcAttr.Setsid = true
-		cmd.SysProcAttr.Setctty = true
-		cmd.SysProcAttr.Ctty = int(pty.Tty.Fd())
+	return len(d), nil
+}
 
-		fdx, err := NewFdx(&cli.IOStreams, pty.Pty, RshBuffSize)
-		if err != nil {
-			return err
-		}
+func (r *Recorder) Resize(size *term.TerminalSize) error {
+	d, err := json.Marshal(size)
+	if err != nil {
+		return err
+	}
 
-		recorder, err := NewRecorder(fileName)
-		if err != nil {
-			return err
-		}
-		defer recorder.Close()
+	return r.put(MsgResize, d)
+}
 
-		// tty <- cmd
-		fdx.RxFilter(func(b []byte) ([]byte, error) {
-			recorder.Write(append([]byte{MsgOutput}, b...))
-			return b, nil
-		})
-
-		// tty -> cmd
-		fdx.TxFilter(func(b []byte) ([]byte, error) {
-			if input {
-				recorder.Write(append([]byte{MsgInput}, b...))
-			}
-			return b, nil
-		})
-
-		go func() {
-			for {
-				ws, ok := <-cli.SizeQueue
-				if !ok {
-					return
-				}
-				pty.Resize(ws.Width, ws.Height)
-			}
-		}()
-
-		go fdx.Run()
-
-		return cmd.Run()
+func (r *Recorder) put(msgType byte, data []byte) error {
+	return r.enc.Encode(RecData{
+		Time: Nanotime(),
+		Data: append([]byte{msgType}, data...),
 	})
-
 }
-*/

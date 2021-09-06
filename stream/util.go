@@ -1,3 +1,6 @@
+// Copyright 2021 yubo. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 package stream
 
 import (
@@ -7,10 +10,6 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
-)
-
-var (
-	RealCrash = false
 )
 
 func wrapErr(err error) error {
@@ -81,14 +80,6 @@ func BindPty(tty Tty, pty Pty) <-chan error {
 
 func Nanotime() int64 {
 	return time.Now().UnixNano()
-}
-
-func crash() {
-	if r := recover(); r != nil {
-		if RealCrash {
-			panic(r)
-		}
-	}
 }
 
 func ioctl(fd, cmd, ptr uintptr) error {

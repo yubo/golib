@@ -1,3 +1,6 @@
+// Copyright 2021 yubo. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
 package stream
 
 import (
@@ -13,20 +16,15 @@ import (
 
 type ProxyTty struct {
 	sync.RWMutex
-
-	ctx    context.Context
-	cancel context.CancelFunc
-
+	ctx       context.Context
+	cancel    context.CancelFunc
 	ttys      *list.ListHead
 	recorders *list.ListHead
-	//upstreams []*upstream
-	in       chan *proxyMsg
-	inErr    chan error
-	buffSize int
-
-	sizeCh chan *term.TerminalSize
-
-	size term.TerminalSize
+	in        chan *proxyMsg
+	inErr     chan error
+	buffSize  int
+	sizeCh    chan *term.TerminalSize
+	size      term.TerminalSize
 }
 
 func NewProxyTty(bsize int) *ProxyTty {
@@ -84,7 +82,17 @@ func (p *ProxyTty) MonitorSize(initialSizes ...*term.TerminalSize) term.Terminal
 }
 
 func (p *ProxyTty) Next() *term.TerminalSize {
-	return <-p.sizeCh
+	size := <-p.sizeCh
+
+	p.RLock()
+	defer p.RUnlock()
+
+	// send to recorder
+	h := p.recorders
+	for p1 := h.Next; p1 != h; p1 = p1.Next {
+		list2recorderEntry(p1).recorder.Resize(size)
+	}
+	return size
 }
 
 type ttyEntry struct {
@@ -96,20 +104,23 @@ type ttyEntry struct {
 }
 
 type recorderEntry struct {
-	list   list.ListHead
-	in     io.Writer
-	out    io.Writer
-	errOut io.Writer
+	list     list.ListHead
+	in       io.Writer
+	out      io.Writer
+	errOut   io.Writer
+	recorder *Recorder
 }
 
-func (p *ProxyTty) AddRecorderStreams(s RecorderStreams) error {
+func (p *ProxyTty) AddRecorder(r *Recorder) error {
 	p.Lock()
 	defer p.Unlock()
 
+	s := r.Streams()
 	entry := &recorderEntry{
-		in:     s.In,
-		out:    s.Out,
-		errOut: s.ErrOut,
+		in:       s.In,
+		out:      s.Out,
+		errOut:   s.ErrOut,
+		recorder: r,
 	}
 	p.recorders.AddTail(&entry.list)
 
