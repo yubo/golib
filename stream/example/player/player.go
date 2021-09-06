@@ -31,10 +31,8 @@ func do() error {
 	}
 	defer player.Close()
 
-	// run
 	return nativeTty.Safe(func() error {
 		return <-nativeTty.Bind(player)
-		//return <-util.BindPtyStreams(nativeTty.Streams(), player.Streams())
 	})
 }
 

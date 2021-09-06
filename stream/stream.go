@@ -13,6 +13,10 @@ const (
 	MsgAction // custom Action
 )
 
+const (
+	debugLevel = 18
+)
+
 type ReadFunc func(p []byte) (n int, err error)
 
 func (f ReadFunc) Read(p []byte) (int, error) {

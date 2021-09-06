@@ -74,7 +74,7 @@ func (p *ProxyTty) IsTerminal() bool {
 func (p *ProxyTty) MonitorSize(initialSizes ...*term.TerminalSize) term.TerminalSizeQueue {
 	go func() {
 		for _, size := range initialSizes {
-			klog.V(6).Infof("size %v", size)
+			debug().Infof("size %v", size)
 			p.sizeCh <- size
 		}
 	}()
@@ -160,13 +160,13 @@ func (p *ProxyTty) addTtyEntry(entry *ttyEntry) error {
 			}
 
 			n, err := reader.Read(buff)
-			klog.V(6).InfoS("proxy.tty.in.read", "len", n, "err", err)
+			debug().InfoS("proxy.tty.in.read", "len", n, "err", err)
 			if err != nil {
 				klog.Errorf("read from tty.in err %s", err)
 				return
 			}
 			_, err = p.writeInChan(buff[:n])
-			klog.V(6).InfoS("proxy.in.write", "len", n, "err", err)
+			debug().InfoS("proxy.in.write", "len", n, "err", err)
 			if err != nil {
 				klog.Errorf("write to tty.in err %s", err)
 				return
@@ -205,18 +205,17 @@ type proxyMsg struct {
 }
 
 func (p *ProxyTty) readInChan(b []byte) (int, error) {
-	klog.V(6).InfoS("entering proxy.in.read")
+	debug().InfoS("entering proxy.in.read")
 	msg, ok := <-p.in
 	if !ok {
 		return 0, io.EOF
 	}
 
-	if len(b) < len(msg.data) {
-		msg.done <- io.ErrShortBuffer
-		return 0, io.ErrShortBuffer
+	_, err := copyBytes(b, msg.data)
+	if err != nil {
+		msg.done <- err
+		return 0, err
 	}
-
-	copy(b, msg.data)
 
 	p.Lock()
 	defer p.Unlock()
@@ -225,12 +224,12 @@ func (p *ProxyTty) readInChan(b []byte) (int, error) {
 	for p1, p2 := h.Next, h.Next.Next; p1 != h; p1, p2 = p2, p2.Next {
 		n, err := list2recorderEntry(p1).in.Write(msg.data)
 		if err != nil {
-			klog.V(6).Infof("write recorder.in err %v, remove", err)
+			debug().Infof("write recorder.in err %v, remove", err)
 			p1.Del()
 			continue
 		}
 		if n != len(msg.data) {
-			klog.V(6).Infof("write recorder.in err %v, remove", io.ErrShortWrite)
+			debug().Infof("write recorder.in err %v, remove", io.ErrShortWrite)
 			p1.Del()
 			continue
 		}
@@ -238,7 +237,7 @@ func (p *ProxyTty) readInChan(b []byte) (int, error) {
 
 	msg.done <- nil
 
-	klog.V(6).InfoS("leaving proxy.in.read", "len", len(msg.data))
+	debug().InfoS("leaving proxy.in.read", "len", len(msg.data))
 	return len(msg.data), nil
 }
 
@@ -266,7 +265,7 @@ func list2recorderEntry(list *list.ListHead) *recorderEntry {
 func (p *ProxyTty) writeOut(b []byte) (int, error) {
 	p.Lock()
 	defer p.Unlock()
-	klog.V(6).InfoS("entering proxy.out.write", "len", len(b))
+	debug().InfoS("entering proxy.out.write", "len", len(b))
 
 	select {
 	case <-p.ctx.Done():
@@ -282,12 +281,12 @@ func (p *ProxyTty) writeOut(b []byte) (int, error) {
 		}
 		n, err := out.Write(b)
 		if err != nil {
-			klog.V(6).Infof("write tty.out err %v, remove", err)
+			debug().Infof("write tty.out err %v, remove", err)
 			p1.Del()
 			continue
 		}
 		if n != len(b) {
-			klog.V(6).Infof("write tty.out err %v, remove", io.ErrShortWrite)
+			debug().Infof("write tty.out err %v, remove", io.ErrShortWrite)
 			p1.Del()
 			continue
 		}
@@ -301,25 +300,25 @@ func (p *ProxyTty) writeOut(b []byte) (int, error) {
 		}
 		n, err := out.Write(b)
 		if err != nil {
-			klog.V(6).Infof("write recorder.out err %v, remove", err)
+			debug().Infof("write recorder.out err %v, remove", err)
 			p1.Del()
 			continue
 		}
 		if n != len(b) {
-			klog.V(6).Infof("write recorder.out err %v, remove", io.ErrShortWrite)
+			debug().Infof("write recorder.out err %v, remove", io.ErrShortWrite)
 			p1.Del()
 			continue
 		}
 	}
 
-	klog.V(6).InfoS("leaving proxy.out.write", "len", len(b), "data", string(b))
+	debug().InfoS("leaving proxy.out.write", "len", len(b), "data", string(b))
 	return len(b), nil
 }
 
 func (p *ProxyTty) writeErrOut(b []byte) (int, error) {
 	p.Lock()
 	defer p.Unlock()
-	klog.V(6).InfoS("entering proxy.ErrOut.write", "len", len(b))
+	debug().InfoS("entering proxy.ErrOut.write", "len", len(b))
 
 	select {
 	case <-p.ctx.Done():
@@ -335,12 +334,12 @@ func (p *ProxyTty) writeErrOut(b []byte) (int, error) {
 		}
 		n, err := errOut.Write(b)
 		if err != nil {
-			klog.V(6).Infof("write tty.errout err %v, remove", err)
+			debug().Infof("write tty.errout err %v, remove", err)
 			p1.Del()
 			continue
 		}
 		if n != len(b) {
-			klog.V(6).Infof("write tty.errout err %v, remove", err)
+			debug().Infof("write tty.errout err %v, remove", err)
 			p1.Del()
 			continue
 		}
@@ -354,18 +353,18 @@ func (p *ProxyTty) writeErrOut(b []byte) (int, error) {
 		}
 		n, err := errOut.Write(b)
 		if err != nil {
-			klog.V(6).Infof("write recorder.errout err %v, remove", err)
+			debug().Infof("write recorder.errout err %v, remove", err)
 			p1.Del()
 			continue
 		}
 		if n != len(b) {
-			klog.V(6).Infof("write recorder.errout err %v, remove", err)
+			debug().Infof("write recorder.errout err %v, remove", err)
 			p1.Del()
 			continue
 		}
 	}
 
-	klog.V(6).InfoS("leaving proxy.ErrOut.Write", "len", len(b))
+	debug().InfoS("leaving proxy.ErrOut.Write", "len", len(b))
 
 	return len(b), nil
 }

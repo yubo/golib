@@ -100,3 +100,16 @@ func EnvsToKv(envs []string) map[string]string {
 	}
 	return data
 }
+
+func copyBytes(dst, src []byte) (int, error) {
+	if len(dst) < len(src) {
+		return 0, io.ErrShortBuffer
+	}
+
+	copy(dst, src)
+	return len(src), nil
+}
+
+func debug() klog.Verbose {
+	return klog.V(debugLevel)
+}

@@ -6,6 +6,7 @@
 package stream
 
 import (
+	"context"
 	"encoding/gob"
 	"encoding/json"
 	"io"
@@ -13,13 +14,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/clock"
 	"github.com/yubo/golib/util/term"
 	"k8s.io/klog/v2"
 )
 
 const (
-	SampleTime = 100 * time.Millisecond // 10Hz
+	SampleTime = time.Second / 100 // 100Hz
+)
+
+var (
+	MagicCode = []byte{0xff, 0xf1, 0xf2, 0xf3}
 )
 
 type PlayerStreams struct {
@@ -34,181 +39,72 @@ type CtlMsg struct {
 }
 
 type Player struct {
-	FileName  string
-	f         *os.File
-	dec       *gob.Decoder
-	size      term.TerminalSize
-	d         RecData
-	pending   bool
-	speed     int64
-	repeat    bool
-	sync      bool
-	fileStart int64
-	done      chan struct{}
-	ctlMsgCh  chan *CtlMsg
-
+	filename string
+	ctx      context.Context
+	cancel   context.CancelFunc
+	speed    int64
+	repeat   bool
 	pause    int64
-	playTime int64
-	start    int64
-	offset   int64
-	maxWait  int64
+	maxWait  time.Duration
+	outCh    chan []byte
+	errOutCh chan []byte
 }
 
 func (p *Player) Streams() PtyStreams {
 	return PtyStreams{
-		In:     WriteFunc(p.Write),
-		Out:    ReadFunc(p.Read),
-		ErrOut: ReadFunc(p.Read),
+		In:     WriteFunc(p.writeIn),
+		Out:    ReadFunc(p.readOut),
+		ErrOut: ReadFunc(p.readErrOut),
 	}
 }
 
+// canot support resize method
 func (p *Player) IsTerminal() bool {
-	return true
+	return false
 }
 
 func (p *Player) Resize(*term.TerminalSize) error {
 	return nil
 }
 
-func (p *Player) GetSize() error {
-	return nil
-}
-
-// slave(tty) -> master(exec)
-// in reader -> in writer
-// out writer <- out reader
-// errout writer <- errout reader
-
 func NewPlayer(fileName string, speed int64, repeat bool, wait time.Duration) (*Player, error) {
-	var err error
-
-	p := &Player{FileName: fileName,
+	p := &Player{
+		filename: fileName,
 		speed:    speed,
 		repeat:   repeat,
-		sync:     false,
-		maxWait:  int64(wait),
-		done:     make(chan struct{}),
-		ctlMsgCh: make(chan *CtlMsg, 8),
+		maxWait:  wait,
+		outCh:    make(chan []byte, 10),
+		errOutCh: make(chan []byte, 10),
 	}
 
-	if p.f, err = os.OpenFile(fileName, os.O_RDONLY, 0); err != nil {
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+
+	if err := p.run(); err != nil {
 		return nil, err
 	}
-	p.dec = gob.NewDecoder(p.f)
-
-	p.run()
 
 	return p, nil
 }
 
-func (p *Player) Read(d []byte) (n int, err error) {
-	for {
-		if !p.pending {
-			if err = p.dec.Decode(&p.d); err != nil {
-				if p.repeat && err == io.EOF {
-					p.start = Nanotime()
-					p.offset = 0
-					atomic.StoreInt64(&p.playTime, 0)
-					p.f.Seek(0, 0)
-					p.dec = gob.NewDecoder(p.f)
-					continue
-				} else {
-					return 0, err
-				}
-			}
-			p.pending = true
-		}
-
-		typ, data := p.d.Data[0], p.d.Data[1:]
-
-		switch typ {
-		case MsgResize:
-			err = json.Unmarshal(data, &p.size)
-			if err != nil {
-				klog.V(6).Infof("json unmarshal err %s", err)
-				continue
-			}
-			p.pending = false
-			continue
-		case MsgInput:
-			klog.V(6).Infof("input msg %s", data)
-			p.pending = false
-			continue
-		case MsgOutput:
-			wait := p.d.Time - p.fileStart - p.offset -
-				atomic.LoadInt64(&p.playTime)*p.speed
-			if wait > p.maxWait {
-				p.offset += wait - p.maxWait
-			}
-			for {
-				wait = p.d.Time - p.fileStart - p.offset -
-					atomic.LoadInt64(&p.playTime)*p.speed
-				if wait <= 0 {
-					break
-				}
-
-				// check chan before sleep
-				select {
-				case msg := <-p.ctlMsgCh:
-					b := append([]byte{MsgCtl}, []byte(util.JsonStr(msg))...)
-					klog.Infof("%s", string(b))
-					n = copy(d, b[:])
-					return
-				default:
-				}
-
-				time.Sleep(time.Duration(MaxInt64(int64(SampleTime), wait)))
-			}
-
-			// synchronization time axis
-			// expect wait == 0 when sending msg
-			if p.sync {
-				p.offset = p.d.Time - p.fileStart - atomic.LoadInt64(&p.playTime)*p.speed
-			}
-			n = copy(d, data)
-			p.pending = false
-
-			return
-		default:
-			klog.Infof("unknow type(%d) context(%s)", typ, string(data))
-			continue
-		}
+func (p *Player) readOut(b []byte) (int, error) {
+	data, ok := <-p.outCh
+	if !ok {
+		return 0, io.EOF
 	}
+
+	return copyBytes(b, data)
 }
 
-func MaxInt64(a, b int64) int64 {
-	if a > b {
-		return a
+func (p *Player) readErrOut(b []byte) (int, error) {
+	data, ok := <-p.errOutCh
+	if !ok {
+		return 0, io.EOF
 	}
-	return b
+
+	return copyBytes(b, data)
 }
 
-func (p *Player) run() {
-	p.fileStart = p.d.Time
-	p.start = Nanotime()
-	go func() {
-		tick := time.NewTicker(SampleTime)
-		defer tick.Stop()
-
-		lastTime := p.start
-		now := p.start
-
-		for {
-			select {
-			case <-p.done:
-				return
-			case t := <-tick.C:
-				now = t.UnixNano()
-				if atomic.LoadInt64(&p.pause)&0x01 == 0 {
-					atomic.AddInt64(&p.playTime, now-lastTime)
-				}
-				lastTime = now
-			}
-		}
-	}()
-}
-
-func (p *Player) Write(b []byte) (n int, err error) {
+func (p *Player) writeIn(b []byte) (n int, err error) {
 	n = len(b)
 
 	if len(b) != 1 {
@@ -216,21 +112,114 @@ func (p *Player) Write(b []byte) (n int, err error) {
 		return
 	}
 
-	switch b[0] {
+	switch c := b[0]; c {
+	case '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		debug().Infof("spped %d", c-'0')
+		atomic.StoreInt64(&p.speed, int64(c-'0'))
 	case 3, 4, 'q':
 		return 0, io.EOF
 	case ' ', 'p':
-		if atomic.AddInt64(&p.pause, 1)&0x01 == 0 {
-			p.ctlMsgCh <- &CtlMsg{Type: "unpause"}
-		} else {
-			p.ctlMsgCh <- &CtlMsg{Type: "pause"}
-		}
+		pause := atomic.AddInt64(&p.pause, 1)&0x01 == 0
+		debug().InfoS("player", "pause", pause)
 	}
 
 	return
 }
 
 func (p *Player) Close() error {
-	close(p.done)
-	return p.f.Close()
+	p.cancel()
+	return nil
+}
+func readFrame(decoder *gob.Decoder) (*RecData, error) {
+	data := &RecData{}
+	if err := decoder.Decode(data); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (p *Player) run() error {
+	fd, err := os.OpenFile(p.filename, os.O_RDONLY, 0)
+	if err != nil {
+		return err
+	}
+	decoder := gob.NewDecoder(fd)
+
+	frame, err := readFrame(decoder)
+	if err != nil {
+		return err
+	}
+
+	startTime := time.Unix(0, frame.Time)
+	clock := clock.NewFakeClock(startTime)
+
+	go func() {
+		tick := time.NewTicker(SampleTime)
+		defer tick.Stop()
+
+		for {
+			select {
+			case <-p.ctx.Done():
+				return
+			case <-tick.C:
+				if atomic.LoadInt64(&p.pause)&0x01 == 0 {
+					clock.Step(SampleTime * time.Duration(atomic.LoadInt64(&p.speed)))
+				}
+			}
+		}
+	}()
+
+	go func() {
+		defer fd.Close()
+		p.sendMsg(frame, clock)
+
+		for {
+			if frame, err = readFrame(decoder); err != nil {
+				if err == io.EOF && p.repeat {
+					clock.SetTime(startTime)
+					fd.Seek(0, 0)
+					decoder = gob.NewDecoder(fd)
+					continue
+				}
+				p.cancel()
+				return
+			}
+			p.sendMsg(frame, clock)
+		}
+	}()
+
+	return nil
+}
+
+func (p *Player) sendMsg(frame *RecData, clock *clock.FakeClock) {
+	wait := time.Unix(0, frame.Time).Sub(clock.Now())
+	if wait > p.maxWait {
+		clock.Step(wait - p.maxWait)
+		wait = p.maxWait
+	}
+	debug().Infof("wait %v", wait)
+	<-clock.After(wait)
+
+	msgType, data := frame.Data[0], frame.Data[1:]
+	switch msgType {
+	case MsgInput:
+		debug().InfoS("player in", "len", len(data))
+	case MsgOutput:
+		debug().InfoS("player out", "len", len(data), "content", string(data))
+		p.outCh <- data
+	case MsgErrOutput:
+		debug().InfoS("player errOut", "len", len(data))
+		p.errOutCh <- data
+	case MsgResize:
+		var size term.TerminalSize
+		err := json.Unmarshal(data, &size)
+		if err != nil {
+			debug().Infof("json unmarshal err %s", err)
+			return
+		}
+		debug().InfoS("player resize", "width", size.Width, "height", size.Height)
+	default:
+		klog.Infof("unknow type(%d) data(%s)", msgType, string(data))
+	}
 }
