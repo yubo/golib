@@ -41,7 +41,7 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 	configer.SetOptions(true, false, 5, fs)
 	namedFlagSets := NamedFlagSets()
 	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)
-	configer.Options.AddFlags(namedFlagSets.FlagSet("global"))
+	configer.GlobalOptions.AddFlags(namedFlagSets.FlagSet("global"))
 	for _, f := range namedFlagSets.FlagSets {
 		fs.AddFlagSet(f)
 	}

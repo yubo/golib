@@ -18,15 +18,15 @@ import (
 )
 
 var (
-	Options = newOptions()
+	GlobalOptions = newOptions()
 )
 
 func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
-	Options.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
+	GlobalOptions.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
 }
 
 type Configer struct {
-	*options
+	*Options
 	//*options // use setting instead of it
 
 	data     map[string]interface{}
@@ -36,7 +36,7 @@ type Configer struct {
 
 // must called after pflag parse
 func New(optsIn ...Option) (*Configer, error) {
-	opts := Options.DeepCopy()
+	opts := GlobalOptions.DeepCopy()
 	for _, opt := range optsIn {
 		opt.apply(opts)
 	}
@@ -48,7 +48,7 @@ func New(optsIn ...Option) (*Configer, error) {
 	conf := &Configer{
 		data: map[string]interface{}{},
 		//options: opts,
-		options: opts,
+		Options: opts,
 	}
 
 	if err := conf.Prepare(); err != nil {
@@ -137,7 +137,7 @@ func (p *Configer) Prepare() (err error) {
 	}
 
 	// override
-	p.mergeEnvValues(base)
+	//p.mergeEnvValues(base)
 	p.mergeFlagValues(base)
 
 	for path, b := range p.pathsOverride {
@@ -152,7 +152,7 @@ func (p *Configer) Prepare() (err error) {
 }
 
 func (p *Configer) ValueFiles() []string {
-	if p == nil || p.options == nil {
+	if p == nil || p.Options == nil {
 		return nil
 	}
 	return p.valueFiles
@@ -161,14 +161,14 @@ func (p *Configer) ValueFiles() []string {
 func (p *Configer) GetConfiger(path string) *Configer {
 	if data, ok := p.GetRaw(path).(map[string]interface{}); ok {
 		return &Configer{
-			options: p.options,
+			Options: p.Options,
 			path:    append(clonePath(p.path), parsePath(path)...),
 			data:    data,
 		}
 	}
 
 	return &Configer{
-		options: p.options,
+		Options: p.Options,
 		path:    append(clonePath(p.path), parsePath(path)...),
 		data:    map[string]interface{}{},
 	}
@@ -313,7 +313,7 @@ func (p *Configer) Read(path string, into interface{}, optsIn ...Option) error {
 		return nil
 	}
 
-	opts := &options{}
+	opts := &Options{}
 	for _, opt := range optsIn {
 		opt.apply(opts)
 	}
@@ -356,7 +356,7 @@ func (p *Configer) String() string {
 	return string(buf)
 }
 
-func (p *Configer) getEnv(key string) (string, bool) {
+func (p *Options) getEnv(key string) (string, bool) {
 	val, ok := os.LookupEnv(key)
 	return val, ok && (p.allowEmptyEnv || val != "")
 }

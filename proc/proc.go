@@ -30,7 +30,8 @@ type Process struct {
 	status        ProcessStatus
 	hookOps       [ACTION_SIZE][]*HookOps
 	namedFlagSets flag.NamedFlagSets
-	//configer      *configer.Configer
+	initDone      bool //
+
 	wg  sync.WaitGroup
 	ctx context.Context
 }
@@ -53,6 +54,10 @@ func WithContext(ctx context.Context) {
 
 func Start() error {
 	return proc.start()
+}
+
+func Init() error {
+	return proc.init()
 }
 
 func RegisterHooks(in []HookOps) error {
@@ -105,6 +110,10 @@ func (p *Process) start() error {
 // validate config each module
 // sort hook options
 func (p *Process) init() error {
+	if p.initDone {
+		return nil
+	}
+
 	ctx := p.ctx
 
 	if _, ok := AttrFrom(ctx); !ok {
@@ -132,6 +141,7 @@ func (p *Process) init() error {
 	}
 
 	p.ctx = ctx
+	p.initDone = true
 
 	return nil
 }
@@ -174,7 +184,9 @@ func (p *Process) loop() error {
 		select {
 		case s := <-sigs:
 			if sigContains(s, shutdownSignals) {
+				klog.V(1).Infof("recv shutdown signal, exiting")
 				if shutdown {
+					klog.V(1).Infof("recv shutdown signal, force exiting")
 					os.Exit(1)
 				}
 				shutdown = true

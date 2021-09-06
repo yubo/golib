@@ -75,17 +75,17 @@ func (p *Configer) mergeFlagValues(into map[string]interface{}) {
 	}
 }
 
-func (p *Configer) mergeEnvValues(into map[string]interface{}) {
-	if !p.enableEnv {
-		return
-	}
-	for _, f := range p.params {
-		if v := p.getEnvValue(f); v != nil {
-			klog.V(7).InfoS("env", "path", joinPath(append(p.path, f.configPath)...), "value", v)
-			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
-		}
-	}
-}
+//func (p *Configer) mergeEnvValues(into map[string]interface{}) {
+//	if !p.enableEnv {
+//		return
+//	}
+//	for _, f := range p.params {
+//		if v := p.getEnvValue(f); v != nil {
+//			klog.V(7).InfoS("env", "path", joinPath(append(p.path, f.configPath)...), "value", v)
+//			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
+//		}
+//	}
+//}
 
 func (p *Configer) getFlagValue(f *param) interface{} {
 	if f.flag == "" {
@@ -99,45 +99,45 @@ func (p *Configer) getFlagValue(f *param) interface{} {
 	return nil
 }
 
-func (p *Configer) getEnvValue(f *param) interface{} {
-	if f.envName == "" {
-		return nil
-	}
-
-	val, ok := p.getEnv(f.envName)
-	if !ok {
-		return nil
-	}
-
-	switch reflect.ValueOf(f.flagValue).Elem().Interface().(type) {
-	case bool:
-		return cast.ToBool(val)
-	case string:
-		return cast.ToString(val)
-	case int32, int16, int8, int:
-		return cast.ToInt(val)
-	case uint:
-		return cast.ToUint(val)
-	case uint32:
-		return cast.ToUint32(val)
-	case uint64:
-		return cast.ToUint64(val)
-	case int64:
-		return cast.ToInt64(val)
-	case float64, float32:
-		return cast.ToFloat64(val)
-	//case time.Time:
-	//	return cast.ToTime(val)
-	case time.Duration:
-		return cast.ToDuration(val)
-	case []string:
-		return cast.ToStringSlice(val)
-	case []int:
-		return cast.ToIntSlice(val)
-	default:
-		panic(fmt.Sprintf("unsupported type %s", reflect.TypeOf(f.flagValue).Name()))
-	}
-}
+//func (p *Configer) getEnvValue(f *param) interface{} {
+//	if f.envName == "" {
+//		return nil
+//	}
+//
+//	val, ok := GetEnv(f.envName)
+//	if !ok {
+//		return nil
+//	}
+//
+//	switch reflect.ValueOf(f.flagValue).Elem().Interface().(type) {
+//	case bool:
+//		return cast.ToBool(val)
+//	case string:
+//		return cast.ToString(val)
+//	case int32, int16, int8, int:
+//		return cast.ToInt(val)
+//	case uint:
+//		return cast.ToUint(val)
+//	case uint32:
+//		return cast.ToUint32(val)
+//	case uint64:
+//		return cast.ToUint64(val)
+//	case int64:
+//		return cast.ToInt64(val)
+//	case float64, float32:
+//		return cast.ToFloat64(val)
+//	//case time.Time:
+//	//	return cast.ToTime(val)
+//	case time.Duration:
+//		return cast.ToDuration(val)
+//	case []string:
+//		return cast.ToStringSlice(val)
+//	case []int:
+//		return cast.ToIntSlice(val)
+//	default:
+//		panic(fmt.Sprintf("unsupported type %s", reflect.TypeOf(f.flagValue).Name()))
+//	}
+//}
 
 // addConfigs: add flags and env from sample's tags
 func AddConfigs(fs *pflag.FlagSet, path string, sample interface{}) error {
@@ -148,10 +148,10 @@ func AddConfigs(fs *pflag.FlagSet, path string, sample interface{}) error {
 		return fmt.Errorf("Addflag: sample must be a struct, got %v/%v", rv.Kind(), rt)
 	}
 
-	return Options.addConfigs(parsePath(path), fs, rt)
+	return GlobalOptions.addConfigs(parsePath(path), fs, rt)
 }
 
-func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
+func (p *Options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
 	if len(path) > p.maxDepth {
 		return fmt.Errorf("path.depth is larger than the maximum allowed depth of %d", p.maxDepth)
 	}
@@ -173,7 +173,7 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 			continue
 		}
 
-		opt := GetTagOpts(sf)
+		opt := GetTagOpts(sf, p)
 		if opt.Skip {
 			continue
 		}
@@ -200,36 +200,37 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		}
 
 		ps := strings.Join(append(path, opt.Json), ".")
+		def := opt.Default
 
 		switch t := reflect.New(ft).Elem().Interface(); t.(type) {
 		case bool:
-			addConfigField(fs, ps, opt, fs.Bool, fs.BoolP, cast.ToBool(opt.Default))
+			addConfigField(fs, ps, opt, fs.Bool, fs.BoolP, cast.ToBool(def))
 		case string:
-			addConfigField(fs, ps, opt, fs.String, fs.StringP, cast.ToString(opt.Default))
+			addConfigField(fs, ps, opt, fs.String, fs.StringP, cast.ToString(def))
 		case int32, int16, int8, int:
-			addConfigField(fs, ps, opt, fs.Int, fs.IntP, cast.ToInt(opt.Default))
+			addConfigField(fs, ps, opt, fs.Int, fs.IntP, cast.ToInt(def))
 		case int64:
-			addConfigField(fs, ps, opt, fs.Int64, fs.Int64P, cast.ToInt64(opt.Default))
+			addConfigField(fs, ps, opt, fs.Int64, fs.Int64P, cast.ToInt64(def))
 		case uint:
-			addConfigField(fs, ps, opt, fs.Uint, fs.UintP, cast.ToUint(opt.Default))
+			addConfigField(fs, ps, opt, fs.Uint, fs.UintP, cast.ToUint(def))
 		case uint8:
-			addConfigField(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint8(opt.Default))
+			addConfigField(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint8(def))
 		case uint16:
-			addConfigField(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint16(opt.Default))
+			addConfigField(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint16(def))
 		case uint32:
-			addConfigField(fs, ps, opt, fs.Uint32, fs.Uint32P, cast.ToUint32(opt.Default))
+			addConfigField(fs, ps, opt, fs.Uint32, fs.Uint32P, cast.ToUint32(def))
 		case uint64:
-			addConfigField(fs, ps, opt, fs.Uint64, fs.Uint64P, cast.ToUint64(opt.Default))
+			addConfigField(fs, ps, opt, fs.Uint64, fs.Uint64P, cast.ToUint64(def))
 		case float32, float64:
-			addConfigField(fs, ps, opt, fs.Float64, fs.Float64P, cast.ToFloat64(opt.Default))
+			addConfigField(fs, ps, opt, fs.Float64, fs.Float64P, cast.ToFloat64(def))
 		case time.Duration:
-			addConfigField(fs, ps, opt, fs.Duration, fs.DurationP, cast.ToDuration(opt.Default))
+			addConfigField(fs, ps, opt, fs.Duration, fs.DurationP, cast.ToDuration(def))
 		case []string:
-			addConfigField(fs, ps, opt, fs.StringArray, fs.StringArrayP, cast.ToStringSlice(opt.Default))
+			addConfigField(fs, ps, opt, fs.StringArray, fs.StringArrayP, cast.ToStringSlice(def))
 		case []int:
-			addConfigField(fs, ps, opt, fs.IntSlice, fs.IntSliceP, cast.ToIntSlice(opt.Default))
+			addConfigField(fs, ps, opt, fs.IntSlice, fs.IntSliceP, cast.ToIntSlice(def))
 		case map[string]string:
-			addConfigField(fs, ps, opt, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(opt.Default))
+			addConfigField(fs, ps, opt, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(def))
 		default:
 			klog.V(6).InfoS("add config unsupported", "type", ft.String(), "path", joinPath(path...), "kind", ft.Kind())
 		}
@@ -245,7 +246,7 @@ type TagOpts struct {
 	Env         string   // env:"{env}"
 	Description string   // description:"{description}"
 	Skip        bool     // if json:"-"
-	Arg         string   // arg:"{arg}"
+	Arg         string   // arg:"{arg}"  args[0] arg1... -- arg2...
 }
 
 func (p TagOpts) String() string {
@@ -253,34 +254,48 @@ func (p TagOpts) String() string {
 		p.Json, p.Flag, p.Env, p.Description)
 }
 
-func GetTagOpts(sf reflect.StructField) (opt *TagOpts) {
-	opt = &TagOpts{Name: sf.Name}
+func GetTagOpts(sf reflect.StructField, in ...*Options) (tag *TagOpts) {
+	options := GlobalOptions
+	if len(in) > 0 {
+		options = in[0]
+	}
+
+	tag = &TagOpts{Name: sf.Name}
 	if sf.Anonymous {
 		return
 	}
 
 	json, _ := parseTag(sf.Tag.Get("json"))
 	if json == "-" {
-		opt.Skip = true
+		tag.Skip = true
 		return
 	}
 
 	if json != "" {
-		opt.Json = json
+		tag.Json = json
 	}
 
 	if flag := strings.Split(strings.TrimSpace(sf.Tag.Get("flag")), ","); len(flag) > 0 && flag[0] != "" && flag[0] != "-" {
-		opt.Flag = flag
+		tag.Flag = flag
 	}
 
-	opt.Default = sf.Tag.Get("default")
-	opt.Description = sf.Tag.Get("description")
-	opt.Arg = sf.Tag.Get("arg")
-	opt.Env = sf.Tag.Get("env")
-	if opt.Env != "" {
-		opt.Description = fmt.Sprintf("%s (env %s)", opt.Description, opt.Env)
+	tag.Default = sf.Tag.Get("default")
+	tag.Description = sf.Tag.Get("description")
+	tag.Arg = sf.Tag.Get("arg")
+	tag.Env = strings.Replace(strings.ToUpper(sf.Tag.Get("env")), "-", "_", -1)
+
+	if !options.enableEnv || tag.Env == "" {
+		return
 	}
 
+	tag.Description = fmt.Sprintf("%s (env %s)", tag.Description, tag.Env)
+
+	v, ok := options.getEnv(tag.Env)
+	if !ok {
+		return
+	}
+
+	tag.Default = v
 	return
 }
 
@@ -355,5 +370,5 @@ func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn,
 		panic("invalid flag value")
 	}
 
-	Options.params = append(Options.params, v)
+	GlobalOptions.params = append(GlobalOptions.params, v)
 }

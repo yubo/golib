@@ -8,7 +8,6 @@ require (
 	github.com/creack/pty v1.1.11
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96
-	github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153
 	github.com/emicklei/go-restful v2.15.0+incompatible
 	github.com/evanphx/json-patch v4.9.0+incompatible
 	github.com/go-ldap/ldap v3.0.3+incompatible
@@ -58,5 +57,3 @@ require (
 	k8s.io/klog/v2 v2.9.0
 	sigs.k8s.io/yaml v1.2.0
 )
-
-replace github.com/elazarl/goproxy => github.com/elazarl/goproxy v0.0.0-20180725130230-947c36da3153 // 947c36da3153 is the SHA for git tag v1.11
