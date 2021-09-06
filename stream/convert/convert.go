@@ -11,6 +11,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"time"
 
 	"github.com/yubo/golib/stream"
 	"github.com/yubo/golib/util/term"
@@ -97,8 +98,8 @@ func Save(asciicast *Asciicast, path string) error {
 	return nil
 }
 
-func Convert(src, dst string, wait int64) error {
-	var buf stream.RecData
+func Convert(src, dst string, wait time.Duration) error {
+	var frame stream.RecData
 
 	fp, err := os.OpenFile(src, os.O_RDONLY, 0)
 	if err != nil {
@@ -107,34 +108,37 @@ func Convert(src, dst string, wait int64) error {
 	defer fp.Close()
 
 	dec := gob.NewDecoder(fp)
-	s := &Stream{maxWait: wait * 1000000000}
+	s := &Stream{maxWait: int64(wait)}
 
 	asciicast := &Asciicast{Version: 1, Env: &Env{}}
-	if err = dec.Decode(&buf); err != nil {
+	if err = dec.Decode(&frame); err != nil {
 		if err == io.EOF {
 			return errors.New("empty file")
 		}
 	}
 
 	for {
-		switch buf.Data[0] {
+		msgType, data := frame.Data[0], frame.Data[1:]
+		switch msgType {
 		case stream.MsgResize:
-			var args term.TerminalSize
-			err = json.Unmarshal(buf.Data[1:], &args)
+			var size term.TerminalSize
+			err = json.Unmarshal(data, &size)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Malformed remote command")
 			} else {
-				asciicast.Height = int(args.Height)
-				asciicast.Width = int(args.Width)
+				if size.Height > 0 && size.Width > 0 {
+					asciicast.Height = int(size.Height)
+					asciicast.Width = int(size.Width)
+				}
 			}
-		case stream.MsgOutput:
-			s.Write(buf.Time, buf.Data[1:])
+		case stream.MsgOutput, stream.MsgErrOutput:
+			s.Write(frame.Time, data)
+		case stream.MsgInput:
 		default:
-			fmt.Fprintf(os.Stderr, "unknow type(%d) context(%s)",
-				buf.Data[0], string(buf.Data[1:]))
+			fmt.Fprintf(os.Stderr, "unknow type(%d) context(%s)", msgType, string(data))
 		}
 
-		if err = dec.Decode(&buf); err != nil {
+		if err = dec.Decode(&frame); err != nil {
 			if err == io.EOF {
 				break
 			}

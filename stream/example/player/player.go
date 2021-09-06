@@ -10,6 +10,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// go run ./player.go ../demo.rec
+
 /*
 nativeTty -> player
 */
@@ -23,8 +25,13 @@ func do() error {
 	}
 	defer nativeTty.Close()
 
+	file := "/tmp/test.rec"
+	if len(os.Args) > 1 {
+		file = os.Args[1]
+	}
+
 	// player
-	player, err := stream.NewPlayer("/tmp/test.rec", 1, true, time.Second)
+	player, err := stream.NewPlayer(file, 1, true, time.Second)
 	klog.Infof("player %v err %v", player, err)
 	if err != nil {
 		return err
