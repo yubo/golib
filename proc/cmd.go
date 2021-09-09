@@ -31,7 +31,7 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 				fs := cmd.Flags()
 				flag.PrintFlags(fs)
 			}
-			return proc.start()
+			return proc.Start()
 		},
 	}
 
@@ -58,7 +58,7 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		flag.PrintSections(cmd.OutOrStdout(), *namedFlagSets, cols)
 	})
 
-	proc.ctx = ctx
+	proc.ctx, proc.cancel = context.WithCancel(ctx)
 
 	return cmd
 }

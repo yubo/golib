@@ -32,8 +32,10 @@ type Process struct {
 	namedFlagSets flag.NamedFlagSets
 	initDone      bool //
 
-	wg  sync.WaitGroup
-	ctx context.Context
+	wg     sync.WaitGroup
+	cancel context.CancelFunc
+	ctx    context.Context
+	err    error
 }
 
 func newProcess() *Process {
@@ -42,22 +44,29 @@ func newProcess() *Process {
 		hookOps[i] = []*HookOps{}
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	return &Process{
 		hookOps: hookOps,
-		ctx:     context.Background(),
+		ctx:     ctx,
+		cancel:  cancel,
 	}
 }
 
 func WithContext(ctx context.Context) {
-	proc.ctx = ctx
+	proc.ctx, proc.cancel = context.WithCancel(ctx)
 }
 
 func Start() error {
-	return proc.start()
+	return proc.Start()
 }
 
 func Init() error {
 	return proc.init()
+}
+
+func Stop() error {
+	return proc.stop()
 }
 
 func RegisterHooks(in []HookOps) error {
@@ -92,12 +101,12 @@ func hookNumName(n ProcessAction) string {
 	}
 }
 
-func (p *Process) start() error {
+func (p *Process) Start() error {
 	if err := p.init(); err != nil {
 		return err
 	}
 
-	if err := p.procStart(); err != nil {
+	if err := p.start(); err != nil {
 		return err
 	}
 
@@ -115,9 +124,17 @@ func (p *Process) init() error {
 	}
 
 	ctx := p.ctx
+	go func() {
+		c := ctx
+		<-c.Done()
+	}()
 
 	if _, ok := AttrFrom(ctx); !ok {
 		ctx = WithAttr(ctx, make(map[interface{}]interface{}))
+		go func() {
+			c := ctx
+			<-c.Done()
+		}()
 	}
 
 	if _, ok := ConfigerFrom(ctx); !ok {
@@ -127,7 +144,6 @@ func (p *Process) init() error {
 			return err
 		}
 		WithConfiger(ctx, configer)
-
 	}
 	if _, ok := WgFrom(ctx); !ok {
 		WithWg(ctx, &p.wg)
@@ -147,7 +163,7 @@ func (p *Process) init() error {
 }
 
 // only be called once
-func (p *Process) procStart() error {
+func (p *Process) start() error {
 	for _, ops := range p.hookOps[ACTION_START] {
 		logOps(ops)
 
@@ -178,10 +194,11 @@ func (p *Process) loop() error {
 	}
 
 	shutdown := false
-	shutdownResult := make(chan error, 1)
 
 	for {
 		select {
+		case <-p.ctx.Done():
+			return p.err
 		case s := <-sigs:
 			if sigContains(s, shutdownSignals) {
 				klog.V(1).Infof("recv shutdown signal, exiting")
@@ -191,21 +208,25 @@ func (p *Process) loop() error {
 				}
 				shutdown = true
 				go func() {
-					shutdownResult <- p.procStop()
+					p.stop()
 				}()
 			} else if sigContains(s, reloadSignals) {
-				if err := p.procReload(); err != nil {
+				if err := p.reload(); err != nil {
 					return err
 				}
 			}
-		case err := <-shutdownResult:
-			return err
 		}
 	}
 }
 
 // reverse order
-func (p *Process) procStop() (err error) {
+func (p *Process) stop() error {
+	select {
+	case <-p.ctx.Done():
+		return nil
+	default:
+	}
+
 	wgCh := make(chan struct{})
 
 	go func() {
@@ -219,7 +240,9 @@ func (p *Process) procStop() (err error) {
 
 		logOps(ops)
 		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
-			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
+			p.err = fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
+
+			return p.err
 		}
 	}
 	p.status.Set(STATUS_EXIT)
@@ -230,19 +253,22 @@ func (p *Process) procStop() (err error) {
 	case <-wgCh:
 		klog.Info("server closed")
 	case <-time.After(closeTimeout):
-		err = fmt.Errorf("server closed after timeout %ds", closeTimeout/time.Second)
+		p.err = fmt.Errorf("server closed after timeout %ds", closeTimeout/time.Second)
 
 	}
 
-	return err
+	p.cancel()
+
+	return p.err
 }
 
-func (p *Process) procReload() (err error) {
+func (p *Process) reload() (err error) {
 	p.status.Set(STATUS_RELOADING)
 
 	opts, _ := ConfigOptsFrom(p.ctx)
 	configer, err := configer.New(opts...)
 	if err != nil {
+		p.err = err
 		return err
 	}
 
@@ -251,9 +277,12 @@ func (p *Process) procReload() (err error) {
 	for _, ops := range p.hookOps[ACTION_RELOAD] {
 		logOps(ops)
 		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
+			p.err = err
 			return err
 		}
 	}
 	p.status.Set(STATUS_RUNNING)
+
+	p.err = nil
 	return nil
 }
