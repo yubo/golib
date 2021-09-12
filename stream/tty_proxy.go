@@ -9,61 +9,94 @@ import (
 	"sync"
 	"unsafe"
 
+	mobyterm "github.com/moby/term"
+	"github.com/pkg/errors"
 	"github.com/yubo/golib/util/list"
 	"github.com/yubo/golib/util/term"
-	"k8s.io/klog/v2"
 )
 
 type ProxyTty struct {
 	sync.RWMutex
-	ctx       context.Context
-	cancel    context.CancelFunc
 	ttys      *list.ListHead
 	recorders *list.ListHead
-	in        chan *proxyMsg
-	inErr     chan error
-	buffSize  int
+	stdin     io.ReadCloser
+	stdinPipe io.WriteCloser
 	sizeCh    chan *term.TerminalSize
-	size      term.TerminalSize
+	size      *term.TerminalSize
+	err       error
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
-func NewProxyTty(bsize int) *ProxyTty {
-	ctx, cancel := context.WithCancel(context.Background())
-	tty := &ProxyTty{
+var _ Tty = &ProxyTty{}
+
+func NewProxyTty(parent context.Context, bsize int) *ProxyTty {
+	ctx, cancel := context.WithCancel(parent)
+	p := &ProxyTty{
 		ctx:       ctx,
 		cancel:    cancel,
-		in:        make(chan *proxyMsg, 1),
-		inErr:     make(chan error, 1),
-		buffSize:  bsize,
 		ttys:      &list.ListHead{},
 		recorders: &list.ListHead{},
 		sizeCh:    make(chan *term.TerminalSize),
+		size:      &term.TerminalSize{},
 	}
 
-	tty.ttys.Init()
-	tty.recorders.Init()
+	p.stdin, p.stdinPipe = io.Pipe()
 
-	return tty
+	p.ttys.Init()
+	p.recorders.Init()
+
+	return p
 }
 
-func (p *ProxyTty) Bind(pty Pty) <-chan error {
-	return BindPty(p, pty)
+func (p *ProxyTty) CopyToPty(pty Pty) <-chan error {
+	return CopyToPty(p, pty)
 }
 
 func (t *ProxyTty) GetSize() *term.TerminalSize {
-	return &t.size
+	return &term.TerminalSize{
+		Height: t.size.Height,
+		Width:  t.size.Width,
+	}
 }
 
 func (p *ProxyTty) Close() error {
+	p.Lock()
+	defer p.Unlock()
+
+	// close ttys
+	h := p.ttys
+	for p1 := h.Next; p1 != h; p1 = p1.Next {
+		list2ttyEntry(p1).tty.Close()
+	}
+
+	// close recorders
+	h = p.recorders
+	for p1 := h.Next; p1 != h; p1 = p1.Next {
+		list2recorderEntry(p1).recorder.Close()
+	}
+
+	p.stdin.Close()
+
 	p.cancel()
 	return nil
 }
 
+func (p *ProxyTty) Err() error {
+	p.RLock()
+	defer p.RUnlock()
+	return p.err
+}
+
+func (p *ProxyTty) Done() <-chan struct{} {
+	return p.ctx.Done()
+}
+
 func (p *ProxyTty) Streams() TtyStreams {
 	return TtyStreams{
-		In:     ReadFunc(p.readInChan),
-		Out:    WriteFunc(p.writeOut),
-		ErrOut: WriteFunc(p.writeErrOut),
+		Stdin:  p.stdin,
+		Stdout: WriteFunc(p.writeOut),
+		Stderr: WriteFunc(p.writeErrOut),
 	}
 }
 
@@ -82,25 +115,56 @@ func (p *ProxyTty) MonitorSize(initialSizes ...*term.TerminalSize) term.Terminal
 }
 
 func (p *ProxyTty) Next() *term.TerminalSize {
-	size := <-p.sizeCh
+	select {
+	case <-p.ctx.Done():
+		return nil
+	case <-p.sizeCh:
+	}
 
 	p.RLock()
 	defer p.RUnlock()
 
+	// find minSize by tty.GetSize()
+	size := &term.TerminalSize{}
+	h := p.ttys
+	for p1 := h.Next; p1 != h; p1 = p1.Next {
+		size = minSize(size, list2ttyEntry(p1).tty.GetSize())
+	}
+
+	p.size = size
+
+	if size.Height == 0 || size.Width == 0 {
+		return size
+	}
+
 	// send to recorder
-	h := p.recorders
+	h = p.recorders
 	for p1 := h.Next; p1 != h; p1 = p1.Next {
 		list2recorderEntry(p1).recorder.Resize(size)
 	}
 	return size
 }
 
+// s1 !== nil
+func minSize(s1, s2 *term.TerminalSize) *term.TerminalSize {
+	if s2 == nil || s2.Height == 0 || s2.Width == 0 {
+		return s1
+	}
+
+	if (s1.Height == 0 || s1.Width == 0) || (s2.Height < s1.Height && s2.Width < s1.Width) {
+		return s2
+	}
+
+	return s1
+}
+
 type ttyEntry struct {
-	list   list.ListHead
-	in     io.Reader
-	out    io.Writer
-	errOut io.Writer
-	tty    Tty
+	list    list.ListHead
+	stdin   io.Reader
+	stdout  io.Writer
+	stderr  io.Writer
+	tty     Tty
+	options *Options
 }
 
 type recorderEntry struct {
@@ -108,18 +172,33 @@ type recorderEntry struct {
 	in       io.Writer
 	out      io.Writer
 	errOut   io.Writer
-	recorder *Recorder
+	recorder Recorder
 }
 
-func (p *ProxyTty) AddRecorder(r *Recorder) error {
+type Options struct {
+	detach     bool
+	detachKeys []byte
+	err        error
+}
+
+type Opt func(*Options)
+
+func WithDetach(detach bool, detachKeys string) Opt {
+	return func(o *Options) {
+		o.detach = detach
+		o.detachKeys, o.err = mobyterm.ToBytes(detachKeys)
+	}
+}
+
+func (p *ProxyTty) AddRecorder(r Recorder) error {
 	p.Lock()
 	defer p.Unlock()
 
 	s := r.Streams()
 	entry := &recorderEntry{
-		in:       s.In,
-		out:      s.Out,
-		errOut:   s.ErrOut,
+		in:       s.Stdin,
+		out:      s.Stdout,
+		errOut:   s.Stderr,
 		recorder: r,
 	}
 	p.recorders.AddTail(&entry.list)
@@ -127,16 +206,27 @@ func (p *ProxyTty) AddRecorder(r *Recorder) error {
 	return nil
 }
 
-func (p *ProxyTty) AddTty(tty Tty) error {
+// tty will be closed by proxyTty, when proxyTty at closed
+func (p *ProxyTty) AddTty(tty Tty, opts ...Opt) error {
 	p.Lock()
 	defer p.Unlock()
 
+	options := &Options{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	if options.err != nil {
+		return options.err
+	}
+
 	s := tty.Streams()
 	entry := &ttyEntry{
-		tty:    tty,
-		in:     s.In,
-		out:    s.Out,
-		errOut: s.ErrOut,
+		tty:     tty,
+		stdin:   s.Stdin,
+		stdout:  s.Stdout,
+		stderr:  s.Stderr,
+		options: options,
 	}
 
 	return p.addTtyEntry(entry)
@@ -147,31 +237,26 @@ func (p *ProxyTty) addTtyEntry(entry *ttyEntry) error {
 
 	// start stdin stream
 	go func() {
-		buff := make([]byte, p.buffSize)
-		reader := entry.in
+		reader := entry.stdin
 		if reader == nil {
 			return
 		}
-		for {
-			select {
-			case <-p.ctx.Done():
-				return
-			default:
-			}
+		debug().Infof("attach: stdin: begin")
+		defer debug().Infof("attach: stdin: end")
 
-			n, err := reader.Read(buff)
-			debug().InfoS("proxy.tty.in.read", "len", n, "err", err)
-			if err != nil {
-				klog.Errorf("read from tty.in err %s", err)
-				return
-			}
-			_, err = p.writeInChan(buff[:n])
-			debug().InfoS("proxy.in.write", "len", n, "err", err)
-			if err != nil {
-				klog.Errorf("write to tty.in err %s", err)
-				return
-			}
+		if entry.tty.IsTerminal() {
+			reader = NewEscapeProxy(reader, entry.options.detachKeys)
+		}
 
+		reader = p.recorderStdinProxy(reader)
+
+		_, err := io.Copy(p.stdinPipe, reader)
+
+		if err != nil {
+			debug().Infof("error on attach stdin")
+			p.Lock()
+			p.err = errors.Wrap(err, "error on attach stdin")
+			p.Unlock()
 		}
 	}()
 
@@ -180,13 +265,10 @@ func (p *ProxyTty) addTtyEntry(entry *ttyEntry) error {
 		sizeQueue := entry.tty.MonitorSize()
 		go func() {
 			p.sizeCh <- entry.tty.GetSize()
+			debug().Infof("attach: sizeQueue: begin")
+			defer debug().Infof("attach: sizeQueue: end")
 
 			for {
-				select {
-				case <-p.ctx.Done():
-					return
-				default:
-				}
 				size := sizeQueue.Next()
 				if size == nil {
 					return
@@ -197,61 +279,6 @@ func (p *ProxyTty) addTtyEntry(entry *ttyEntry) error {
 	}
 
 	return nil
-}
-
-type proxyMsg struct {
-	data []byte
-	done chan error
-}
-
-func (p *ProxyTty) readInChan(b []byte) (int, error) {
-	debug().InfoS("entering proxy.in.read")
-	msg, ok := <-p.in
-	if !ok {
-		return 0, io.EOF
-	}
-
-	_, err := copyBytes(b, msg.data)
-	if err != nil {
-		msg.done <- err
-		return 0, err
-	}
-
-	p.Lock()
-	defer p.Unlock()
-
-	h := p.recorders
-	for p1, p2 := h.Next, h.Next.Next; p1 != h; p1, p2 = p2, p2.Next {
-		n, err := list2recorderEntry(p1).in.Write(msg.data)
-		if err != nil {
-			debug().Infof("write recorder.in err %v, remove", err)
-			p1.Del()
-			continue
-		}
-		if n != len(msg.data) {
-			debug().Infof("write recorder.in err %v, remove", io.ErrShortWrite)
-			p1.Del()
-			continue
-		}
-	}
-
-	msg.done <- nil
-
-	debug().InfoS("leaving proxy.in.read", "len", len(msg.data))
-	return len(msg.data), nil
-}
-
-func (p *ProxyTty) writeInChan(b []byte) (int, error) {
-	msg := &proxyMsg{data: b, done: p.inErr}
-	select {
-	case <-p.ctx.Done():
-		return 0, io.EOF
-	case p.in <- msg:
-		if err := <-msg.done; err != nil {
-			return 0, err
-		}
-		return len(b), nil
-	}
 }
 
 func list2ttyEntry(list *list.ListHead) *ttyEntry {
@@ -275,40 +302,12 @@ func (p *ProxyTty) writeOut(b []byte) (int, error) {
 
 	h := p.ttys
 	for p1, p2 := h.Next, h.Next.Next; p1 != h; p1, p2 = p2, p2.Next {
-		out := list2ttyEntry(p1).out
-		if out == nil {
-			continue
-		}
-		n, err := out.Write(b)
-		if err != nil {
-			debug().Infof("write tty.out err %v, remove", err)
-			p1.Del()
-			continue
-		}
-		if n != len(b) {
-			debug().Infof("write tty.out err %v, remove", io.ErrShortWrite)
-			p1.Del()
-			continue
-		}
+		entryWrite("tty.out", p1, list2ttyEntry(p1).stdout, b)
 	}
 
 	h = p.recorders
 	for p1, p2 := h.Next, h.Next.Next; p1 != h; p1, p2 = p2, p2.Next {
-		out := list2recorderEntry(p1).out
-		if out == nil {
-			continue
-		}
-		n, err := out.Write(b)
-		if err != nil {
-			debug().Infof("write recorder.out err %v, remove", err)
-			p1.Del()
-			continue
-		}
-		if n != len(b) {
-			debug().Infof("write recorder.out err %v, remove", io.ErrShortWrite)
-			p1.Del()
-			continue
-		}
+		entryWrite("recorder.out", p1, list2recorderEntry(p1).out, b)
 	}
 
 	debug().InfoS("leaving proxy.out.write", "len", len(b), "data", string(b))
@@ -328,43 +327,57 @@ func (p *ProxyTty) writeErrOut(b []byte) (int, error) {
 
 	h := p.ttys
 	for p1, p2 := h.Next, h.Next.Next; p1 != h; p1, p2 = p2, p2.Next {
-		errOut := list2ttyEntry(p1).errOut
-		if errOut == nil {
-			continue
-		}
-		n, err := errOut.Write(b)
-		if err != nil {
-			debug().Infof("write tty.errout err %v, remove", err)
-			p1.Del()
-			continue
-		}
-		if n != len(b) {
-			debug().Infof("write tty.errout err %v, remove", err)
-			p1.Del()
-			continue
-		}
+		entryWrite("tty.errout", p1, list2ttyEntry(p1).stderr, b)
 	}
 
 	h = p.recorders
 	for p1, p2 := h.Next, h.Next.Next; p1 != h; p1, p2 = p2, p2.Next {
-		errOut := list2recorderEntry(p1).errOut
-		if errOut == nil {
-			continue
-		}
-		n, err := errOut.Write(b)
-		if err != nil {
-			debug().Infof("write recorder.errout err %v, remove", err)
-			p1.Del()
-			continue
-		}
-		if n != len(b) {
-			debug().Infof("write recorder.errout err %v, remove", err)
-			p1.Del()
-			continue
-		}
+		entryWrite("recorder.errout", p1, list2recorderEntry(p1).errOut, b)
 	}
 
 	debug().InfoS("leaving proxy.ErrOut.Write", "len", len(b))
 
 	return len(b), nil
+}
+
+func entryWrite(msg string, list *list.ListHead, writer io.Writer, b []byte) {
+	if writer == nil {
+		return
+	}
+	_, err := writer.Write(b)
+	if err != nil {
+		debug().Infof("write %s err %v, remove", msg, err)
+		list.Del()
+		return
+	}
+}
+
+type recorderStdinProxy struct {
+	r io.Reader
+	p *ProxyTty
+}
+
+func (p *ProxyTty) recorderStdinProxy(reader io.Reader) io.Reader {
+	return &recorderStdinProxy{
+		p: p,
+		r: reader,
+	}
+
+}
+
+func (r *recorderStdinProxy) Read(buf []byte) (n int, err error) {
+	n, err = r.r.Read(buf)
+	if err != nil {
+		return n, err
+	}
+
+	r.p.Lock()
+	defer r.p.Unlock()
+
+	h := r.p.recorders
+	for p1, p2 := h.Next, h.Next.Next; p1 != h; p1, p2 = p2, p2.Next {
+		entryWrite("recorder.in", p1, list2recorderEntry(p1).in, buf[:n])
+	}
+
+	return n, err
 }

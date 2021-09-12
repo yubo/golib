@@ -30,9 +30,9 @@ func NewExec(cmd *exec.Cmd) (*Exec, error) {
 
 func (p *Exec) PtyStreams() PtyStreams {
 	return PtyStreams{
-		In:     p.pty,
-		Out:    p.pty,
-		ErrOut: p.pty,
+		Stdin:  p.pty,
+		Stdout: p.pty,
+		Stderr: p.pty,
 	}
 }
 

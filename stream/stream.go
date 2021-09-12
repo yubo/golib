@@ -10,6 +10,7 @@ const (
 	MsgResize                      // Notify that the browser size has been changed
 	MsgPing
 	MsgCtl
+	MsgInfo
 	MsgAction // custom Action
 )
 

@@ -9,54 +9,40 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/moby/term"
 	"k8s.io/klog/v2"
 )
 
-func wrapErr(err error) error {
-	if err == nil {
-		return nil
-	}
+var defaultEscapeSequence = []byte{16, 17} // ctrl-p, ctrl-q
 
-	if err == io.EOF {
-		klog.V(5).Infof("error %s", err)
-		return nil
-	}
-
-	if strings.Contains(err.Error(), "input/output error") {
-		klog.V(5).Infof("error %s -> nil", err)
-		return nil
-	}
-
-	return err
-}
-
-func BindPtyStreams(tty TtyStreams, pty PtyStreams) chan error {
+func CopyPtyStreams(tty TtyStreams, pty PtyStreams) chan error {
 	ch := make(chan error)
 	go func() {
-		if tty.In != nil && pty.In != nil {
-			_, err := io.Copy(pty.In, tty.In)
-			ch <- wrapErr(err)
+		if tty.Stdin != nil && pty.Stdin != nil {
+			_, err := io.Copy(pty.Stdin, tty.Stdin)
+			ch <- err
 		}
 	}()
 	go func() {
-		if tty.Out != nil && pty.Out != nil {
-			_, err := io.Copy(tty.Out, pty.Out)
-			ch <- wrapErr(err)
+		if tty.Stdout != nil && pty.Stdout != nil {
+			_, err := io.Copy(tty.Stdout, pty.Stdout)
+			ch <- err
 		}
 	}()
 	go func() {
-		if tty.ErrOut != nil && pty.ErrOut != nil {
-			_, err := io.Copy(tty.ErrOut, pty.ErrOut)
-			ch <- wrapErr(err)
+		if tty.Stderr != nil && pty.Stderr != nil {
+			_, err := io.Copy(tty.Stderr, pty.Stderr)
+			ch <- err
 		}
 	}()
 
 	return ch
 }
 
-func BindPty(tty Tty, pty Pty) <-chan error {
-	ch := BindPtyStreams(tty.Streams(), pty.Streams())
+func CopyToPty(tty Tty, pty Pty) <-chan error {
+	ch := CopyPtyStreams(tty.Streams(), pty.Streams())
 
+	klog.Infof("bind tty %v pty %v", tty.IsTerminal(), pty.IsTerminal())
 	if tty.IsTerminal() && pty.IsTerminal() {
 		if sizeQueue := tty.MonitorSize(tty.GetSize()); sizeQueue != nil {
 			go func() {
@@ -112,4 +98,22 @@ func copyBytes(dst, src []byte) (int, error) {
 
 func debug() klog.Verbose {
 	return klog.V(debugLevel)
+}
+
+func copyEscapable(dst io.Writer, src io.Reader, keys []byte) (written int64, err error) {
+	if len(keys) == 0 {
+		keys = defaultEscapeSequence
+	}
+
+	pr := term.NewEscapeProxy(src, keys)
+
+	return io.Copy(dst, pr)
+}
+
+func NewEscapeProxy(reader io.Reader, keys []byte) io.Reader {
+	if len(keys) == 0 {
+		keys = defaultEscapeSequence
+	}
+
+	return term.NewEscapeProxy(reader, keys)
 }

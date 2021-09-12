@@ -4,103 +4,133 @@
 package stream
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"sync"
 
 	mobyterm "github.com/moby/term"
 	"github.com/yubo/golib/util/term"
 )
 
 type NativeTty struct {
-	TtyStreams
-	Stdin bool
-	TTY   bool
-
+	sync.RWMutex
+	in        io.Reader
+	out       io.Writer
+	errOut    io.Writer
+	stdin     bool
+	isTty     bool
+	tty       *term.TTY
+	sizeQueue term.TerminalSizeQueue
+	err       error
+	ctx       context.Context
+	cancel    context.CancelFunc
+	streams   TtyStreams
 	// for testing
 	overrideStreams func() (io.ReadCloser, io.Writer, io.Writer)
 	isTerminalIn    func(t *term.TTY) bool
-
-	tty       *term.TTY
-	sizeQueue term.TerminalSizeQueue
 }
+
+var _ Tty = &NativeTty{}
 
 func NewNativeTty(in io.Reader, out, errOut io.Writer) (*NativeTty, error) {
-	t := &NativeTty{
-		TtyStreams: TtyStreams{
-			In:     in,
-			Out:    out,
-			ErrOut: errOut,
-		},
-		Stdin: true,
-		TTY:   true,
+	p := &NativeTty{
+		in:     in,
+		out:    out,
+		errOut: errOut,
+		stdin:  true,
+		isTty:  true,
+	}
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+
+	p.tty = p.SetupTTY()
+
+	if p.tty.Raw {
+		// unset p.Err if it was previously set because both stdout and stderr go over p.Out when tty is
+		// true
+		p.errOut = nil
 	}
 
-	t.tty = t.SetupTTY()
+	if p.in != nil {
+		p.streams.Stdin = ReadFunc(p.io(p.in.Read))
+	}
+	if p.out != nil {
+		p.streams.Stdout = WriteFunc(p.io(p.out.Write))
+	}
+	if p.errOut != nil {
+		p.streams.Stderr = WriteFunc(p.io(p.errOut.Write))
+	}
 
-	//if t.tty.Raw {
-	//	// unset p.Err if it was previously set because both stdout and stderr go over p.Out when tty is
-	//	// true
-	//	t.ErrOut = nil
-	//}
-
-	return t, nil
+	return p, nil
 }
 
-func (t *NativeTty) Safe(fn term.SafeFunc) error {
-	return t.tty.Safe(fn)
+func (p *NativeTty) Safe(fn term.SafeFunc) error {
+	return p.tty.Safe(fn)
 }
 
-func (t *NativeTty) Streams() TtyStreams {
-	return t.TtyStreams
+func (p *NativeTty) Streams() TtyStreams {
+	return p.streams
 }
 
-func (t *NativeTty) Close() error {
-	return nil
+func (p *NativeTty) Close() error {
+	p.cancel()
+
+	return p.err
 }
 
-func (t *NativeTty) Bind(pty Pty) <-chan error {
-	return BindPty(t, pty)
+func (p *NativeTty) Err() error {
+	p.RLock()
+	defer p.RUnlock()
+	return p.err
 }
 
-func (t *NativeTty) IsTerminal() bool {
-	return t.tty.IsTerminalIn()
+func (p *NativeTty) Done() <-chan struct{} {
+	return p.ctx.Done()
 }
 
-func (t *NativeTty) GetSize() *term.TerminalSize {
-	return t.tty.GetSize()
+func (p *NativeTty) CopyToPty(pty Pty) <-chan error {
+	return CopyToPty(p, pty)
 }
 
-func (t *NativeTty) MonitorSize(size ...*term.TerminalSize) term.TerminalSizeQueue {
-	return t.tty.MonitorSize(size...)
+func (p *NativeTty) IsTerminal() bool {
+	return p.tty.IsTerminalIn()
 }
 
-func (o *NativeTty) SetupTTY() *term.TTY {
+func (p *NativeTty) GetSize() *term.TerminalSize {
+	return p.tty.GetSize()
+}
+
+func (p *NativeTty) MonitorSize(size ...*term.TerminalSize) term.TerminalSizeQueue {
+	return p.tty.MonitorSize(size...)
+}
+
+func (p *NativeTty) SetupTTY() *term.TTY {
 	t := &term.TTY{
-		Out: o.Out,
+		Out: p.out,
 	}
 
-	if !o.Stdin {
+	if !p.stdin {
 		// need to nil out o.In to make sure we don't create a stream for stdin
-		o.In = nil
-		o.TTY = false
+		p.in = nil
+		p.isTty = false
 		return t
 	}
 
-	t.In = o.In
-	if !o.TTY {
+	t.In = p.in
+	if !p.isTty {
 		return t
 	}
 
-	if o.isTerminalIn == nil {
-		o.isTerminalIn = func(tty *term.TTY) bool {
+	if p.isTerminalIn == nil {
+		p.isTerminalIn = func(tty *term.TTY) bool {
 			return tty.IsTerminalIn()
 		}
 	}
-	if !o.isTerminalIn(t) {
-		o.TTY = false
+	if !p.isTerminalIn(t) {
+		p.isTty = false
 
-		if o.ErrOut != nil {
-			fmt.Fprintln(o.ErrOut, "Unable to use a TTY - input is not a terminal or the right kind of file")
+		if p.errOut != nil {
+			fmt.Fprintln(p.errOut, "Unable to use a TTY - input is not a terminal or the right kind of file")
 		}
 
 		return t
@@ -110,17 +140,38 @@ func (o *NativeTty) SetupTTY() *term.TTY {
 	// can safely set t.Raw to true
 	t.Raw = true
 
-	if o.overrideStreams == nil {
+	if p.overrideStreams == nil {
 		// use mobyterm.StdStreams() to get the right I/O handles on Windows
-		o.overrideStreams = mobyterm.StdStreams
+		p.overrideStreams = mobyterm.StdStreams
 	}
-	stdin, stdout, _ := o.overrideStreams()
-	o.In = stdin
+	stdin, stdout, _ := p.overrideStreams()
+	p.in = stdin
 	t.In = stdin
-	if o.Out != nil {
-		o.Out = stdout
+	if p.out != nil {
+		p.out = stdout
 		t.Out = stdout
 	}
 
 	return t
+}
+
+func (p *NativeTty) io(fn func([]byte) (int, error)) func([]byte) (int, error) {
+	return func(b []byte) (int, error) {
+		select {
+		case <-p.ctx.Done():
+			return 0, io.EOF
+		default:
+		}
+
+		n, err := fn(b)
+		if err != nil {
+			p.Lock()
+			p.err = err
+			p.Unlock()
+			p.cancel()
+			return 0, err
+		}
+
+		return n, nil
+	}
 }

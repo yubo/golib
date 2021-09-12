@@ -25,14 +25,18 @@ func do() error {
 	defer nativeTty.Close()
 
 	// recorder
-	recorder, err := stream.NewRecorder("/tmp/test.rec")
+	fd, err := os.Create("/tmp/test.rec")
+	if err != nil {
+		return err
+	}
+	recorder, err := stream.NewRecorder(fd)
 	klog.Infof("recorder %v err %v", recorder, err)
 	if err != nil {
 		return err
 	}
 	defer recorder.Close()
 
-	// tty rpoxy
+	// tty proxy
 	tty := stream.NewProxyTty(1024)
 	if err := tty.AddTty(nativeTty); err != nil {
 		return err

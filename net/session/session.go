@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/yubo/golib/api/errors"
-	"github.com/yubo/golib/util/clock"
 	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/clock"
 	"k8s.io/klog/v2"
 )
 
@@ -100,10 +100,10 @@ type Session interface {
 }
 
 func StartSession(cf *Config, optsInput ...Option) (SessionManager, error) {
-	opts := &options{}
+	opts := Options{}
 
 	for _, opt := range optsInput {
-		opt.apply(opts)
+		opt(&opts)
 	}
 
 	if opts.ctx == nil {
@@ -117,9 +117,9 @@ func StartSession(cf *Config, optsInput ...Option) (SessionManager, error) {
 	var storage storage
 	var err error
 	if cf.Storage == "mem" {
-		storage, err = newMemStorage(cf, opts)
+		storage, err = newMemStorage(cf, &opts)
 	} else {
-		storage, err = newDbStorage(cf, opts)
+		storage, err = newDbStorage(cf, &opts)
 	}
 
 	if err != nil {
@@ -129,7 +129,7 @@ func StartSession(cf *Config, optsInput ...Option) (SessionManager, error) {
 	return &sessionManager{
 		storage: storage,
 		config:  cf,
-		options: opts,
+		Options: opts,
 	}, nil
 }
 
@@ -144,7 +144,7 @@ type sessionConn struct {
 
 type sessionManager struct {
 	storage
-	*options
+	Options
 	config *Config
 }
 

@@ -32,7 +32,7 @@ const (
 		" CREATE INDEX `session_key_updated_at` on `session` (`updated_at`);"
 )
 
-func newDbStorage(cf *Config, opts *options) (storage, error) {
+func newDbStorage(cf *Config, opts *Options) (storage, error) {
 	st := &dbStorage{config: cf, db: opts.db}
 
 	if st.db == nil && cf.Dsn != "" {

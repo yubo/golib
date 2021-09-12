@@ -12,9 +12,9 @@ import (
 // TtyStreams provides the standard names for iostreams.  This is useful for embedding and for unit testing.
 // Inconsistent and different names make it hard to read and review code
 type TtyStreams struct {
-	In     io.Reader // os.Stdin
-	Out    io.Writer // os.Stdout
-	ErrOut io.Writer // os.Stderr
+	Stdin  io.Reader // os.Stdin
+	Stdout io.Writer // os.Stdout
+	Stderr io.Writer // os.Stderr
 }
 
 type Tty interface {
@@ -22,5 +22,8 @@ type Tty interface {
 	IsTerminal() bool
 	GetSize() *term.TerminalSize
 	MonitorSize(...*term.TerminalSize) term.TerminalSizeQueue
-	Bind(pty Pty) <-chan error
+	CopyToPty(pty Pty) <-chan error
+	Done() <-chan struct{}
+	Err() error
+	Close() error
 }

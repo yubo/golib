@@ -7,7 +7,7 @@ import (
 	"github.com/yubo/golib/util"
 )
 
-func newMemStorage(cf *Config, opts *options) (storage, error) {
+func newMemStorage(cf *Config, opts *Options) (storage, error) {
 	st := &memStorage{
 		data:   make(map[string]*sessionConn),
 		opts:   opts,
@@ -25,7 +25,7 @@ type memStorage struct {
 	sync.RWMutex
 	data map[string]*sessionConn
 
-	opts   *options
+	opts   *Options
 	config *Config
 }
 

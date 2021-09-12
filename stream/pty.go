@@ -16,12 +16,13 @@ type Pty interface {
 	Streams() PtyStreams
 	IsTerminal() bool
 	Resize(*term.TerminalSize) error
+	Close() error
 }
 
 type PtyStreams struct {
-	In     io.Writer // /dev/ptmx
-	Out    io.Reader // /dev/ptmx
-	ErrOut io.Reader // /dev/ptmx
+	Stdin  io.Writer // /dev/ptmx
+	Stdout io.Reader // /dev/ptmx
+	Stderr io.Reader // /dev/ptmx
 }
 
 type CmdPty struct {
@@ -41,8 +42,8 @@ func NewCmdPty(cmd *exec.Cmd) (*CmdPty, error) {
 
 func (p *CmdPty) Streams() PtyStreams {
 	return PtyStreams{
-		In:  p.pty,
-		Out: p.pty,
+		Stdin:  p.pty,
+		Stdout: p.pty,
 	}
 }
 

@@ -7,7 +7,7 @@ import (
 	"github.com/yubo/golib/util/clock"
 )
 
-type options struct {
+type Options struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	clock  clock.Clock
@@ -15,45 +15,29 @@ type options struct {
 	mem    bool
 }
 
-type Option interface {
-	apply(*options)
-}
+type Option func(*Options)
 
-type funcOption struct {
-	f func(*options)
-}
-
-func (p *funcOption) apply(opt *options) {
-	p.f(opt)
-}
-
-func newFuncOption(f func(*options)) *funcOption {
-	return &funcOption{
-		f: f,
+func WithCtx(ctx context.Context) Option {
+	return func(o *Options) {
+		o.ctx = ctx
+		o.cancel = nil
 	}
 }
 
-func WithCtx(ctx context.Context) Option {
-	return newFuncOption(func(o *options) {
-		o.ctx = ctx
-		o.cancel = nil
-	})
-}
-
 func WithDB(db *orm.DB) Option {
-	return newFuncOption(func(o *options) {
+	return func(o *Options) {
 		o.db = db
-	})
+	}
 }
 
 func WithClock(clock clock.Clock) Option {
-	return newFuncOption(func(o *options) {
+	return func(o *Options) {
 		o.clock = clock
-	})
+	}
 }
 
 func WithMem() Option {
-	return newFuncOption(func(o *options) {
+	return func(o *Options) {
 		o.mem = true
-	})
+	}
 }

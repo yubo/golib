@@ -28,9 +28,9 @@ var (
 )
 
 type PlayerStreams struct {
-	In     io.ReadWriter // read ctl
-	Out    io.Writer
-	ErrOut io.Writer
+	Stdin  io.ReadWriter // read ctl
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 type CtlMsg struct {
@@ -52,9 +52,9 @@ type Player struct {
 
 func (p *Player) Streams() PtyStreams {
 	return PtyStreams{
-		In:     WriteFunc(p.writeIn),
-		Out:    ReadFunc(p.readOut),
-		ErrOut: ReadFunc(p.readErrOut),
+		Stdin:  WriteFunc(p.writeIn),
+		Stdout: ReadFunc(p.readOut),
+		Stderr: ReadFunc(p.readErrOut),
 	}
 }
 

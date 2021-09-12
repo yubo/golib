@@ -93,23 +93,7 @@ func (p *Options) Validate() (err error) {
 	return nil
 }
 
-type Option interface {
-	apply(*Options)
-}
-
-type funcOption struct {
-	f func(*Options)
-}
-
-func (p *funcOption) apply(opt *Options) {
-	p.f(opt)
-}
-
-func newFuncOption(f func(*Options)) *funcOption {
-	return &funcOption{
-		f: f,
-	}
-}
+type Option func(*Options)
 
 // with config object
 func WithConfig(path string, config interface{}) Option {
@@ -123,27 +107,27 @@ func WithConfig(path string, config interface{}) Option {
 
 // with config yaml
 func WithDefaultYaml(path, yamlData string) Option {
-	return newFuncOption(func(o *Options) {
+	return func(o *Options) {
 		if o.pathsBase == nil {
 			o.pathsBase = map[string]string{path: yamlData}
 		} else {
 			o.pathsBase[path] = yamlData
 		}
-	})
+	}
 }
 
 func WithOverrideYaml(path, yamlData string) Option {
-	return newFuncOption(func(o *Options) {
+	return func(o *Options) {
 		if o.pathsOverride == nil {
 			o.pathsOverride = map[string]string{path: yamlData}
 		} else {
 			o.pathsOverride[path] = yamlData
 		}
-	})
+	}
 }
 
 func WithValueFile(valueFiles ...string) Option {
-	return newFuncOption(func(o *Options) {
+	return func(o *Options) {
 		o.valueFiles = append(o.valueFiles, valueFiles...)
-	})
+	}
 }

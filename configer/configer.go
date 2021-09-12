@@ -27,7 +27,6 @@ func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
 
 type Configer struct {
 	*Options
-	//*options // use setting instead of it
 
 	data     map[string]interface{}
 	path     []string
@@ -35,20 +34,19 @@ type Configer struct {
 }
 
 // must called after pflag parse
-func New(optsIn ...Option) (*Configer, error) {
-	opts := GlobalOptions.DeepCopy()
-	for _, opt := range optsIn {
-		opt.apply(opts)
+func New(opts ...Option) (*Configer, error) {
+	options := GlobalOptions.DeepCopy()
+	for _, opt := range opts {
+		opt(options)
 	}
 
-	if err := opts.Validate(); err != nil {
+	if err := options.Validate(); err != nil {
 		return nil, err
 	}
 
 	conf := &Configer{
-		data: map[string]interface{}{},
-		//options: opts,
-		Options: opts,
+		data:    map[string]interface{}{},
+		Options: options,
 	}
 
 	if err := conf.Prepare(); err != nil {
@@ -308,14 +306,9 @@ func (p *Configer) IsSet(path string) bool {
 	return err == nil
 }
 
-func (p *Configer) Read(path string, into interface{}, optsIn ...Option) error {
+func (p *Configer) Read(path string, into interface{}) error {
 	if into == nil {
 		return nil
-	}
-
-	opts := &Options{}
-	for _, opt := range optsIn {
-		opt.apply(opts)
 	}
 
 	if v := p.GetRaw(path); v != nil {

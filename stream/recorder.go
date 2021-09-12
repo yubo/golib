@@ -7,15 +7,14 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"io"
-	"os"
 
 	"github.com/yubo/golib/util/term"
 )
 
 type RecorderStreams struct {
-	In     io.Writer
-	Out    io.Writer
-	ErrOut io.Writer
+	Stdin  io.Writer
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 type RecData struct {
@@ -23,74 +22,75 @@ type RecData struct {
 	Data []byte
 }
 
-type Recorder struct {
-	FileName string
-	f        *os.File
-	enc      *gob.Encoder
+type RecorderFactory func(out io.WriteCloser) (Recorder, error)
+
+type Recorder interface {
+	Close() error
+	Streams() RecorderStreams
+	Resize(size *term.TerminalSize) error
+	Info(info []byte) error
 }
 
-func (p *Recorder) Streams() RecorderStreams {
+var _ Recorder = &streamRecorder{}
+
+type streamRecorder struct {
+	out io.WriteCloser
+	enc *gob.Encoder
+}
+
+func (p *streamRecorder) Streams() RecorderStreams {
 	return RecorderStreams{
-		In:     WriteFunc(p.WriteIn),
-		Out:    WriteFunc(p.WriteOut),
-		ErrOut: WriteFunc(p.WriteErrOut),
+		Stdin:  WriteFunc(p.writeIn),
+		Stdout: WriteFunc(p.writeOut),
+		Stderr: WriteFunc(p.writeErrOut),
 	}
 }
 
-func (p *Recorder) Close() error {
-	return p.f.Close()
+func (p *streamRecorder) Close() error {
+	return p.out.Close()
 }
 
-// TERM SHELL COMMAND
-func NewRecorder(fileName string) (*Recorder, error) {
-	r := &Recorder{FileName: fileName}
-
-	var err error
-	if r.f, err = os.Create(fileName); err != nil {
-		return nil, err
-	}
-	r.enc = gob.NewEncoder(r.f)
-
-	return r, nil
+func NewRecorder(out io.WriteCloser) (Recorder, error) {
+	return &streamRecorder{
+		out: out,
+		enc: gob.NewEncoder(out),
+	}, nil
 }
 
-func (r *Recorder) WriteIn(d []byte) (int, error) {
-	if err := r.put(MsgInput, d); err != nil {
-		return 0, err
-	}
-
-	return len(d), nil
+func (r *streamRecorder) Info(info []byte) error {
+	_, err := r.write(MsgInfo, info)
+	return err
 }
 
-func (r *Recorder) WriteOut(d []byte) (int, error) {
-	if err := r.put(MsgOutput, d); err != nil {
-		return 0, err
-	}
-
-	return len(d), nil
-
-}
-
-func (r *Recorder) WriteErrOut(d []byte) (int, error) {
-	if err := r.put(MsgErrOutput, d); err != nil {
-		return 0, err
-	}
-
-	return len(d), nil
-}
-
-func (r *Recorder) Resize(size *term.TerminalSize) error {
+func (r *streamRecorder) Resize(size *term.TerminalSize) error {
 	d, err := json.Marshal(size)
 	if err != nil {
 		return err
 	}
 
-	return r.put(MsgResize, d)
+	_, err = r.write(MsgResize, d)
+	return err
 }
 
-func (r *Recorder) put(msgType byte, data []byte) error {
-	return r.enc.Encode(RecData{
+func (r *streamRecorder) writeIn(d []byte) (int, error) {
+	return r.write(MsgInput, d)
+}
+
+func (r *streamRecorder) writeOut(d []byte) (int, error) {
+	return r.write(MsgOutput, d)
+}
+
+func (r *streamRecorder) writeErrOut(d []byte) (int, error) {
+	return r.write(MsgErrOutput, d)
+}
+
+func (r *streamRecorder) write(msgType byte, data []byte) (int, error) {
+	if err := r.enc.Encode(RecData{
 		Time: Nanotime(),
 		Data: append([]byte{msgType}, data...),
-	})
+	}); err != nil {
+		return 0, err
+	}
+
+	return len(data), nil
 }
