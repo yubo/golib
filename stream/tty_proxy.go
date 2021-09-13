@@ -258,6 +258,7 @@ func (p *ProxyTty) addTtyEntry(entry *ttyEntry) error {
 			p.err = errors.Wrap(err, "error on attach stdin")
 			p.Unlock()
 		}
+		entry.tty.Close()
 	}()
 
 	// start tty monitor Resize
@@ -271,6 +272,7 @@ func (p *ProxyTty) addTtyEntry(entry *ttyEntry) error {
 			for {
 				size := sizeQueue.Next()
 				if size == nil {
+					entry.tty.Close()
 					return
 				}
 				p.sizeCh <- size
