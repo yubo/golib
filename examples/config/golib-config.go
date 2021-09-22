@@ -32,6 +32,7 @@ var (
 
 func main() {
 	if err := newServerCmd().Execute(); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }
