@@ -62,11 +62,11 @@ func (m *Quantity) XXX_DiscardUnknown() {
 var xxx_messageInfo_Quantity proto.InternalMessageInfo
 
 func init() {
-	proto.RegisterType((*Quantity)(nil), "k8s.io.apimachinery.pkg.api.resource.Quantity")
+	proto.RegisterType((*Quantity)(nil), "github.com/yubo.golib.api.resource.Quantity")
 }
 
 func init() {
-	proto.RegisterFile("k8s.io/kubernetes/vendor/k8s.io/apimachinery/pkg/api/resource/generated.proto", fileDescriptor_612bba87bd70906c)
+	proto.RegisterFile("github.com/yubo/golib/api/resource/generated.proto", fileDescriptor_612bba87bd70906c)
 }
 
 var fileDescriptor_612bba87bd70906c = []byte{
