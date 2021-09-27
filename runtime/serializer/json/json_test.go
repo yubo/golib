@@ -378,7 +378,7 @@ func TestDecode(t *testing.T) {
 		} else {
 			s = json.NewSerializerWithOptions(json.SerializerOptions{Yaml: test.yaml, Pretty: test.pretty, Strict: test.strict})
 		}
-		err := s.Decode([]byte(test.data), test.into)
+		_, err := s.Decode([]byte(test.data), test.into)
 		obj := test.into
 		switch {
 		case err == nil && test.errFn != nil:

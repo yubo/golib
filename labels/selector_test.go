@@ -21,7 +21,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/yubo/golib/selection"
+	"github.com/yubo/golib/util/sets"
 	"github.com/yubo/golib/util/validation/field"
 )
 
@@ -301,6 +304,434 @@ func TestParserLookahead(t *testing.T) {
 	}
 }
 
+func TestRequirementConstructor(t *testing.T) {
+	requirementConstructorTests := []struct {
+		Key     string
+		Op      selection.Operator
+		Vals    sets.String
+		WantErr field.ErrorList
+	}{
+		{
+			Key: "x1",
+			Op:  selection.In,
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values",
+					BadValue: []string{},
+				},
+			},
+		},
+		{
+			Key:  "x2",
+			Op:   selection.NotIn,
+			Vals: sets.NewString(),
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values",
+					BadValue: []string{},
+				},
+			},
+		},
+		{
+			Key:  "x3",
+			Op:   selection.In,
+			Vals: sets.NewString("foo"),
+		},
+		{
+			Key:  "x4",
+			Op:   selection.NotIn,
+			Vals: sets.NewString("foo"),
+		},
+		{
+			Key:  "x5",
+			Op:   selection.Equals,
+			Vals: sets.NewString("foo", "bar"),
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values",
+					BadValue: []string{"bar", "foo"},
+				},
+			},
+		},
+		{
+			Key: "x6",
+			Op:  selection.Exists,
+		},
+		{
+			Key: "x7",
+			Op:  selection.DoesNotExist,
+		},
+		{
+			Key:  "x8",
+			Op:   selection.Exists,
+			Vals: sets.NewString("foo"),
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values",
+					BadValue: []string{"foo"},
+				},
+			},
+		},
+		{
+			Key:  "x9",
+			Op:   selection.In,
+			Vals: sets.NewString("bar"),
+		},
+		{
+			Key:  "x10",
+			Op:   selection.In,
+			Vals: sets.NewString("bar"),
+		},
+		{
+			Key:  "x11",
+			Op:   selection.GreaterThan,
+			Vals: sets.NewString("1"),
+		},
+		{
+			Key:  "x12",
+			Op:   selection.LessThan,
+			Vals: sets.NewString("6"),
+		},
+		{
+			Key: "x13",
+			Op:  selection.GreaterThan,
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values",
+					BadValue: []string{},
+				},
+			},
+		},
+		{
+			Key:  "x14",
+			Op:   selection.GreaterThan,
+			Vals: sets.NewString("bar"),
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values[0]",
+					BadValue: "bar",
+				},
+			},
+		},
+		{
+			Key:  "x15",
+			Op:   selection.LessThan,
+			Vals: sets.NewString("bar"),
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values[0]",
+					BadValue: "bar",
+				},
+			},
+		},
+		{
+			Key: strings.Repeat("a", 254), //breaks DNS rule that len(key) <= 253
+			Op:  selection.Exists,
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "key",
+					BadValue: strings.Repeat("a", 254),
+				},
+			},
+		},
+		{
+			Key:  "x16",
+			Op:   selection.Equals,
+			Vals: sets.NewString(strings.Repeat("a", 254)),
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values[0][x16]",
+					BadValue: strings.Repeat("a", 254),
+				},
+			},
+		},
+		{
+			Key:  "x17",
+			Op:   selection.Equals,
+			Vals: sets.NewString("a b"),
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values[0][x17]",
+					BadValue: "a b",
+				},
+			},
+		},
+		{
+			Key: "x18",
+			Op:  "unsupportedOp",
+			WantErr: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeNotSupported,
+					Field:    "operator",
+					BadValue: selection.Operator("unsupportedOp"),
+				},
+			},
+		},
+	}
+	for _, rc := range requirementConstructorTests {
+		_, err := NewRequirement(rc.Key, rc.Op, rc.Vals.List())
+		if diff := cmp.Diff(rc.WantErr.ToAggregate(), err, ignoreDetail); diff != "" {
+			t.Errorf("NewRequirement test %v returned unexpected error (-want,+got):\n%s", rc.Key, diff)
+		}
+	}
+}
+
+func TestToString(t *testing.T) {
+	var req Requirement
+	toStringTests := []struct {
+		In    *internalSelector
+		Out   string
+		Valid bool
+	}{
+
+		{&internalSelector{
+			getRequirement("x", selection.In, sets.NewString("abc", "def"), t),
+			getRequirement("y", selection.NotIn, sets.NewString("jkl"), t),
+			getRequirement("z", selection.Exists, nil, t)},
+			"x in (abc,def),y notin (jkl),z", true},
+		{&internalSelector{
+			getRequirement("x", selection.NotIn, sets.NewString("abc", "def"), t),
+			getRequirement("y", selection.NotEquals, sets.NewString("jkl"), t),
+			getRequirement("z", selection.DoesNotExist, nil, t)},
+			"x notin (abc,def),y!=jkl,!z", true},
+		{&internalSelector{
+			getRequirement("x", selection.In, sets.NewString("abc", "def"), t),
+			req}, // adding empty req for the trailing ','
+			"x in (abc,def),", false},
+		{&internalSelector{
+			getRequirement("x", selection.NotIn, sets.NewString("abc"), t),
+			getRequirement("y", selection.In, sets.NewString("jkl", "mno"), t),
+			getRequirement("z", selection.NotIn, sets.NewString(""), t)},
+			"x notin (abc),y in (jkl,mno),z notin ()", true},
+		{&internalSelector{
+			getRequirement("x", selection.Equals, sets.NewString("abc"), t),
+			getRequirement("y", selection.DoubleEquals, sets.NewString("jkl"), t),
+			getRequirement("z", selection.NotEquals, sets.NewString("a"), t),
+			getRequirement("z", selection.Exists, nil, t)},
+			"x=abc,y==jkl,z!=a,z", true},
+		{&internalSelector{
+			getRequirement("x", selection.GreaterThan, sets.NewString("2"), t),
+			getRequirement("y", selection.LessThan, sets.NewString("8"), t),
+			getRequirement("z", selection.Exists, nil, t)},
+			"x>2,y<8,z", true},
+	}
+	for _, ts := range toStringTests {
+		if out := ts.In.String(); out == "" && ts.Valid {
+			t.Errorf("%#v.String() => '%v' expected no error", ts.In, out)
+		} else if out != ts.Out {
+			t.Errorf("%#v.String() => '%v' want '%v'", ts.In, out, ts.Out)
+		}
+	}
+}
+
+func TestRequirementSelectorMatching(t *testing.T) {
+	var req Requirement
+	labelSelectorMatchingTests := []struct {
+		Set   Set
+		Sel   Selector
+		Match bool
+	}{
+		{Set{"x": "foo", "y": "baz"}, &internalSelector{
+			req,
+		}, false},
+		{Set{"x": "foo", "y": "baz"}, &internalSelector{
+			getRequirement("x", selection.In, sets.NewString("foo"), t),
+			getRequirement("y", selection.NotIn, sets.NewString("alpha"), t),
+		}, true},
+		{Set{"x": "foo", "y": "baz"}, &internalSelector{
+			getRequirement("x", selection.In, sets.NewString("foo"), t),
+			getRequirement("y", selection.In, sets.NewString("alpha"), t),
+		}, false},
+		{Set{"y": ""}, &internalSelector{
+			getRequirement("x", selection.NotIn, sets.NewString(""), t),
+			getRequirement("y", selection.Exists, nil, t),
+		}, true},
+		{Set{"y": ""}, &internalSelector{
+			getRequirement("x", selection.DoesNotExist, nil, t),
+			getRequirement("y", selection.Exists, nil, t),
+		}, true},
+		{Set{"y": ""}, &internalSelector{
+			getRequirement("x", selection.NotIn, sets.NewString(""), t),
+			getRequirement("y", selection.DoesNotExist, nil, t),
+		}, false},
+		{Set{"y": "baz"}, &internalSelector{
+			getRequirement("x", selection.In, sets.NewString(""), t),
+		}, false},
+		{Set{"z": "2"}, &internalSelector{
+			getRequirement("z", selection.GreaterThan, sets.NewString("1"), t),
+		}, true},
+		{Set{"z": "v2"}, &internalSelector{
+			getRequirement("z", selection.GreaterThan, sets.NewString("1"), t),
+		}, false},
+	}
+	for _, lsm := range labelSelectorMatchingTests {
+		if match := lsm.Sel.Matches(lsm.Set); match != lsm.Match {
+			t.Errorf("%+v.Matches(%#v) => %v, want %v", lsm.Sel, lsm.Set, match, lsm.Match)
+		}
+	}
+}
+
+func TestSetSelectorParser(t *testing.T) {
+	setSelectorParserTests := []struct {
+		In    string
+		Out   Selector
+		Match bool
+		Valid bool
+	}{
+		{"", NewSelector(), true, true},
+		{"\rx", internalSelector{
+			getRequirement("x", selection.Exists, nil, t),
+		}, true, true},
+		{"this-is-a-dns.domain.com/key-with-dash", internalSelector{
+			getRequirement("this-is-a-dns.domain.com/key-with-dash", selection.Exists, nil, t),
+		}, true, true},
+		{"this-is-another-dns.domain.com/key-with-dash in (so,what)", internalSelector{
+			getRequirement("this-is-another-dns.domain.com/key-with-dash", selection.In, sets.NewString("so", "what"), t),
+		}, true, true},
+		{"0.1.2.domain/99 notin (10.10.100.1, tick.tack.clock)", internalSelector{
+			getRequirement("0.1.2.domain/99", selection.NotIn, sets.NewString("10.10.100.1", "tick.tack.clock"), t),
+		}, true, true},
+		{"foo  in	 (abc)", internalSelector{
+			getRequirement("foo", selection.In, sets.NewString("abc"), t),
+		}, true, true},
+		{"x notin\n (abc)", internalSelector{
+			getRequirement("x", selection.NotIn, sets.NewString("abc"), t),
+		}, true, true},
+		{"x  notin	\t	(abc,def)", internalSelector{
+			getRequirement("x", selection.NotIn, sets.NewString("abc", "def"), t),
+		}, true, true},
+		{"x in (abc,def)", internalSelector{
+			getRequirement("x", selection.In, sets.NewString("abc", "def"), t),
+		}, true, true},
+		{"x in (abc,)", internalSelector{
+			getRequirement("x", selection.In, sets.NewString("abc", ""), t),
+		}, true, true},
+		{"x in ()", internalSelector{
+			getRequirement("x", selection.In, sets.NewString(""), t),
+		}, true, true},
+		{"x notin (abc,,def),bar,z in (),w", internalSelector{
+			getRequirement("bar", selection.Exists, nil, t),
+			getRequirement("w", selection.Exists, nil, t),
+			getRequirement("x", selection.NotIn, sets.NewString("abc", "", "def"), t),
+			getRequirement("z", selection.In, sets.NewString(""), t),
+		}, true, true},
+		{"x,y in (a)", internalSelector{
+			getRequirement("y", selection.In, sets.NewString("a"), t),
+			getRequirement("x", selection.Exists, nil, t),
+		}, false, true},
+		{"x=a", internalSelector{
+			getRequirement("x", selection.Equals, sets.NewString("a"), t),
+		}, true, true},
+		{"x>1", internalSelector{
+			getRequirement("x", selection.GreaterThan, sets.NewString("1"), t),
+		}, true, true},
+		{"x<7", internalSelector{
+			getRequirement("x", selection.LessThan, sets.NewString("7"), t),
+		}, true, true},
+		{"x=a,y!=b", internalSelector{
+			getRequirement("x", selection.Equals, sets.NewString("a"), t),
+			getRequirement("y", selection.NotEquals, sets.NewString("b"), t),
+		}, true, true},
+		{"x=a,y!=b,z in (h,i,j)", internalSelector{
+			getRequirement("x", selection.Equals, sets.NewString("a"), t),
+			getRequirement("y", selection.NotEquals, sets.NewString("b"), t),
+			getRequirement("z", selection.In, sets.NewString("h", "i", "j"), t),
+		}, true, true},
+		{"x=a||y=b", internalSelector{}, false, false},
+		{"x,,y", nil, true, false},
+		{",x,y", nil, true, false},
+		{"x nott in (y)", nil, true, false},
+		{"x notin ( )", internalSelector{
+			getRequirement("x", selection.NotIn, sets.NewString(""), t),
+		}, true, true},
+		{"x notin (, a)", internalSelector{
+			getRequirement("x", selection.NotIn, sets.NewString("", "a"), t),
+		}, true, true},
+		{"a in (xyz),", nil, true, false},
+		{"a in (xyz)b notin ()", nil, true, false},
+		{"a ", internalSelector{
+			getRequirement("a", selection.Exists, nil, t),
+		}, true, true},
+		{"a in (x,y,notin, z,in)", internalSelector{
+			getRequirement("a", selection.In, sets.NewString("in", "notin", "x", "y", "z"), t),
+		}, true, true}, // operator 'in' inside list of identifiers
+		{"a in (xyz abc)", nil, false, false}, // no comma
+		{"a notin(", nil, true, false},        // bad formed
+		{"a (", nil, false, false},            // cpar
+		{"(", nil, false, false},              // opar
+	}
+
+	for _, ssp := range setSelectorParserTests {
+		if sel, err := Parse(ssp.In); err != nil && ssp.Valid {
+			t.Errorf("Parse(%s) => %v expected no error", ssp.In, err)
+		} else if err == nil && !ssp.Valid {
+			t.Errorf("Parse(%s) => %+v expected error", ssp.In, sel)
+		} else if ssp.Match && !reflect.DeepEqual(sel, ssp.Out) {
+			t.Errorf("Parse(%s) => parse output '%#v' doesn't match '%#v' expected match", ssp.In, sel, ssp.Out)
+		}
+	}
+}
+
+func getRequirement(key string, op selection.Operator, vals sets.String, t *testing.T) Requirement {
+	req, err := NewRequirement(key, op, vals.List())
+	if err != nil {
+		t.Errorf("NewRequirement(%v, %v, %v) resulted in error:%v", key, op, vals, err)
+		return Requirement{}
+	}
+	return *req
+}
+
+func TestAdd(t *testing.T) {
+	testCases := []struct {
+		name        string
+		sel         Selector
+		key         string
+		operator    selection.Operator
+		values      []string
+		refSelector Selector
+	}{
+		{
+			"keyInOperator",
+			internalSelector{},
+			"key",
+			selection.In,
+			[]string{"value"},
+			internalSelector{Requirement{"key", selection.In, []string{"value"}}},
+		},
+		{
+			"keyEqualsOperator",
+			internalSelector{Requirement{"key", selection.In, []string{"value"}}},
+			"key2",
+			selection.Equals,
+			[]string{"value2"},
+			internalSelector{
+				Requirement{"key", selection.In, []string{"value"}},
+				Requirement{"key2", selection.Equals, []string{"value2"}},
+			},
+		},
+	}
+	for _, ts := range testCases {
+		req, err := NewRequirement(ts.key, ts.operator, ts.values)
+		if err != nil {
+			t.Errorf("%s - Unable to create labels.Requirement", ts.name)
+		}
+		ts.sel = ts.sel.Add(*req)
+		if !reflect.DeepEqual(ts.sel, ts.refSelector) {
+			t.Errorf("%s - Expected %v found %v", ts.name, ts.refSelector, ts.sel)
+		}
+	}
+}
+
 func TestSafeSort(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -355,5 +786,217 @@ func BenchmarkSelectorFromValidatedSet(b *testing.B) {
 		if SelectorFromValidatedSet(set).Empty() {
 			b.Errorf("Unexpected selector")
 		}
+	}
+}
+
+func TestRequiresExactMatch(t *testing.T) {
+	testCases := []struct {
+		name          string
+		sel           Selector
+		label         string
+		expectedFound bool
+		expectedValue string
+	}{
+		{
+			name:          "keyInOperatorExactMatch",
+			sel:           internalSelector{Requirement{"key", selection.In, []string{"value"}}},
+			label:         "key",
+			expectedFound: true,
+			expectedValue: "value",
+		},
+		{
+			name:          "keyInOperatorNotExactMatch",
+			sel:           internalSelector{Requirement{"key", selection.In, []string{"value", "value2"}}},
+			label:         "key",
+			expectedFound: false,
+			expectedValue: "",
+		},
+		{
+			name: "keyInOperatorNotExactMatch",
+			sel: internalSelector{
+				Requirement{"key", selection.In, []string{"value", "value1"}},
+				Requirement{"key2", selection.In, []string{"value2"}},
+			},
+			label:         "key2",
+			expectedFound: true,
+			expectedValue: "value2",
+		},
+		{
+			name:          "keyEqualOperatorExactMatch",
+			sel:           internalSelector{Requirement{"key", selection.Equals, []string{"value"}}},
+			label:         "key",
+			expectedFound: true,
+			expectedValue: "value",
+		},
+		{
+			name:          "keyDoubleEqualOperatorExactMatch",
+			sel:           internalSelector{Requirement{"key", selection.DoubleEquals, []string{"value"}}},
+			label:         "key",
+			expectedFound: true,
+			expectedValue: "value",
+		},
+		{
+			name:          "keyNotEqualOperatorExactMatch",
+			sel:           internalSelector{Requirement{"key", selection.NotEquals, []string{"value"}}},
+			label:         "key",
+			expectedFound: false,
+			expectedValue: "",
+		},
+		{
+			name: "keyEqualOperatorExactMatchFirst",
+			sel: internalSelector{
+				Requirement{"key", selection.In, []string{"value"}},
+				Requirement{"key2", selection.In, []string{"value2"}},
+			},
+			label:         "key",
+			expectedFound: true,
+			expectedValue: "value",
+		},
+	}
+	for _, ts := range testCases {
+		t.Run(ts.name, func(t *testing.T) {
+			value, found := ts.sel.RequiresExactMatch(ts.label)
+			if found != ts.expectedFound {
+				t.Errorf("Expected match %v, found %v", ts.expectedFound, found)
+			}
+			if found && value != ts.expectedValue {
+				t.Errorf("Expected value %v, found %v", ts.expectedValue, value)
+			}
+
+		})
+	}
+}
+
+func TestValidatedSelectorFromSet(t *testing.T) {
+	tests := []struct {
+		name             string
+		input            Set
+		expectedSelector internalSelector
+		expectedError    field.ErrorList
+	}{
+		{
+			name:  "Simple Set, no error",
+			input: Set{"key": "val"},
+			expectedSelector: internalSelector{
+				Requirement{
+					key:       "key",
+					operator:  selection.Equals,
+					strValues: []string{"val"},
+				},
+			},
+		},
+		{
+			name:  "Invalid Set, value too long",
+			input: Set{"Key": "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui"},
+			expectedError: field.ErrorList{
+				&field.Error{
+					Type:     field.ErrorTypeInvalid,
+					Field:    "values[0][Key]",
+					BadValue: "axahm2EJ8Phiephe2eixohbee9eGeiyees1thuozi1xoh0GiuH3diewi8iem7Nui",
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		selector, err := ValidatedSelectorFromSet(tc.input)
+		if diff := cmp.Diff(tc.expectedError.ToAggregate(), err, ignoreDetail); diff != "" {
+			t.Errorf("ValidatedSelectorFromSet %#v returned unexpected error (-want,+got):\n%s", tc.name, diff)
+		}
+		if err == nil {
+			if diff := cmp.Diff(tc.expectedSelector, selector); diff != "" {
+				t.Errorf("ValidatedSelectorFromSet %#v returned unexpected selector (-want,+got):\n%s", tc.name, diff)
+			}
+		}
+	}
+}
+
+func BenchmarkRequirementString(b *testing.B) {
+	r := Requirement{
+		key:      "environment",
+		operator: selection.NotIn,
+		strValues: []string{
+			"dev",
+		},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if r.String() != "environment notin (dev)" {
+			b.Errorf("Unexpected Requirement string")
+		}
+	}
+}
+
+func TestRequirementEqual(t *testing.T) {
+	tests := []struct {
+		name string
+		x, y *Requirement
+		want bool
+	}{
+		{
+			name: "same requirements should be equal",
+			x: &Requirement{
+				key:       "key",
+				operator:  selection.Equals,
+				strValues: []string{"foo", "bar"},
+			},
+			y: &Requirement{
+				key:       "key",
+				operator:  selection.Equals,
+				strValues: []string{"foo", "bar"},
+			},
+			want: true,
+		},
+		{
+			name: "requirements with different keys should not be equal",
+			x: &Requirement{
+				key:       "key1",
+				operator:  selection.Equals,
+				strValues: []string{"foo", "bar"},
+			},
+			y: &Requirement{
+				key:       "key2",
+				operator:  selection.Equals,
+				strValues: []string{"foo", "bar"},
+			},
+			want: false,
+		},
+		{
+			name: "requirements with different operators should not be equal",
+			x: &Requirement{
+				key:       "key",
+				operator:  selection.Equals,
+				strValues: []string{"foo", "bar"},
+			},
+			y: &Requirement{
+				key:       "key",
+				operator:  selection.In,
+				strValues: []string{"foo", "bar"},
+			},
+			want: false,
+		},
+		{
+			name: "requirements with different values should not be equal",
+			x: &Requirement{
+				key:       "key",
+				operator:  selection.Equals,
+				strValues: []string{"foo", "bar"},
+			},
+			y: &Requirement{
+				key:       "key",
+				operator:  selection.Equals,
+				strValues: []string{"foobar"},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := cmp.Equal(tt.x, tt.y); got != tt.want {
+				t.Errorf("cmp.Equal() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

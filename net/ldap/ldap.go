@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-ldap/ldap"
+	liberrors "github.com/yubo/golib/api/errors"
 	"github.com/yubo/golib/util"
 )
 
@@ -172,7 +173,7 @@ func (p *Ldap) ldapUserAuthentication(username, password string, attributes ...s
 	}
 
 	if len(sr.Entries) != 1 {
-		return nil, util.ErrLogin
+		return nil, liberrors.NewUnauthorized("ldap")
 	}
 
 	if password == "" {
@@ -182,7 +183,8 @@ func (p *Ldap) ldapUserAuthentication(username, password string, attributes ...s
 	// Bind as the user to verify their password
 	err = conn.Bind(sr.Entries[0].DN, password)
 	if err != nil {
-		return nil, fmt.Errorf("ldap.Bind() %s error %s", sr.Entries[0].DN, err.Error())
+		return nil, liberrors.NewUnauthorized(fmt.Sprintf("ldap.Bind() %s error %s",
+			sr.Entries[0].DN, err.Error()))
 	}
 	return sr.Entries[0], nil
 }

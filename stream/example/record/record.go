@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -37,7 +38,7 @@ func do() error {
 	defer recorder.Close()
 
 	// tty proxy
-	tty := stream.NewProxyTty(1024)
+	tty := stream.NewProxyTty(context.Background(), 1024)
 	if err := tty.AddTty(nativeTty); err != nil {
 		return err
 	}
@@ -55,7 +56,7 @@ func do() error {
 
 	// run
 	return nativeTty.Safe(func() error {
-		return <-tty.Bind(pty)
+		return <-tty.CopyToPty(pty)
 	})
 }
 

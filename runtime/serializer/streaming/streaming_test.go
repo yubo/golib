@@ -34,13 +34,13 @@ type fakeDecoder struct {
 
 func (d *fakeDecoder) Decode(data []byte, into runtime.Object) (runtime.Object, error) {
 	d.got = data
-	return d.obj, nil, d.err
+	return d.obj, d.err
 }
 
 func TestEmptyDecoder(t *testing.T) {
 	buf := bytes.NewBuffer([]byte{})
 	d := &fakeDecoder{}
-	_, _, err := NewDecoder(ioutil.NopCloser(buf), d).Decode(nil, nil)
+	_, err := NewDecoder(ioutil.NopCloser(buf), d).Decode(nil)
 	if err != io.EOF {
 		t.Fatal(err)
 	}
@@ -65,19 +65,19 @@ func TestDecoder(t *testing.T) {
 	r := framer.NewLengthDelimitedFrameReader(pr)
 	d := &fakeDecoder{}
 	dec := NewDecoder(r, d)
-	if _, _, err := dec.Decode(nil, nil); err != nil || !bytes.Equal(d.got, frames[0]) {
+	if _, err := dec.Decode(nil); err != nil || !bytes.Equal(d.got, frames[0]) {
 		t.Fatalf("unexpected %v %v", err, len(d.got))
 	}
-	if _, _, err := dec.Decode(nil, nil); err != nil || !bytes.Equal(d.got, frames[1]) {
+	if _, err := dec.Decode(nil); err != nil || !bytes.Equal(d.got, frames[1]) {
 		t.Fatalf("unexpected %v %v", err, len(d.got))
 	}
-	if _, _, err := dec.Decode(nil, nil); err != ErrObjectTooLarge || !bytes.Equal(d.got, frames[1]) {
+	if _, err := dec.Decode(nil); err != ErrObjectTooLarge || !bytes.Equal(d.got, frames[1]) {
 		t.Fatalf("unexpected %v %v", err, len(d.got))
 	}
-	if _, _, err := dec.Decode(nil, nil); err != nil || !bytes.Equal(d.got, frames[3]) {
+	if _, err := dec.Decode(nil); err != nil || !bytes.Equal(d.got, frames[3]) {
 		t.Fatalf("unexpected %v %v", err, len(d.got))
 	}
-	if _, _, err := dec.Decode(nil, nil); err != io.EOF {
+	if _, err := dec.Decode(nil); err != io.EOF {
 		t.Fatalf("unexpected %v %v", err, len(d.got))
 	}
 }

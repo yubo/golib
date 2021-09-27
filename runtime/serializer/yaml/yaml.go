@@ -38,8 +38,8 @@ func NewDecodingSerializer(jsonSerializer runtime.Serializer) runtime.Serializer
 func (c yamlSerializer) Decode(data []byte, into runtime.Object) (runtime.Object, error) {
 	out, err := yaml.ToJSON(data)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	data = out
-	return c.Serializer.Decode(data, gvk, into)
+	return c.Serializer.Decode(data, into)
 }

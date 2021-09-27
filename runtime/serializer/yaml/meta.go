@@ -19,7 +19,7 @@ package yaml
 import (
 	"fmt"
 
-	"github.com/yubo/golib/runtime"
+	"github.com/yubo/golib/api"
 	"sigs.k8s.io/yaml"
 )
 
@@ -37,7 +37,7 @@ type SimpleMetaFactory struct{}
 // Interpret will return the APIVersion and Kind of the JSON wire-format
 // encoding of an object, or an error.
 func (SimpleMetaFactory) Interpret(data []byte) error {
-	gvk := runtime.TypeMeta{}
+	gvk := api.TypeMeta{}
 	if err := yaml.Unmarshal(data, &gvk); err != nil {
 		return fmt.Errorf("could not interpret GroupVersionKind; unmarshal error: %v", err)
 	}

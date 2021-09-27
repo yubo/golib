@@ -40,7 +40,6 @@ func main() {
 	if err := newRootCmd().Execute(); err != nil {
 		klog.Fatal(err)
 	}
-
 }
 
 func newRootCmd() *cobra.Command {
@@ -60,7 +59,6 @@ func newRootCmd() *cobra.Command {
 		klog.Infof("addflag err %s", err)
 	}
 
-	configer.AddFlags(fs)
 	globalflag.AddGlobalFlags(fs, "example")
 
 	return cmd

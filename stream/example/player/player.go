@@ -39,7 +39,7 @@ func do() error {
 	defer player.Close()
 
 	return nativeTty.Safe(func() error {
-		return <-nativeTty.Bind(player)
+		return <-nativeTty.CopyToPty(player)
 	})
 }
 
