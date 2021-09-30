@@ -62,7 +62,7 @@ func newDbStorage(cf *Config, opts *Options) (storage, error) {
 }
 
 type dbStorage struct {
-	db     *orm.DB
+	db     *orm.DB2
 	config *Config
 }
 

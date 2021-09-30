@@ -11,7 +11,7 @@ type Options struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 	clock  clock.Clock
-	db     *orm.DB
+	db     *orm.DB2
 	mem    bool
 }
 
@@ -24,7 +24,7 @@ func WithCtx(ctx context.Context) Option {
 	}
 }
 
-func WithDB(db *orm.DB) Option {
+func WithDB(db *orm.DB2) Option {
 	return func(o *Options) {
 		o.db = db
 	}

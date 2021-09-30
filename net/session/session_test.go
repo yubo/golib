@@ -19,7 +19,7 @@ var (
 	driver    = "sqlite3"
 	dsn       = "file:test.db?cache=shared&mode=memory"
 	available bool
-	db        *orm.DB
+	db        *orm.DB2
 )
 
 func init() {
@@ -33,7 +33,7 @@ func init() {
 	}
 }
 
-func mustExec(t *testing.T, db *orm.DB, query string, args ...interface{}) (res sql.Result) {
+func mustExec(t *testing.T, db *orm.DB2, query string, args ...interface{}) (res sql.Result) {
 	res, err := db.Exec(query, args...)
 	if err != nil {
 		if len(query) > 300 {

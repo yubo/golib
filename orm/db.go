@@ -1,13 +1,11 @@
 package orm
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,152 +13,217 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type RowsIter interface {
+type DB interface {
+	DB() *sql.DB
 	Close() error
-	Next() bool
-	Scan(dest ...interface{}) error
+	Begin() (Tx, error)
+	BeginTx(ctx context.Context, ops *sql.TxOptions) (Tx, error)
+	ExecRows(bytes []byte) error // like mysql < a.sql
+
+	DBWrapper
 }
 
-const (
-	MAX_ROWS = 1000
-)
+type Tx interface {
+	Tx() *sql.Tx
+	Rollback() error
+	Commit() error
 
-type session interface {
+	DBWrapper
+}
+
+type rawDB interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 }
 
-type DB struct {
-	greatest string
-	tx       *sql.Tx
-	session  session // sql.DB or sql.Tx
-	DB       *sql.DB // DB
+type DBWrapper interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	ExecLastId(sql string, args ...interface{}) (int64, error)
+	ExecNum(sql string, args ...interface{}) (int64, error)
+	ExecNumErr(s string, args ...interface{}) error
+	Query(query string, args ...interface{}) *Rows
+	Update(sample interface{}, opts ...SqlOption) error
+	Insert(sample interface{}, opts ...SqlOption) error
+	InsertLastId(sample interface{}, opts ...SqlOption) (int64, error)
 }
 
-func printString(b []byte) string {
-	s := make([]byte, len(b))
+type ormDB struct {
+	*Options
+	db *sql.DB // DB
 
-	for i := 0; i < len(b); i++ {
-		if strconv.IsPrint(rune(b[i])) {
-			s[i] = b[i]
-		} else {
-			s[i] = '.'
+	dbWrapper
+}
+
+func Open(driverName, dataSourceName string, opts ...Option) (DB, error) {
+	o := &Options{}
+	for _, opt := range append(opts, WithDirver(driverName), WithDsn(dataSourceName)) {
+		opt(o)
+	}
+
+	if err := o.Validate(); err != nil {
+		return nil, err
+	}
+
+	return open(o)
+
+}
+
+func open(opts *Options) (DB, error) {
+	db, err := sql.Open(opts.driver, opts.dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	if !opts.withoutPing {
+		if err := db.Ping(); err != nil {
+			db.Close()
+			return nil, err
 		}
 	}
-	return string(s)
-}
 
-func dlog(format string, args ...interface{}) {
-	if klog.V(3).Enabled() {
-		klog.InfoDepth(2, fmt.Sprintf(format, args...))
+	if opts.ctx != nil {
+		go func() {
+			<-opts.ctx.Done()
+			db.Close()
+		}()
 	}
+
+	if opts.maxIdleCount != nil {
+		db.SetMaxIdleConns(*opts.maxIdleCount)
+	}
+	if opts.maxOpenConns != nil {
+		db.SetMaxOpenConns(*opts.maxOpenConns)
+	}
+	if opts.connMaxLifetime != nil {
+		db.SetConnMaxLifetime(*opts.connMaxLifetime)
+	}
+	if opts.connMaxIdletime != nil {
+		db.SetConnMaxIdleTime(*opts.connMaxIdletime)
+	}
+
+	return &ormDB{
+		Options: opts,
+		db:      db,
+		dbWrapper: dbWrapper{
+			Options: opts,
+			rawDB:   db,
+		},
+	}, nil
 }
 
-func dlogSql(query string, args ...interface{}) {
-	if klog.V(3).Enabled() {
-		args2 := make([]interface{}, len(args))
+func (p *ormDB) DB() *sql.DB {
+	return p.db
+}
 
-		for i := 0; i < len(args2); i++ {
-			rv := reflect.Indirect(reflect.ValueOf(args[i]))
-			if rv.IsValid() && rv.CanInterface() {
-				if b, ok := rv.Interface().([]byte); ok {
-					args2[i] = printString(b)
+func (p *ormDB) Close() error {
+	return p.db.Close()
+}
+
+func (p *ormDB) Begin() (Tx, error) {
+	return p.BeginTx(context.Background(), nil)
+}
+
+func (p *ormDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
+	tx, err := p.db.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &ormTx{tx: tx,
+		dbWrapper: dbWrapper{
+			Options: p.Options,
+			rawDB:   tx,
+		},
+	}, nil
+}
+
+func (p *ormDB) ExecRows(bytes []byte) (err error) {
+	var (
+		cmds []string
+		tx   *sql.Tx
+	)
+
+	if tx, err = p.db.Begin(); err != nil {
+		return fmt.Errorf("Begin() err: %s", err)
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	lines := strings.Split(string(bytes), "\n")
+	for cmd, in, i := "", false, 0; i < len(lines); i++ {
+		line := lines[i]
+		if len(line) == 0 || strings.HasPrefix(line, "-- ") {
+			continue
+		}
+
+		if in {
+			cmd += " " + strings.TrimSpace(line)
+			if cmd[len(cmd)-1] == ';' {
+				cmds = append(cmds, cmd)
+				in = false
+			}
+		} else {
+			n := strings.Index(line, " ")
+			if n <= 0 {
+				continue
+			}
+
+			switch line[:n] {
+			case "SET", "CREATE", "INSERT", "DROP":
+				cmd = line
+				if line[len(line)-1] == ';' {
+					cmds = append(cmds, cmd)
 				} else {
-					args2[i] = rv.Interface()
+					in = true
 				}
 			}
 		}
-		klog.InfoDepth(2, "\n\t"+fmt.Sprintf(strings.Replace(query, "?", "`%v`", -1), args2...))
-	}
-}
-
-func DbOpen(driverName, dataSourceName string) (*DB, error) {
-	db, err := sql.Open(driverName, dataSourceName)
-	if err != nil {
-		return nil, err
 	}
 
-	ret := &DB{DB: db, session: db, greatest: "greatest"}
-
-	if driverName == "sqlite3" {
-		ret.greatest = "max"
+	for i := 0; i < len(cmds); i++ {
+		_, err := tx.Exec(cmds[i])
+		if err != nil {
+			klog.V(3).Infof("%v", err)
+			return fmt.Errorf("sql %s\nerr %s", cmds[i], err)
+		}
 	}
-
-	return ret, nil
+	return nil
 }
 
-func DbOpenWithCtx(driverName, dsn string, ctx context.Context) (*DB, error) {
-	db, err := DbOpen(driverName, dsn)
-	if err != nil {
-		return nil, err
-	}
+type ormTx struct {
+	*Options
+	tx *sql.Tx
 
-	if err := db.DB.Ping(); err != nil {
-		db.DB.Close()
-		return nil, err
-	}
-
-	go func() {
-		<-ctx.Done()
-		db.DB.Close()
-	}()
-
-	return db, nil
+	dbWrapper
 }
 
-func (p *DB) Tx() bool {
-	return p.tx != nil
+func (p *ormTx) Tx() *sql.Tx {
+	return p.tx
 }
 
-func (p *DB) BeginWithCtx(ctx context.Context) (*DB, error) {
-	if p.Tx() {
-		return nil, fmt.Errorf("Already beginning a transaction")
-	}
-	if tx, err := p.DB.BeginTx(ctx, nil); err != nil {
-		return nil, err
-	} else {
-		return &DB{tx: tx, session: tx, greatest: p.greatest}, nil
-	}
+func (p *ormTx) Rollback() error {
+	return p.tx.Rollback()
 }
 
-func (p *DB) Rollback() error {
-	if p.tx != nil {
-		return p.tx.Rollback()
-	}
-	return fmt.Errorf("tx is nil")
-}
-
-func (p *DB) Commit() error {
-	if p.tx != nil {
-		return p.tx.Commit()
-	}
-	return fmt.Errorf("tx is nil")
-}
-
-func (p *DB) Begin() (*DB, error) {
-	return p.BeginWithCtx(context.Background())
-}
-
-func (p *DB) SetConns(maxIdleConns, maxOpenConns int) {
-	p.DB.SetMaxIdleConns(maxIdleConns)
-	p.DB.SetMaxOpenConns(maxOpenConns)
-}
-
-func (p *DB) Close() {
-	p.DB.Close()
-}
-
-func (p *DB) Query(query string, args ...interface{}) *Rows {
-	dlogSql(query, args...)
-	ret := &Rows{}
-	ret.rows, ret.err = p.session.Query(query, args...)
-	return ret
+func (p *ormTx) Commit() error {
+	return p.tx.Commit()
 }
 
 type Rows struct {
-	rows *sql.Rows
-	b    *binder
-	err  error
+	db    DBWrapper
+	query string
+	args  []interface{}
+	count *int64
+
+	maxRows int
+	rows    *sql.Rows
+	b       *binder
+	err     error
 }
 
 // Row(*int, *int, ...)
@@ -205,12 +268,9 @@ func (p *Rows) scanRow(dst interface{}) error {
 	return nil
 }
 
-func (p *Rows) Iter() (RowsIter, error) {
-	if p.err != nil {
-		return nil, p.err
-	}
-
-	return p.rows, nil
+func (p *Rows) Count(count *int64) *Rows {
+	p.count = count
+	return p
 }
 
 // Rows([]struct{})
@@ -220,16 +280,24 @@ func (p *Rows) Iter() (RowsIter, error) {
 // Rows([]string)
 // Rows([]*string)
 // Rows ignore notfound err msg
-func (p *Rows) Rows(dst interface{}, opts ...int) error {
+func (p *Rows) Rows(dst interface{}) error {
 	if p.err != nil {
 		return p.err
 	}
 	defer p.rows.Close()
 
-	limit := MAX_ROWS
-	if len(opts) > 0 && opts[0] > 0 {
-		limit = opts[0]
+	if p.count != nil {
+		countQuery, err := genCountQuery(p.query)
+		if err != nil {
+			return err
+		}
+		err = p.db.Query(countQuery, p.args...).Row(p.count)
+		if err != nil {
+			return err
+		}
 	}
+
+	limit := p.maxRows
 
 	rv, err := rowsInputValue(dst)
 	if err != nil {
@@ -297,376 +365,6 @@ func rowsInputValue(sample interface{}) (rv reflect.Value, err error) {
 	}
 
 	return rv, nil
-}
-
-func (p *DB) Exec(sql string, args ...interface{}) (sql.Result, error) {
-	dlogSql(sql, args...)
-
-	ret, err := p.session.Exec(sql, args...)
-	if err != nil {
-		klog.V(3).Info(1, err)
-		return nil, fmt.Errorf("Exec() err: %s", err)
-	}
-
-	return ret, nil
-}
-
-func (p *DB) ExecErr(sql string, args ...interface{}) error {
-	dlogSql(sql, args...)
-
-	_, err := p.session.Exec(sql, args...)
-	if err != nil {
-		klog.InfoDepth(1, err)
-	}
-	return err
-}
-
-func (p *DB) ExecLastId(sql string, args ...interface{}) (int64, error) {
-	dlogSql(sql, args...)
-
-	res, err := p.session.Exec(sql, args...)
-	if err != nil {
-		klog.InfoDepth(1, err)
-		return 0, fmt.Errorf("Exec() err: %s", err)
-	}
-
-	if ret, err := res.LastInsertId(); err != nil {
-		dlogSql("%v", err)
-		return 0, fmt.Errorf("LastInsertId() err: %s", err)
-	} else {
-		return ret, nil
-	}
-
-}
-
-func (p *DB) execNum(sql string, args ...interface{}) (int64, error) {
-	res, err := p.session.Exec(sql, args...)
-	if err != nil {
-		dlogSql("%v", err)
-		return 0, fmt.Errorf("Exec() err: %s", err)
-	}
-
-	if ret, err := res.RowsAffected(); err != nil {
-		dlogSql("%v", err)
-		return 0, fmt.Errorf("RowsAffected() err: %s", err)
-	} else {
-		return ret, nil
-	}
-}
-
-func (p *DB) ExecNum(sql string, args ...interface{}) (int64, error) {
-	dlogSql(sql, args...)
-	return p.execNum(sql, args...)
-}
-
-func (p *DB) ExecNumErr(s string, args ...interface{}) error {
-	dlogSql(s, args...)
-	if n, err := p.execNum(s, args...); err != nil {
-		return err
-	} else if n == 0 {
-		return errors.NewNotFound("rows")
-	} else {
-		return nil
-	}
-}
-
-func (p *DB) ExecRows(bytes []byte) (err error) {
-	var (
-		cmds []string
-		tx   *sql.Tx
-	)
-
-	if tx, err = p.DB.Begin(); err != nil {
-		return fmt.Errorf("Begin() err: %s", err)
-	}
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	lines := strings.Split(string(bytes), "\n")
-	for cmd, in, i := "", false, 0; i < len(lines); i++ {
-		line := lines[i]
-		if len(line) == 0 || strings.HasPrefix(line, "-- ") {
-			continue
-		}
-
-		if in {
-			cmd += " " + strings.TrimSpace(line)
-			if cmd[len(cmd)-1] == ';' {
-				cmds = append(cmds, cmd)
-				in = false
-			}
-		} else {
-			n := strings.Index(line, " ")
-			if n <= 0 {
-				continue
-			}
-
-			switch line[:n] {
-			case "SET", "CREATE", "INSERT", "DROP":
-				cmd = line
-				if line[len(line)-1] == ';' {
-					cmds = append(cmds, cmd)
-				} else {
-					in = true
-				}
-			}
-		}
-	}
-
-	for i := 0; i < len(cmds); i++ {
-		_, err := tx.Exec(cmds[i])
-		if err != nil {
-			klog.V(3).Infof("%v", err)
-			return fmt.Errorf("sql %s\nerr %s", cmds[i], err)
-		}
-	}
-	return nil
-}
-
-func (p *DB) Update(table string, sample interface{}) error {
-	sql, args, err := GenUpdateSql(table, sample)
-	if err != nil {
-		dlog("%v", err)
-		return err
-	}
-
-	dlogSql(sql, args...)
-	_, err = p.session.Exec(sql, args...)
-	if err != nil {
-		dlog("%v", err)
-	}
-	return err
-}
-
-func (p *DB) Insert(table string, sample interface{}) error {
-	sql, args, err := GenInsertSql(table, sample)
-	if err != nil {
-		return err
-	}
-
-	dlogSql(sql, args...)
-	if _, err := p.session.Exec(sql, args...); err != nil {
-		dlog("%v", err)
-		return fmt.Errorf("Insert() err: %s", err)
-	}
-	return nil
-}
-
-func (p *DB) InsertLastId(table string, sample interface{}) (int64, error) {
-	sql, args, err := GenInsertSql(table, sample)
-	if err != nil {
-		return 0, err
-	}
-
-	dlogSql(sql, args...)
-	res, err := p.session.Exec(sql, args...)
-	if err != nil {
-		dlog("%v", err)
-		return 0, fmt.Errorf("Exec() err: %s", err)
-	}
-
-	if ret, err := res.LastInsertId(); err != nil {
-		dlog("%v", err)
-		return 0, fmt.Errorf("LastInsertId() err: %s", err)
-	} else {
-		return ret, nil
-	}
-}
-
-// utils
-func snakeCasedName(name string) string {
-	newstr := make([]rune, 0)
-	firstTime := true
-
-	for _, chr := range name {
-		if isUpper := 'A' <= chr && chr <= 'Z'; isUpper {
-			if firstTime == true {
-				firstTime = false
-			} else {
-				newstr = append(newstr, '_')
-			}
-			chr -= ('A' - 'a')
-		}
-		newstr = append(newstr, chr)
-	}
-
-	return string(newstr)
-}
-
-// {1,2,3} => "(1,2,3)"
-func Ints2sql(array []int64) string {
-	out := bytes.NewBuffer([]byte("("))
-
-	for i := 0; i < len(array); i++ {
-		if i > 0 {
-			out.WriteByte(',')
-		}
-		fmt.Fprintf(out, "%d", array[i])
-	}
-	out.WriteByte(')')
-	return out.String()
-}
-
-// {"1","2","3"} => "('1', '2', '3')"
-func Strings2sql(array []string) string {
-	out := bytes.NewBuffer([]byte("("))
-
-	for i := 0; i < len(array); i++ {
-		if i > 0 {
-			out.WriteByte(',')
-		}
-		out.WriteByte('\'')
-		out.Write([]byte(array[i]))
-		out.WriteByte('\'')
-	}
-	out.WriteByte(')')
-	return out.String()
-}
-
-// struct{}, *struct{}, **struct{} return true
-func isStructMode(in interface{}) bool {
-	rt := reflect.TypeOf(in)
-
-	// depth 2
-	if rt.Kind() == reflect.Ptr {
-		rt = rt.Elem()
-	}
-	if rt.Kind() == reflect.Ptr {
-		rt = rt.Elem()
-	}
-
-	return rt.Kind() == reflect.Struct && rt.String() != "time.Time"
-}
-
-type kv struct {
-	k string
-	v interface{}
-}
-
-func GenUpdateSql(table string, sample interface{}) (string, []interface{}, error) {
-	set := []kv{}
-	where := []kv{}
-
-	rv := reflect.Indirect(reflect.ValueOf(sample))
-
-	if err := genUpdateSql(rv, &set, &where); err != nil {
-		return "", nil, err
-	}
-
-	if len(set) == 0 {
-		return "", nil, fmt.Errorf("Update %s `set` is empty", table)
-	}
-	if len(where) == 0 {
-		return "", nil, fmt.Errorf("update %s `where` is empty", table)
-	}
-
-	buf := &bytes.Buffer{}
-	buf.WriteString("update " + table + " set ")
-
-	args := []interface{}{}
-	for i, v := range set {
-		if i != 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(v.k + "=?")
-		args = append(args, v.v)
-	}
-
-	buf.WriteString(" where ")
-	for i, v := range where {
-		if i != 0 {
-			buf.WriteString(" and ")
-		}
-		buf.WriteString(v.k + "=?")
-		args = append(args, v.v)
-	}
-
-	return buf.String(), args, nil
-}
-
-func genUpdateSql(rv reflect.Value, set, where *[]kv) error {
-	fields := cachedTypeFields(rv.Type())
-	for _, f := range fields.list {
-		fv, err := getSubv(rv, f.index, false)
-		if err != nil || isNil(fv) {
-			continue
-		}
-
-		if fv.Kind() == reflect.Ptr {
-			fv = fv.Elem()
-		}
-
-		if f.where {
-			*where = append(*where, kv{f.key, fv.Interface()})
-			continue
-		}
-
-		v, err := sqlInterface(fv)
-		if err != nil {
-			return err
-		}
-		*set = append(*set, kv{f.key, v})
-	}
-	return nil
-}
-
-func GenInsertSql(table string, sample interface{}) (string, []interface{}, error) {
-	values := []kv{}
-
-	rv := reflect.Indirect(reflect.ValueOf(sample))
-
-	if err := genInsertSql(rv, &values); err != nil {
-		return "", nil, err
-	}
-
-	if len(values) == 0 {
-		return "", nil, fmt.Errorf("insert into %s `values` is empty", table)
-	}
-
-	buf := &bytes.Buffer{}
-	buf2 := &bytes.Buffer{}
-	args := []interface{}{}
-
-	buf.WriteString("insert into " + table + " (")
-
-	for i, v := range values {
-		if i != 0 {
-			buf.WriteString(", ")
-			buf2.WriteString(", ")
-		}
-		buf.WriteString("`" + v.k + "`")
-		buf2.WriteString("?")
-		args = append(args, v.v)
-	}
-
-	return buf.String() + ") values (" + buf2.String() + ")", args, nil
-}
-
-func genInsertSql(rv reflect.Value, values *[]kv) error {
-	fields := cachedTypeFields(rv.Type())
-	for _, f := range fields.list {
-		fv, err := getSubv(rv, f.index, false)
-		if err != nil || isNil(fv) {
-			continue
-		}
-
-		if fv.Kind() == reflect.Ptr {
-			fv = fv.Elem()
-		}
-
-		v, err := sqlInterface(fv)
-		if err != nil {
-			return err
-		}
-		*values = append(*values, kv{f.key, v})
-	}
-	return nil
 }
 
 func (p *Rows) genBinder(rt reflect.Type) (*binder, error) {
@@ -757,7 +455,7 @@ func (p *transfer) unmarshal() error {
 
 	if jsonStr, ok := p.dstProxy.([]byte); ok {
 		if err := json.Unmarshal(jsonStr, rv.Addr().Interface()); err != nil {
-			dlog("json.Unmarshal() error %s", err)
+			dlog(2, "json.Unmarshal() error %s", err)
 		}
 	}
 
@@ -831,4 +529,44 @@ func isNil(rv reflect.Value) bool {
 	default:
 		return false
 	}
+}
+
+type RowsIter interface {
+	Close() error
+	Next() bool
+	Row(dest ...interface{}) error
+}
+
+func (p *Rows) Iterator() (RowsIter, error) {
+	if p.err != nil {
+		return nil, p.err
+	}
+
+	return &rowsIterator{Rows: p}, nil
+}
+
+type rowsIterator struct {
+	*Rows
+}
+
+func (p *rowsIterator) Close() error {
+	return p.rows.Close()
+}
+
+func (p *rowsIterator) Next() bool {
+	return p.rows.Next()
+}
+
+func (p *rowsIterator) Row(dst ...interface{}) error {
+	if p.err != nil {
+		return p.err
+	}
+
+	if len(dst) == 1 && isStructMode(dst[0]) {
+		// klog.V(5).Infof("enter row scan struct")
+		return p.Rows.scanRow(dst[0])
+	}
+
+	// klog.V(5).Infof("enter row scan")
+	return p.rows.Scan(dst...)
 }
