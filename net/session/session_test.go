@@ -19,21 +19,21 @@ var (
 	driver    = "sqlite3"
 	dsn       = "file:test.db?cache=shared&mode=memory"
 	available bool
-	db        *orm.DB2
+	db        orm.DB
 )
 
 func init() {
 	var err error
 
-	if db, err = orm.DbOpen(driver, dsn); err == nil {
-		if err = db.DB.Ping(); err == nil {
+	if db, err = orm.Open(driver, dsn); err == nil {
+		if err = db.DB().Ping(); err == nil {
 			available = true
 		}
 		db.Close()
 	}
 }
 
-func mustExec(t *testing.T, db *orm.DB2, query string, args ...interface{}) (res sql.Result) {
+func mustExec(t *testing.T, db orm.DB, query string, args ...interface{}) (res sql.Result) {
 	res, err := db.Exec(query, args...)
 	if err != nil {
 		if len(query) > 300 {
@@ -67,7 +67,7 @@ func TestDbSession(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	db, _ := orm.DbOpenWithCtx(driver, dsn, ctx)
+	db, _ := orm.Open(driver, dsn, orm.WithContext(ctx))
 
 	if sess, err = StartSession(cf, WithCtx(ctx), WithDB(db)); err != nil {
 		t.Fatalf("error NewSession: %s", err.Error())
@@ -157,7 +157,7 @@ func TestDbSessionGC(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	db, _ := orm.DbOpenWithCtx(driver, dsn, ctx)
+	db, _ := orm.Open(driver, dsn, orm.WithContext(ctx))
 	clock := &clock.FakeClock{}
 	clock.SetTime(time.Now())
 

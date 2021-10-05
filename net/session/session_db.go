@@ -37,7 +37,7 @@ func newDbStorage(cf *Config, opts *Options) (storage, error) {
 
 	if st.db == nil && cf.Dsn != "" {
 		var err error
-		st.db, err = orm.DbOpenWithCtx(cf.DbDriver, cf.Dsn, opts.ctx)
+		st.db, err = orm.Open(cf.DbDriver, cf.Dsn, orm.WithContext(opts.ctx))
 		if err != nil {
 			return nil, err
 		}
@@ -47,7 +47,7 @@ func newDbStorage(cf *Config, opts *Options) (storage, error) {
 		return nil, fmt.Errorf("unable get db storage")
 	}
 
-	if err := st.db.DB.Ping(); err != nil {
+	if err := st.db.DB().Ping(); err != nil {
 		return nil, err
 	}
 
@@ -62,7 +62,7 @@ func newDbStorage(cf *Config, opts *Options) (storage, error) {
 }
 
 type dbStorage struct {
-	db     *orm.DB2
+	db     orm.DB
 	config *Config
 }
 
@@ -81,7 +81,7 @@ func (p *dbStorage) get(sid string) (ret *sessionConn, err error) {
 }
 
 func (p *dbStorage) insert(s *sessionConn) error {
-	return p.db.Insert("session", s)
+	return p.db.Insert(s, orm.WithTable("session"))
 }
 
 func (p *dbStorage) del(sid string) error {
@@ -89,5 +89,5 @@ func (p *dbStorage) del(sid string) error {
 }
 
 func (p *dbStorage) update(s *sessionConn) error {
-	return p.db.Update("session", s)
+	return p.db.Update(s, orm.WithTable("session"))
 }

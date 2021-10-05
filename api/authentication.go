@@ -18,7 +18,6 @@ package api
 
 import (
 	"fmt"
-	"time"
 )
 
 const (
@@ -166,7 +165,7 @@ type TokenRequestStatus struct {
 	// Token is the opaque bearer token.
 	Token string `json:"token" protobuf:"bytes,1,opt,name=token"`
 	// ExpirationTimestamp is the time of expiration of the returned token.
-	ExpirationTimestamp time.Time `json:"expirationTimestamp" protobuf:"bytes,2,opt,name=expirationTimestamp"`
+	ExpirationTimestamp Time `json:"expirationTimestamp" protobuf:"bytes,2,opt,name=expirationTimestamp"`
 }
 
 // BoundObjectReference is a reference to an object that a token is bound to.

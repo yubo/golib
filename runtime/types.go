@@ -33,12 +33,12 @@ package runtime
 // +k8s:deepcopy-gen=false
 // +protobuf=true
 // +k8s:openapi-gen=true
-// type TypeMeta struct {
-// 	// +optional
-// 	APIVersion string `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty" protobuf:"bytes,1,opt,name=apiVersion"`
-// 	// +optional
-// 	Kind string `json:"kind,omitempty" yaml:"kind,omitempty" protobuf:"bytes,2,opt,name=kind"`
-// }
+type TypeMeta struct {
+	// +optional
+	APIVersion string `json:"apiVersion,omitempty" yaml:"apiVersion,omitempty" protobuf:"bytes,1,opt,name=apiVersion"`
+	// +optional
+	Kind string `json:"kind,omitempty" yaml:"kind,omitempty" protobuf:"bytes,2,opt,name=kind"`
+}
 
 const (
 	ContentTypeJSON     string = "application/json"
@@ -112,7 +112,7 @@ type RawExtension struct {
 // +protobuf=true
 // +k8s:openapi-gen=true
 type Unknown struct {
-	//TypeMeta `json:",inline" protobuf:"bytes,1,opt,name=typeMeta"`
+	TypeMeta `json:",inline" protobuf:"bytes,1,opt,name=typeMeta"`
 	// Raw will hold the complete serialized object which couldn't be matched
 	// with a registered type. Most likely, nothing should be done with this
 	// except for passing it through the system.

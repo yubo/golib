@@ -3,7 +3,6 @@ module github.com/yubo/golib
 go 1.15
 
 require (
-	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/creack/pty v1.1.11
 	github.com/davecgh/go-spew v1.1.1
@@ -16,25 +15,25 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
-	github.com/golang/protobuf v1.5.2
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/go-cmp v0.5.5
 	github.com/google/gofuzz v1.1.0
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/json-iterator/go v1.1.11
+	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-sqlite3 v1.14.0
 	github.com/mitchellh/go-wordwrap v1.0.1
 	github.com/moby/term v0.0.0-20201216013528-df9cb8a40635
 	github.com/modern-go/reflect2 v1.0.1
+	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/client_model v0.2.0
-	github.com/prometheus/common v0.15.0
+	github.com/prometheus/client_golang v0.9.3
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
-	github.com/uber-go/tally v3.3.17+incompatible
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/multierr v1.4.0 // indirect
 	go.uber.org/zap v1.13.0
@@ -47,12 +46,13 @@ require (
 	google.golang.org/grpc v1.27.1
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d // indirect
+	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gopkg.in/inf.v0 v0.9.1
 	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	gotest.tools/v3 v3.0.3 // indirect
 	honnef.co/go/tools v0.0.1-2020.1.6 // indirect
-	k8s.io/apimachinery v0.22.2
 	k8s.io/klog/v2 v2.9.0
 	sigs.k8s.io/yaml v1.2.0
 )
