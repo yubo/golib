@@ -5,16 +5,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func newOptions() *Options {
-	return &Options{
-		enableFlag:    true,
-		enableEnv:     true,
-		allowEmptyEnv: false,
-		maxDepth:      5,
-	}
-}
-
-type Options struct {
+type options struct {
 	pathsBase     map[string]string // data in yaml format with path
 	pathsOverride map[string]string // data in yaml format with path
 	valueFiles    []string          // files, -f/--values
@@ -27,9 +18,20 @@ type Options struct {
 	allowEmptyEnv bool
 	flagSet       *pflag.FlagSet
 	params        []*param // all of config fields
+	tagOptsGetter func(path string) (tag *TagOpts)
+	prefixPath    string
 }
 
-func (s *Options) SetOptions(enableEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
+func newOptions() *options {
+	return &options{
+		enableFlag:    true,
+		enableEnv:     true,
+		allowEmptyEnv: false,
+		maxDepth:      5,
+	}
+}
+
+func (s *options) set(enableEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
 	s.enableEnv = enableEnv
 	s.maxDepth = maxDepth
 	s.allowEmptyEnv = allowEmptyEnv
@@ -40,19 +42,19 @@ func (s *Options) SetOptions(enableEnv, allowEmptyEnv bool, maxDepth int, fs *pf
 	}
 }
 
-func (s *Options) AddFlags(f *pflag.FlagSet) {
+func (s *options) addFlags(f *pflag.FlagSet) {
 	f.StringSliceVarP(&s.valueFiles, "values", "f", s.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
 	f.StringArrayVar(&s.values, "set", s.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&s.stringValues, "set-string", s.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&s.fileValues, "set-file", s.fileValues, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
 }
 
-func (in *Options) DeepCopy() (out *Options) {
+func (in *options) deepCopy() (out *options) {
 	if in == nil {
 		return nil
 	}
 
-	out = new(Options)
+	out = new(options)
 	*out = *in
 
 	if in.pathsBase != nil {
@@ -86,14 +88,11 @@ func (in *Options) DeepCopy() (out *Options) {
 	return
 }
 
-func (s *Options) ValueFiles() []string {
-	return s.valueFiles
-}
-func (p *Options) Validate() (err error) {
+func (p *options) validate() (err error) {
 	return nil
 }
 
-type Option func(*Options)
+type Option func(*options)
 
 // with config object
 func WithConfig(path string, config interface{}) Option {
@@ -107,7 +106,7 @@ func WithConfig(path string, config interface{}) Option {
 
 // with config yaml
 func WithDefaultYaml(path, yamlData string) Option {
-	return func(o *Options) {
+	return func(o *options) {
 		if o.pathsBase == nil {
 			o.pathsBase = map[string]string{path: yamlData}
 		} else {
@@ -117,7 +116,7 @@ func WithDefaultYaml(path, yamlData string) Option {
 }
 
 func WithOverrideYaml(path, yamlData string) Option {
-	return func(o *Options) {
+	return func(o *options) {
 		if o.pathsOverride == nil {
 			o.pathsOverride = map[string]string{path: yamlData}
 		} else {
@@ -127,7 +126,13 @@ func WithOverrideYaml(path, yamlData string) Option {
 }
 
 func WithValueFile(valueFiles ...string) Option {
-	return func(o *Options) {
+	return func(o *options) {
 		o.valueFiles = append(o.valueFiles, valueFiles...)
+	}
+}
+
+func WithTagOptsGetter(getter func(path string) (tag *TagOpts)) Option {
+	return func(o *options) {
+		o.tagOptsGetter = getter
 	}
 }

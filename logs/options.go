@@ -57,7 +57,7 @@ func NewOptions() *Options {
 func (o *Options) Validate() []error {
 	errs := []error{}
 	if o.LogFormat != defaultLogFormat {
-		allFlags := unsupportedLoggingFlags()
+		allFlags := UnsupportedLoggingFlags()
 		for _, fname := range allFlags {
 			if flagIsSet(fname) {
 				errs = append(errs, fmt.Errorf("non-default logging format doesn't honor flag: %s", fname))
@@ -84,7 +84,7 @@ func flagIsSet(name string) bool {
 
 // AddFlags add logging-format flag
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
-	unsupportedFlags := fmt.Sprintf("--%s", strings.Join(unsupportedLoggingFlags(), ", --"))
+	unsupportedFlags := fmt.Sprintf("--%s", strings.Join(UnsupportedLoggingFlags(), ", --"))
 	formats := fmt.Sprintf(`"%s"`, strings.Join(logRegistry.List(), `", "`))
 	fs.StringVar(&o.LogFormat, logFormatFlagName, defaultLogFormat, fmt.Sprintf("Sets the log format. Permitted formats: %s.\nNon-default formats don't honor these flags: %s.\nNon-default choices are currently alpha and subject to change without warning.", formats, unsupportedFlags))
 
@@ -109,7 +109,7 @@ func (o *Options) Get() (logr.Logger, error) {
 	return logRegistry.Get(o.LogFormat)
 }
 
-func unsupportedLoggingFlags() []string {
+func UnsupportedLoggingFlags() []string {
 	allFlags := []string{}
 
 	// k8s.io/klog flags

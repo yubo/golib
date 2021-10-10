@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spf13/pflag"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	"k8s.io/klog/v2"
@@ -18,15 +17,11 @@ import (
 )
 
 var (
-	GlobalOptions = newOptions()
+	configerOptions = newOptions()
 )
 
-func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
-	GlobalOptions.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
-}
-
 type Configer struct {
-	*Options
+	*options
 
 	data     map[string]interface{}
 	path     []string
@@ -35,18 +30,18 @@ type Configer struct {
 
 // must called after pflag parse
 func New(opts ...Option) (*Configer, error) {
-	options := GlobalOptions.DeepCopy()
+	options := configerOptions.deepCopy()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	if err := options.Validate(); err != nil {
+	if err := options.validate(); err != nil {
 		return nil, err
 	}
 
 	conf := &Configer{
 		data:    map[string]interface{}{},
-		Options: options,
+		options: options,
 	}
 
 	if err := conf.Prepare(); err != nil {
@@ -150,7 +145,7 @@ func (p *Configer) Prepare() (err error) {
 }
 
 func (p *Configer) ValueFiles() []string {
-	if p == nil || p.Options == nil {
+	if p == nil || p.options == nil {
 		return nil
 	}
 	return p.valueFiles
@@ -159,14 +154,14 @@ func (p *Configer) ValueFiles() []string {
 func (p *Configer) GetConfiger(path string) *Configer {
 	if data, ok := p.GetRaw(path).(map[string]interface{}); ok {
 		return &Configer{
-			Options: p.Options,
+			options: p.options,
 			path:    append(clonePath(p.path), parsePath(path)...),
 			data:    data,
 		}
 	}
 
 	return &Configer{
-		Options: p.Options,
+		options: p.options,
 		path:    append(clonePath(p.path), parsePath(path)...),
 		data:    map[string]interface{}{},
 	}
@@ -349,7 +344,7 @@ func (p *Configer) String() string {
 	return string(buf)
 }
 
-func (p *Options) getEnv(key string) (string, bool) {
+func (p *options) getEnv(key string) (string, bool) {
 	val, ok := os.LookupEnv(key)
 	return val, ok && (p.allowEmptyEnv || val != "")
 }

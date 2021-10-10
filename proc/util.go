@@ -1,11 +1,16 @@
 package proc
 
 import (
+	"fmt"
 	"os"
 	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/yubo/golib/cli/flag"
+	"github.com/yubo/golib/util/term"
 )
 
 func envOr(name string, defs ...string) string {
@@ -43,5 +48,21 @@ func nameOfFunction(f interface{}) string {
 	last = strings.TrimSuffix(last, "·fm")  // < Go 1.5
 	last = strings.TrimSuffix(last, "-fm")  // Go 1.5
 	return last
+
+}
+
+func setGroupCommandFunc(cmd *cobra.Command) {
+	nfs := NamedFlagSets()
+	usageFmt := "Usage:\n  %s\n"
+	cols, _, _ := term.GetTerminalSize(cmd.OutOrStdout())
+	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
+		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
+		flag.PrintSections(cmd.OutOrStderr(), *nfs, cols)
+		return nil
+	})
+	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
+		flag.PrintSections(cmd.OutOrStdout(), *nfs, cols)
+	})
 
 }

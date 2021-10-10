@@ -352,11 +352,11 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	GlobalOptions.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
-	GlobalOptions.values = []string{"e=v2_e", "f1=f1,f2=f2"}
-	GlobalOptions.stringValues = []string{"sv1=sv1,sv2=sv2"}
+	configerOptions.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
+	configerOptions.values = []string{"e=v2_e", "f1=f1,f2=f2"}
+	configerOptions.stringValues = []string{"sv1=sv1,sv2=sv2"}
 	cf, err := New()
-	defer func() { GlobalOptions = newOptions() }()
+	defer func() { configerOptions = newOptions() }()
 
 	assert.NoError(t, err)
 
@@ -380,6 +380,60 @@ e: v2_e
 	}
 }
 
+func TestConfigerWithTagOptsGetter(t *testing.T) {
+	type Foo struct {
+		A string `json:"a" flag:"test-a" env:"TEST_A" default:"default-a"`
+	}
+
+	opts2 := &TagOpts{
+		Name:    "A",
+		Json:    "a",
+		Flag:    []string{"test-a"},
+		Env:     "TEST_A",
+		Default: "default-a",
+	}
+	getter := func(fieldName string) *TagOpts {
+		switch fieldName {
+		case "A":
+			return opts2
+		default:
+			return nil
+		}
+	}
+
+	var cases = []struct {
+		tagOptsGetter func(string) *TagOpts
+		want          *TagOpts
+	}{
+		{nil, &TagOpts{
+			Name:    "A",
+			Json:    "a",
+			Flag:    []string{"test-a"},
+			Env:     "TEST_A",
+			Default: "default-a",
+		}},
+		{getter, opts2},
+	}
+
+	for _, c := range cases {
+		teardown()
+
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		err := AddConfigs(fs, "", &Foo{})
+		assert.NoError(t, err)
+
+		found := false
+		fs.VisitAll(func(flag *pflag.Flag) {
+			if flag.Name == c.want.Flag[0] {
+				found = true
+			}
+		})
+		if !found {
+			t.Errorf("can't found flag --%s", c.want.Flag[0])
+		}
+	}
+}
+
 func TestConfigerPriority(t *testing.T) {
 	type Foo struct {
 		A string `json:"a" flag:"test-a" env:"TEST_A" default:"default-a"`
@@ -398,7 +452,7 @@ func TestConfigerPriority(t *testing.T) {
 		{"flag-a", "env-a", "", "flag-a"},
 		{"flag-a", "env-a", "file-a", "flag-a"},
 		{"", "env-a", "", "env-a"},
-		{"", "env-a", "file-a", "env-a"},
+		{"", "env-a", "file-a", "file-a"},
 		{"", "", "file-a", "file-a"},
 		{"", "", "", "default-a"},
 	}
@@ -431,7 +485,7 @@ func TestConfigerPriority(t *testing.T) {
 			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("#"), 0666)
 		}
 
-		GlobalOptions.valueFiles = []string{"base.yml"}
+		configerOptions.valueFiles = []string{"base.yml"}
 		cf, err := New()
 		assert.NoError(t, err)
 
@@ -459,5 +513,5 @@ func TestConfigerDef(t *testing.T) {
 
 func teardown() {
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	GlobalOptions = newOptions()
+	configerOptions = newOptions()
 }

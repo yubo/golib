@@ -76,3 +76,11 @@ func GlogSetter(val string) (string, error) {
 	}
 	return fmt.Sprintf("successfully set klog.logging.verbosity to %s", val), nil
 }
+
+func RegistryFreeze() {
+	logRegistry.Freeze()
+}
+
+func RegistryList() []string {
+	return logRegistry.List()
+}

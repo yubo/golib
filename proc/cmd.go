@@ -11,7 +11,6 @@ import (
 	"github.com/yubo/golib/cli/flag"
 	"github.com/yubo/golib/cli/globalflag"
 	"github.com/yubo/golib/configer"
-	"github.com/yubo/golib/util/term"
 	"k8s.io/klog/v2"
 )
 
@@ -35,34 +34,41 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		},
 	}
 
-	// add flags
-	fs := cmd.Flags()
-	fs.ParseErrorsWhitelist.UnknownFlags = true
-	configer.SetOptions(true, false, 5, fs)
-	namedFlagSets := NamedFlagSets()
-	globalflag.AddGlobalFlags(namedFlagSets.FlagSet("global"), name)
-	configer.GlobalOptions.AddFlags(namedFlagSets.FlagSet("global"))
-	for _, f := range namedFlagSets.FlagSets {
-		fs.AddFlagSet(f)
-	}
-
-	usageFmt := "Usage:\n  %s\n"
-	cols, _, _ := term.GetTerminalSize(cmd.OutOrStdout())
-	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
-		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
-		flag.PrintSections(cmd.OutOrStderr(), *namedFlagSets, cols)
-		return nil
-	})
-	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
-		flag.PrintSections(cmd.OutOrStdout(), *namedFlagSets, cols)
-	})
+	InitFlags(cmd, true, true, false, 5)
 
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
 
 	return cmd
 }
 
-func RegisterFlags(path, groupName string, sample interface{}) {
-	configer.AddConfigs(NamedFlagSets().FlagSet(groupName), path, sample)
+func InitFlags(cmd *cobra.Command, group, allowEnv, allowEmptyEnv bool, maxDepth int) {
+
+	// add flags
+	fs := cmd.Flags()
+	fs.ParseErrorsWhitelist.UnknownFlags = true
+
+	nfs := NamedFlagSets()
+
+	// add klog, logs, help flags
+	globalflag.AddGlobalFlags(nfs.FlagSet("global"))
+
+	// add configer flags
+	configer.AddFlags(nfs.FlagSet("global"))
+
+	// set configer options for init configer options fro parser
+	configer.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
+
+	// add registed fs into cmd.Flags
+	for _, f := range nfs.FlagSets {
+		fs.AddFlagSet(f)
+	}
+
+	if group {
+		setGroupCommandFunc(cmd)
+	}
+
+}
+
+func RegisterFlags(path, groupName string, sample interface{}, opts ...configer.Option) {
+	configer.AddConfigs(NamedFlagSets().FlagSet(groupName), path, sample, opts...)
 }

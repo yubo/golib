@@ -70,7 +70,7 @@ func Stop() error {
 }
 
 func RegisterHooks(in []HookOps) error {
-	for i, _ := range in {
+	for i := range in {
 		v := &in[i]
 		v.process = proc
 		v.priority = ProcessPriority(uint32(v.Priority)<<(16-3) + uint32(v.SubPriority))

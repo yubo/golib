@@ -99,6 +99,7 @@ func (lfr *LogFormatRegistry) List() []string {
 func (lfr *LogFormatRegistry) Freeze() {
 	lfr.frozen = true
 }
+
 func init() {
 	// Text format is default klog format
 	logRegistry.Register(defaultLogFormat, nil)

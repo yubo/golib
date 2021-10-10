@@ -10,13 +10,9 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func AddFlags(fs *pflag.FlagSet, in interface{}) {
-	addFlags(fs, in, 0)
-}
-
-func addFlags(fs *pflag.FlagSet, in interface{}, depth int) {
-	if depth > GlobalOptions.maxDepth {
-		panic(fmt.Sprintf("path.depth is larger than the maximum allowed depth of %d", GlobalOptions.maxDepth))
+func (p *options) addFlagsVar(fs *pflag.FlagSet, in interface{}, depth int) {
+	if depth > configerOptions.maxDepth {
+		panic(fmt.Sprintf("path.depth is larger than the maximum allowed depth of %d", configerOptions.maxDepth))
 	}
 
 	if k := reflect.ValueOf(in).Kind(); k != reflect.Ptr {
@@ -30,7 +26,7 @@ func addFlags(fs *pflag.FlagSet, in interface{}, depth int) {
 		fv := rv.Field(i)
 		ft := sf.Type
 
-		opt := GetTagOpts(sf)
+		opt := p.getTagOpts(sf, nil)
 		if len(opt.Flag) == 0 {
 			continue
 		}
@@ -41,11 +37,11 @@ func addFlags(fs *pflag.FlagSet, in interface{}, depth int) {
 				fv = fv.Elem()
 				ft = fv.Type()
 			}
-			addFlags(fs, fv.Addr().Interface(), depth+1)
+			p.addFlagsVar(fs, fv.Addr().Interface(), depth+1)
 			continue
 		}
 
-		_addFlag(fs, fv, ft, opt)
+		addflagvar(fs, fv, ft, opt)
 	}
 }
 
@@ -55,7 +51,7 @@ func prepareValue(rv reflect.Value, rt reflect.Type) {
 	}
 }
 
-func _addFlag(fs *pflag.FlagSet, rv reflect.Value, rt reflect.Type, opt *TagOpts) {
+func addflagvar(fs *pflag.FlagSet, rv reflect.Value, rt reflect.Type, opt *TagOpts) {
 	if !rv.CanSet() {
 		panic(fmt.Sprintf("field %s (%s) can not be set", opt.Name, rv.Kind()))
 	}

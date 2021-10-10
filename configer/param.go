@@ -75,18 +75,6 @@ func (p *Configer) mergeFlagValues(into map[string]interface{}) {
 	}
 }
 
-//func (p *Configer) mergeEnvValues(into map[string]interface{}) {
-//	if !p.enableEnv {
-//		return
-//	}
-//	for _, f := range p.params {
-//		if v := p.getEnvValue(f); v != nil {
-//			klog.V(7).InfoS("env", "path", joinPath(append(p.path, f.configPath)...), "value", v)
-//			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
-//		}
-//	}
-//}
-
 func (p *Configer) getFlagValue(f *param) interface{} {
 	if f.flag == "" {
 		return nil
@@ -99,59 +87,7 @@ func (p *Configer) getFlagValue(f *param) interface{} {
 	return nil
 }
 
-//func (p *Configer) getEnvValue(f *param) interface{} {
-//	if f.envName == "" {
-//		return nil
-//	}
-//
-//	val, ok := GetEnv(f.envName)
-//	if !ok {
-//		return nil
-//	}
-//
-//	switch reflect.ValueOf(f.flagValue).Elem().Interface().(type) {
-//	case bool:
-//		return cast.ToBool(val)
-//	case string:
-//		return cast.ToString(val)
-//	case int32, int16, int8, int:
-//		return cast.ToInt(val)
-//	case uint:
-//		return cast.ToUint(val)
-//	case uint32:
-//		return cast.ToUint32(val)
-//	case uint64:
-//		return cast.ToUint64(val)
-//	case int64:
-//		return cast.ToInt64(val)
-//	case float64, float32:
-//		return cast.ToFloat64(val)
-//	//case time.Time:
-//	//	return cast.ToTime(val)
-//	case time.Duration:
-//		return cast.ToDuration(val)
-//	case []string:
-//		return cast.ToStringSlice(val)
-//	case []int:
-//		return cast.ToIntSlice(val)
-//	default:
-//		panic(fmt.Sprintf("unsupported type %s", reflect.TypeOf(f.flagValue).Name()))
-//	}
-//}
-
-// addConfigs: add flags and env from sample's tags
-func AddConfigs(fs *pflag.FlagSet, path string, sample interface{}) error {
-	rv := reflect.Indirect(reflect.ValueOf(sample))
-	rt := rv.Type()
-
-	if rv.Kind() != reflect.Struct || rt.String() == "time.Time" {
-		return fmt.Errorf("Addflag: sample must be a struct, got %v/%v", rv.Kind(), rt)
-	}
-
-	return GlobalOptions.addConfigs(parsePath(path), fs, rt)
-}
-
-func (p *Options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
+func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
 	if len(path) > p.maxDepth {
 		return fmt.Errorf("path.depth is larger than the maximum allowed depth of %d", p.maxDepth)
 	}
@@ -173,7 +109,7 @@ func (p *Options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 			continue
 		}
 
-		opt := GetTagOpts(sf, p)
+		opt := p.getTagOpts(sf, path)
 		if opt.Skip {
 			continue
 		}
@@ -238,6 +174,16 @@ func (p *Options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 	return nil
 }
 
+func (p *options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
+	if p.tagOptsGetter != nil {
+		field := strings.TrimPrefix(joinPath(append(paths, sf.Name)...), p.prefixPath+".")
+		if opts := p.tagOptsGetter(field); opts != nil {
+			return opts
+		}
+	}
+	return getTagOpts(sf, p)
+}
+
 type TagOpts struct {
 	Name        string   // field name
 	Json        string   // json:"{json}"
@@ -254,12 +200,7 @@ func (p TagOpts) String() string {
 		p.Json, p.Flag, p.Env, p.Description)
 }
 
-func GetTagOpts(sf reflect.StructField, in ...*Options) (tag *TagOpts) {
-	options := GlobalOptions
-	if len(in) > 0 {
-		options = in[0]
-	}
-
+func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
 	tag = &TagOpts{Name: sf.Name}
 	if sf.Anonymous {
 		return
@@ -284,13 +225,13 @@ func GetTagOpts(sf reflect.StructField, in ...*Options) (tag *TagOpts) {
 	tag.Arg = sf.Tag.Get("arg")
 	tag.Env = strings.Replace(strings.ToUpper(sf.Tag.Get("env")), "-", "_", -1)
 
-	if !options.enableEnv || tag.Env == "" {
+	if !o.enableEnv || tag.Env == "" {
 		return
 	}
 
 	tag.Description = fmt.Sprintf("%s (env %s)", tag.Description, tag.Env)
 
-	v, ok := options.getEnv(tag.Env)
+	v, ok := o.getEnv(tag.Env)
 	if !ok {
 		return
 	}
@@ -370,5 +311,5 @@ func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn,
 		panic("invalid flag value")
 	}
 
-	GlobalOptions.params = append(GlobalOptions.params, v)
+	configerOptions.params = append(configerOptions.params, v)
 }
