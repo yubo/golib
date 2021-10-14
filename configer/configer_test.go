@@ -63,28 +63,29 @@ func TestConfigWithConfig(t *testing.T) {
 		A int `json:"a"`
 	}
 	type Bar struct {
-		Foo Foo `json:"foo"`
+		Foo  Foo `json:"foo"`
+		Foo2 Foo `json:",inline"`
 	}
-	v := Bar{Foo{2}}
+	v := Bar{Foo{2}, Foo{3}}
 
 	{
 		c, err := New(WithConfig("foo", v.Foo))
 		assert.NoError(t, err)
 
-		var v2 Bar
-		err = c.Read("foo", &v2.Foo)
+		var got Bar
+		err = c.Read("foo", &got.Foo)
 		assert.NoError(t, err)
-		assert.Equalf(t, v, v2, "configer read \"foo\"")
+		assert.Equalf(t, v.Foo, got.Foo, "configer read \"foo\"")
 	}
 
 	{
 		c, err := New(WithConfig("", v))
 		assert.NoError(t, err)
 
-		var v2 Bar
-		err = c.Read("", &v2)
+		var got Bar
+		err = c.Read("", &got)
 		assert.NoError(t, err)
-		assert.Equalf(t, v, v2, "configer read \"\" configer %s", c)
+		assert.Equalf(t, v, got, "configer read \"\" configer %s", c)
 	}
 }
 
@@ -93,22 +94,31 @@ func TestConfigSet(t *testing.T) {
 		A int `json:"a"`
 	}
 	type Bar struct {
-		Foo Foo `json:"foo"`
+		Foo  Foo `json:"foo"`
+		Foo2 Foo `json:",inline"`
 	}
-	v := Bar{Foo{2}}
+	v := Bar{Foo{2}, Foo{3}}
 
 	{
 		c, _ := New(WithConfig("foo", v.Foo))
-		c.Set("foo", Foo{3})
+		c.Set("foo", Foo{20})
 
-		var v2 Bar
-		c.Read("foo", &v2.Foo)
-		assert.Equalf(t, 3, v2.Foo.A, "configer read \"foo\"")
+		var got Bar
+		c.Read("foo", &got.Foo)
+		assert.Equalf(t, 20, got.Foo.A, "configer read \"foo\"")
 
-		c.Set("foo.a", 4)
-		c.Read("foo", &v2.Foo)
-		assert.Equalf(t, 4, v2.Foo.A, "configer read \"foo.a\"")
+		c.Set("foo.a", 200)
+		c.Read("foo", &got.Foo)
+		assert.Equalf(t, 200, got.Foo.A, "configer read \"foo.a\"")
+	}
 
+	{
+		c, _ := New(WithConfig("a", v.Foo2))
+		c.Set("a", Foo{30})
+
+		var got Bar
+		c.Read("a", &got.Foo2)
+		assert.Equalf(t, 30, got.Foo2.A, "configer read \"a\"")
 	}
 
 }

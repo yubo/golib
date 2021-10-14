@@ -121,7 +121,7 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		}
 
 		if ft.Kind() == reflect.Struct {
-			if opt.Json == "" {
+			if opt.Json == "" || opt.Inline {
 				// anonymous
 				if err := p.addConfigs(path, fs, ft); err != nil {
 					return err
@@ -192,6 +192,7 @@ type TagOpts struct {
 	Env         string   // env:"{env}"
 	Description string   // description:"{description}"
 	Skip        bool     // if json:"-"
+	Inline      bool     // if json:",inline"
 	Arg         string   // arg:"{arg}"  args[0] arg1... -- arg2...
 }
 
@@ -206,13 +207,15 @@ func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
 		return
 	}
 
-	json, _ := parseTag(sf.Tag.Get("json"))
+	json, opts := parseTag(sf.Tag.Get("json"))
 	if json == "-" {
 		tag.Skip = true
 		return
 	}
 
-	if json != "" {
+	if opts.Contains("inline") {
+		tag.Inline = true
+	} else if json != "" {
 		tag.Json = json
 	}
 
