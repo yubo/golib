@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/spf13/pflag"
+	"sigs.k8s.io/yaml"
 )
 
 func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
@@ -24,12 +25,25 @@ func ValueFiles() []string {
 }
 
 // addConfigs: add flags and env from sample's tags
+// defualt priority sample > tagsGetter > tags
 func AddConfigs(fs *pflag.FlagSet, path string, sample interface{}, opts ...Option) error {
 	options := configerOptions.deepCopy()
 	for _, opt := range opts {
 		opt(options)
 	}
 	options.prefixPath = path
+
+	{
+		b, err := yaml.Marshal(sample)
+		if err != nil {
+			return err
+		}
+		v := map[string]interface{}{}
+		if err := yaml.Unmarshal(b, &v); err != nil {
+			return err
+		}
+		options.defualtValues = pathValueToTable(path, v)
+	}
 
 	rv := reflect.Indirect(reflect.ValueOf(sample))
 	rt := rv.Type()

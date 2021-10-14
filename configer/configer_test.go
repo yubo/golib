@@ -506,6 +506,7 @@ func TestConfigerPriority(t *testing.T) {
 func TestConfigerDef(t *testing.T) {
 	type Foo struct {
 		A string `json:"a" default:"default-a"`
+		B string `json:"b" default:""`
 	}
 	type Bar struct {
 		Foo *Foo `json:"foo"`
@@ -514,11 +515,12 @@ func TestConfigerDef(t *testing.T) {
 	teardown()
 
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	err := AddConfigs(fs, "bar", &Bar{})
+	err := AddConfigs(fs, "bar", &Bar{Foo: &Foo{B: "default-b"}})
 	cf, err := New()
 	assert.NoError(t, err)
 
 	assert.Equalf(t, "default-a", cf.GetRaw("bar.foo.a"), "config [%s]", cf)
+	assert.Equalf(t, "default-b", cf.GetRaw("bar.foo.b"), "config [%s]", cf)
 }
 
 func teardown() {

@@ -83,7 +83,7 @@ func (p config) String() string {
 	return util.Prettify(p)
 }
 
-func optsGetter(fieldName string) *configer.TagOpts {
+func tagsGetter(fieldName string) *configer.TagOpts {
 	if fieldName == "Format" {
 		unsupportedFlags := fmt.Sprintf("--%s", strings.Join(logs.UnsupportedLoggingFlags(), ", --"))
 		formats := fmt.Sprintf(`"%s"`, strings.Join(logs.RegistryList(), `", "`))
@@ -105,5 +105,5 @@ func optsGetter(fieldName string) *configer.TagOpts {
 func init() {
 	proc.RegisterHooks(hookOps)
 	proc.RegisterFlags(moduleName, "logs", newConfig(),
-		configer.WithTagOptsGetter(optsGetter))
+		configer.WithTagsGetter(tagsGetter))
 }

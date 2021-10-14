@@ -17,7 +17,7 @@ type param struct {
 	shothand     string      // flag shothand
 	configPath   string      // config path
 	flagValue    interface{} // flag's value
-	defaultValue interface{} // flag's default value
+	defaultValue interface{} // field's default value
 }
 
 func pathValueToTable(path string, val interface{}) map[string]interface{} {
@@ -135,8 +135,8 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 			continue
 		}
 
-		ps := strings.Join(append(path, opt.Json), ".")
-		def := opt.Default
+		ps := joinPath(append(path, opt.JsonName)...)
+		def := getFieldDefaultValue(ps, opt, p)
 
 		switch t := reflect.New(ft).Elem().Interface(); t.(type) {
 		case bool:
@@ -175,18 +175,20 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 }
 
 func (p *options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
-	if p.tagOptsGetter != nil {
+	if p.tagsGetter != nil {
 		field := strings.TrimPrefix(joinPath(append(paths, sf.Name)...), p.prefixPath+".")
-		if opts := p.tagOptsGetter(field); opts != nil {
+		if opts := p.tagsGetter(field); opts != nil {
 			return opts
 		}
 	}
+
 	return getTagOpts(sf, p)
 }
 
 type TagOpts struct {
 	Name        string   // field name
 	Json        string   // json:"{json}"
+	JsonName    string   //  json encode/decode name
 	Flag        []string // flag:"{long},{short}"
 	Default     string   // default:"{default}"
 	Env         string   // env:"{env}"
@@ -202,7 +204,7 @@ func (p TagOpts) String() string {
 }
 
 func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
-	tag = &TagOpts{Name: sf.Name}
+	tag = &TagOpts{Name: sf.Name, JsonName: sf.Name}
 	if sf.Anonymous {
 		return
 	}
@@ -215,8 +217,10 @@ func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
 
 	if opts.Contains("inline") {
 		tag.Inline = true
+		tag.JsonName = ""
 	} else if json != "" {
 		tag.Json = json
+		tag.JsonName = json
 	}
 
 	if flag := strings.Split(strings.TrimSpace(sf.Tag.Get("flag")), ","); len(flag) > 0 && flag[0] != "" && flag[0] != "-" {
@@ -227,19 +231,10 @@ func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
 	tag.Description = sf.Tag.Get("description")
 	tag.Arg = sf.Tag.Get("arg")
 	tag.Env = strings.Replace(strings.ToUpper(sf.Tag.Get("env")), "-", "_", -1)
-
-	if !o.enableEnv || tag.Env == "" {
-		return
+	if tag.Env != "" {
+		tag.Description = fmt.Sprintf("%s (env %s)", tag.Description, tag.Env)
 	}
 
-	tag.Description = fmt.Sprintf("%s (env %s)", tag.Description, tag.Env)
-
-	v, ok := o.getEnv(tag.Env)
-	if !ok {
-		return
-	}
-
-	tag.Default = v
 	return
 }
 
@@ -315,4 +310,26 @@ func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn,
 	}
 
 	configerOptions.params = append(configerOptions.params, v)
+}
+
+func getFieldDefaultValue(path string, opts *TagOpts, o *options) string {
+	def := opts.Default
+
+	if v, err := Values(o.defualtValues).PathValue(path); err == nil {
+		if s := cast.ToString(v); len(s) > 0 {
+			def = s
+		}
+	}
+
+	if o.enableEnv && opts.Env != "" {
+		if v, ok := o.getEnv(opts.Env); ok {
+			def = v
+		}
+	}
+
+	if len(def) > 0 {
+		opts.Default = def
+	}
+
+	return def
 }

@@ -173,7 +173,7 @@ func (p *Configer) Set(path string, v interface{}) error {
 		if err != nil {
 			return err
 		}
-		return yaml.Unmarshal(b, p.data)
+		return yaml.Unmarshal(b, &p.data)
 	}
 
 	ps := strings.Split(path, ".")
