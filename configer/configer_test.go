@@ -396,15 +396,15 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 	}
 
 	opts2 := &TagOpts{
-		Name:    "A",
-		Json:    "a",
+		name:    "A",
+		json:    "a",
 		Flag:    []string{"test-a"},
 		Env:     "TEST_A",
 		Default: "default-a",
 	}
-	getter := func(fieldName string) *TagOpts {
-		switch fieldName {
-		case "A":
+	getter := func(path string) *TagOpts {
+		switch path {
+		case "a":
 			return opts2
 		default:
 			return nil
@@ -416,8 +416,8 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 		want          *TagOpts
 	}{
 		{nil, &TagOpts{
-			Name:    "A",
-			Json:    "a",
+			name:    "A",
+			json:    "a",
 			Flag:    []string{"test-a"},
 			Env:     "TEST_A",
 			Default: "default-a",

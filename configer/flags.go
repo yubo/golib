@@ -53,7 +53,7 @@ func prepareValue(rv reflect.Value, rt reflect.Type) {
 
 func addflagvar(fs *pflag.FlagSet, rv reflect.Value, rt reflect.Type, opt *TagOpts) {
 	if !rv.CanSet() {
-		panic(fmt.Sprintf("field %s (%s) can not be set", opt.Name, rv.Kind()))
+		panic(fmt.Sprintf("field %s (%s) can not be set", opt.name, rv.Kind()))
 	}
 
 	if rv.Kind() == reflect.Ptr {

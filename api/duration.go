@@ -32,3 +32,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 func (d Duration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(d.Duration.String())
 }
+
+func (d Duration) String() string {
+	return d.Duration.String()
+}

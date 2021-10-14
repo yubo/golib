@@ -110,7 +110,7 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		}
 
 		opt := p.getTagOpts(sf, path)
-		if opt.Skip {
+		if opt.skip {
 			continue
 		}
 
@@ -121,7 +121,7 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		}
 
 		if ft.Kind() == reflect.Struct {
-			if opt.Json == "" || opt.Inline {
+			if opt.json == "" || opt.inline {
 				// anonymous
 				if err := p.addConfigs(path, fs, ft); err != nil {
 					return err
@@ -129,13 +129,13 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 				continue
 			}
 
-			if err := p.addConfigs(append(path, opt.Json), fs, ft); err != nil {
+			if err := p.addConfigs(append(path, opt.json), fs, ft); err != nil {
 				return err
 			}
 			continue
 		}
 
-		ps := joinPath(append(path, opt.JsonName)...)
+		ps := joinPath(append(path, opt.json)...)
 		def := getFieldDefaultValue(ps, opt, p)
 
 		switch t := reflect.New(ft).Elem().Interface(); t.(type) {
@@ -175,52 +175,65 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 }
 
 func (p *options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
+	opts := getTagOpts(sf, p)
+
 	if p.tagsGetter != nil {
-		field := strings.TrimPrefix(joinPath(append(paths, sf.Name)...), p.prefixPath+".")
-		if opts := p.tagsGetter(field); opts != nil {
-			return opts
+		field := strings.TrimPrefix(joinPath(append(paths, opts.json)...), p.prefixPath+".")
+		if o := p.tagsGetter(field); o != nil {
+			if len(o.Flag) > 0 {
+				opts.Flag = o.Flag
+			}
+			if len(o.Description) > 0 {
+				opts.Description = o.Description
+			}
+			if len(o.Default) > 0 {
+				opts.Default = o.Default
+			}
+			if len(o.Env) > 0 {
+				opts.Env = o.Env
+			}
 		}
 	}
 
-	return getTagOpts(sf, p)
+	return opts
 }
 
 type TagOpts struct {
-	Name        string   // field name
-	Json        string   // json:"{json}"
-	JsonName    string   //  json encode/decode name
+	name   string // field name
+	json   string // json:"{json}"
+	skip   bool   // if json:"-"
+	inline bool   // if json:",inline"
+
 	Flag        []string // flag:"{long},{short}"
 	Default     string   // default:"{default}"
 	Env         string   // env:"{env}"
 	Description string   // description:"{description}"
-	Skip        bool     // if json:"-"
-	Inline      bool     // if json:",inline"
-	Arg         string   // arg:"{arg}"  args[0] arg1... -- arg2...
+	Arg         string   // arg:"{arg}"  args[0] arg1... -- arg2... (deprecated)
+
 }
 
 func (p TagOpts) String() string {
 	return fmt.Sprintf("json %s flag %v env %s description %s",
-		p.Json, p.Flag, p.Env, p.Description)
+		p.json, p.Flag, p.Env, p.Description)
 }
 
 func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
-	tag = &TagOpts{Name: sf.Name, JsonName: sf.Name}
+	tag = &TagOpts{name: sf.Name, json: sf.Name}
 	if sf.Anonymous {
 		return
 	}
 
 	json, opts := parseTag(sf.Tag.Get("json"))
 	if json == "-" {
-		tag.Skip = true
+		tag.skip = true
 		return
 	}
 
 	if opts.Contains("inline") {
-		tag.Inline = true
-		tag.JsonName = ""
+		tag.inline = true
+		tag.json = ""
 	} else if json != "" {
-		tag.Json = json
-		tag.JsonName = json
+		tag.json = json
 	}
 
 	if flag := strings.Split(strings.TrimSpace(sf.Tag.Get("flag")), ","); len(flag) > 0 && flag[0] != "" && flag[0] != "-" {

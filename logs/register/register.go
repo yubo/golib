@@ -83,16 +83,14 @@ func (p config) String() string {
 	return util.Prettify(p)
 }
 
-func tagsGetter(fieldName string) *configer.TagOpts {
-	if fieldName == "Format" {
+func tagsGetter(path string) *configer.TagOpts {
+	if path == "format" {
 		unsupportedFlags := fmt.Sprintf("--%s", strings.Join(logs.UnsupportedLoggingFlags(), ", --"))
 		formats := fmt.Sprintf(`"%s"`, strings.Join(logs.RegistryList(), `", "`))
 
 		// No new log formats should be added after generation is of flag options
 		logs.RegistryFreeze()
 		return &configer.TagOpts{
-			Name:        "Format",
-			Json:        "format",
 			Flag:        []string{"logging-format"},
 			Default:     defaultLogFormat,
 			Description: fmt.Sprintf("Sets the log format. Permitted formats: %s.\nNon-default formats don't honor these flags: %s.\nNon-default choices are currently alpha and subject to change without warning.", formats, unsupportedFlags),
