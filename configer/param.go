@@ -177,9 +177,9 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 func (p *options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
 	opts := getTagOpts(sf, p)
 
-	if p.tagsGetter != nil {
-		field := strings.TrimPrefix(joinPath(append(paths, opts.json)...), p.prefixPath+".")
-		if o := p.tagsGetter(field); o != nil {
+	if p.tags != nil {
+		path := strings.TrimPrefix(joinPath(append(paths, opts.json)...), p.prefixPath+".")
+		if o := p.tags[path]; o != nil {
 			if len(o.Flag) > 0 {
 				opts.Flag = o.Flag
 			}

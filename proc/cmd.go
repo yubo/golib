@@ -23,12 +23,11 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:          name,
-		Short:        fmt.Sprintf("%s service", name),
+		Short:        DescriptionFrom(ctx),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if klog.V(5).Enabled() {
-				fs := cmd.Flags()
-				flag.PrintFlags(fs)
+				flag.PrintFlags(cmd.Flags())
 			}
 			return proc.Start()
 		},

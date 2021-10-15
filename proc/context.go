@@ -13,6 +13,7 @@ type key int
 
 const (
 	nameKey key = iota
+	descriptionKey
 	wgKey
 	configerKey
 	configOptsKey
@@ -40,6 +41,19 @@ func NameFrom(ctx context.Context) string {
 		return os.Args[0]
 	}
 	return name
+}
+
+func WithDescription(ctx context.Context, description string) context.Context {
+	return WithValue(ctx, descriptionKey, description)
+}
+
+// DescriptionFrom returns the value of the description key on the ctx
+func DescriptionFrom(ctx context.Context) string {
+	description, ok := ctx.Value(descriptionKey).(string)
+	if !ok {
+		return os.Args[0]
+	}
+	return description
 }
 
 // WithWg returns a copy of parent in which the user value is set

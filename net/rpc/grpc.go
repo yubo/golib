@@ -162,4 +162,4 @@ func (r *lbResolver) start() {
 	r.cc.UpdateState(resolver.State{Addresses: addrs})
 }
 func (*lbResolver) ResolveNow(o resolver.ResolveNowOptions) {}
-func (*lbResolver) Close()
+func (*lbResolver) Close()                                  {}

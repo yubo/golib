@@ -18,7 +18,7 @@ type options struct {
 	allowEmptyEnv bool
 	flagSet       *pflag.FlagSet
 	params        []*param // all of config fields
-	tagsGetter    func(path string) (tag *TagOpts)
+	tags          map[string]*TagOpts
 	prefixPath    string
 	defualtValues map[string]interface{} // for AddConfigs()
 }
@@ -132,8 +132,8 @@ func WithValueFile(valueFiles ...string) Option {
 	}
 }
 
-func WithTagsGetter(getter func(path string) (tag *TagOpts)) Option {
+func WithTags(tags map[string]*TagOpts) Option {
 	return func(o *options) {
-		o.tagsGetter = getter
+		o.tags = tags
 	}
 }

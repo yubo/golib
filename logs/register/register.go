@@ -69,7 +69,7 @@ var supportedLogsFlags = map[string]struct{}{
 }
 
 type config struct {
-	Format       string `json:"format" flag:"logging-format"`
+	Format       string `json:"format" flag:"logging-format" default:"text"`
 	Sanitization bool   `json:"sanitization" flag:"experimental-logging-sanitization" description:"[Experimental] When enabled prevents logging of fields tagged as sensitive (passwords, keys, tokens). \nRuntime log sanitization may introduce significant computation overhead and therefore should not be enabled in production."`
 }
 
@@ -83,25 +83,19 @@ func (p config) String() string {
 	return util.Prettify(p)
 }
 
-func tagsGetter(path string) *configer.TagOpts {
-	if path == "format" {
-		unsupportedFlags := fmt.Sprintf("--%s", strings.Join(logs.UnsupportedLoggingFlags(), ", --"))
-		formats := fmt.Sprintf(`"%s"`, strings.Join(logs.RegistryList(), `", "`))
+func (p config) tags() map[string]*configer.TagOpts {
+	unsupportedFlags := fmt.Sprintf("--%s", strings.Join(logs.UnsupportedLoggingFlags(), ", --"))
+	formats := fmt.Sprintf(`"%s"`, strings.Join(logs.RegistryList(), `", "`))
 
-		// No new log formats should be added after generation is of flag options
-		logs.RegistryFreeze()
-		return &configer.TagOpts{
-			Flag:        []string{"logging-format"},
-			Default:     defaultLogFormat,
-			Description: fmt.Sprintf("Sets the log format. Permitted formats: %s.\nNon-default formats don't honor these flags: %s.\nNon-default choices are currently alpha and subject to change without warning.", formats, unsupportedFlags),
-		}
+	return map[string]*configer.TagOpts{
+		"format": {Description: fmt.Sprintf("Sets the log format. Permitted formats: %s.\nNon-default formats don't honor these flags: %s.\nNon-default choices are currently alpha and subject to change without warning.", formats, unsupportedFlags)},
 	}
 
-	return nil
 }
 
 func init() {
 	proc.RegisterHooks(hookOps)
-	proc.RegisterFlags(moduleName, "logs", newConfig(),
-		configer.WithTagsGetter(tagsGetter))
+
+	cf := newConfig()
+	proc.RegisterFlags(moduleName, "logs", cf, configer.WithTags(cf.tags()))
 }
