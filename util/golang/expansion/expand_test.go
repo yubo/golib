@@ -2,12 +2,17 @@ package expansion
 
 import (
 	"testing"
-
-	"github.com/yubo/golib/api"
 )
 
+// ExecEnvVar is used for setting environment variables when executing an exec-based
+// credential plugin.
+type ExecEnvVar struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 func TestMapReference(t *testing.T) {
-	envs := []api.ExecEnvVar{
+	envs := []ExecEnvVar{
 		{
 			Name:  "FOO",
 			Value: "bar",

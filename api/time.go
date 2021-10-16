@@ -39,6 +39,15 @@ func (t *Time) DeepCopyInto(out *Time) {
 	*out = *t
 }
 
+func (in *Time) DeepCopy() *Time {
+	if in == nil {
+		return nil
+	}
+	out := new(Time)
+	in.DeepCopyInto(out)
+	return out
+}
+
 // NewTime returns a wrapped instance of the provided time
 func NewTime(time time.Time) Time {
 	return Time{time}

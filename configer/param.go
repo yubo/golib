@@ -212,6 +212,10 @@ type TagOpts struct {
 
 }
 
+func (p TagOpts) Skip() bool {
+	return p.skip
+}
+
 func (p TagOpts) String() string {
 	return fmt.Sprintf("json %s flag %v env %s description %s",
 		p.json, p.Flag, p.Env, p.Description)

@@ -59,7 +59,7 @@ func newRootCmd() *cobra.Command {
 		klog.Infof("addflag err %s", err)
 	}
 
-	globalflag.AddGlobalFlags(fs, "example")
+	globalflag.AddGlobalFlags(fs)
 
 	return cmd
 }

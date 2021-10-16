@@ -30,7 +30,7 @@ import (
 func TestAddGlobalFlags(t *testing.T) {
 	namedFlagSets := &cliflag.NamedFlagSets{}
 	nfs := namedFlagSets.FlagSet("global")
-	AddGlobalFlags(nfs, "test-cmd")
+	AddGlobalFlags(nfs)
 
 	actualFlag := []string{}
 	nfs.VisitAll(func(flag *pflag.Flag) {

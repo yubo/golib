@@ -137,7 +137,7 @@ func (c *codec) Decode(data []byte, into runtime.Object) (runtime.Object, error)
 	obj := decodeInto
 
 	if d, ok := obj.(runtime.NestedObjectDecoder); ok {
-		if err := d.DecodeNestedObjects(runtime.WithoutVersionDecoder{c.decoder}); err != nil {
+		if err := d.DecodeNestedObjects(runtime.WithoutVersionDecoder{Decoder: c.decoder}); err != nil {
 			return nil, err
 		}
 	}
