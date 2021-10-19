@@ -240,13 +240,19 @@ func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
 		tag.json = json
 	}
 
+	if opts.Contains("arg1") {
+		tag.Arg = "arg1"
+	}
+	if opts.Contains("arg2") {
+		tag.Arg = "arg2"
+	}
+
 	if flag := strings.Split(strings.TrimSpace(sf.Tag.Get("flag")), ","); len(flag) > 0 && flag[0] != "" && flag[0] != "-" {
 		tag.Flag = flag
 	}
 
 	tag.Default = sf.Tag.Get("default")
 	tag.Description = sf.Tag.Get("description")
-	tag.Arg = sf.Tag.Get("arg")
 	tag.Env = strings.Replace(strings.ToUpper(sf.Tag.Get("env")), "-", "_", -1)
 	if tag.Env != "" {
 		tag.Description = fmt.Sprintf("%s (env %s)", tag.Description, tag.Env)
