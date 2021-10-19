@@ -5,6 +5,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// default value priority: env > sample > comstom tags > fieldstruct tags
+
 type options struct {
 	pathsBase     map[string]string // data in yaml format with path
 	pathsOverride map[string]string // data in yaml format with path
@@ -20,7 +22,7 @@ type options struct {
 	params        []*param // all of config fields
 	tags          map[string]*TagOpts
 	prefixPath    string
-	defualtValues map[string]interface{} // for AddConfigs()
+	defaultValues map[string]interface{} // from sample
 }
 
 func newOptions() *options {

@@ -42,7 +42,7 @@ func AddConfigs(fs *pflag.FlagSet, path string, sample interface{}, opts ...Opti
 		if err := yaml.Unmarshal(b, &v); err != nil {
 			return err
 		}
-		options.defualtValues = pathValueToTable(path, v)
+		options.defaultValues = pathValueToTable(path, v)
 	}
 
 	rv := reflect.Indirect(reflect.ValueOf(sample))

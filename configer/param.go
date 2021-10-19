@@ -57,19 +57,20 @@ func (p *Configer) Flags() (names []string) {
 func (p *Configer) mergeDefaultValues(into map[string]interface{}) {
 	for _, f := range p.params {
 		if v := f.defaultValue; v != nil {
-			klog.V(7).InfoS("def", "path", joinPath(append(p.path, f.configPath)...), "value", v)
+			//klog.V(7).InfoS("def", "path", joinPath(append(p.path, f.configPath)...), "value", v)
 			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
 		}
 	}
 }
 
+// merge flag value into ${into}
 func (p *Configer) mergeFlagValues(into map[string]interface{}) {
 	if !p.enableFlag {
 		return
 	}
 	for _, f := range p.params {
 		if v := p.getFlagValue(f); v != nil {
-			klog.V(7).InfoS("flag", "path", joinPath(append(p.path, f.configPath)...), "value", v)
+			//klog.V(7).InfoS("flag", "path", joinPath(append(p.path, f.configPath)...), "value", v)
 			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
 		}
 	}
@@ -120,58 +121,65 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 			ft = ft.Elem()
 		}
 
-		if ft.Kind() == reflect.Struct {
-			if opt.json == "" || opt.inline {
-				// anonymous
-				if err := p.addConfigs(path, fs, ft); err != nil {
-					return err
-				}
-				continue
-			}
+		curPath := make([]string, len(path))
+		copy(curPath, path)
 
-			if err := p.addConfigs(append(path, opt.json), fs, ft); err != nil {
+		if len(opt.json) > 0 {
+			curPath = append(curPath, opt.json)
+		}
+
+		if len(opt.Flag) == 0 && ft.Kind() == reflect.Struct {
+			if err := p.addConfigs(curPath, fs, ft); err != nil {
 				return err
 			}
 			continue
 		}
 
-		ps := joinPath(append(path, opt.json)...)
+		ps := joinPath(curPath...)
 		def := getFieldDefaultValue(ps, opt, p)
 
-		switch t := reflect.New(ft).Elem().Interface(); t.(type) {
-		case bool:
+		switch t := reflect.New(ft).Interface().(type) {
+		case FlagSetValue:
+			addConfigField(fs, ps, opt, t.NewFlagSet(fs), t.NewFlagSetP(fs), t.New(def))
+		case *bool:
 			addConfigField(fs, ps, opt, fs.Bool, fs.BoolP, cast.ToBool(def))
-		case string:
+		case *string:
 			addConfigField(fs, ps, opt, fs.String, fs.StringP, cast.ToString(def))
-		case int32, int16, int8, int:
+		case *int32, *int16, *int8, *int:
 			addConfigField(fs, ps, opt, fs.Int, fs.IntP, cast.ToInt(def))
-		case int64:
+		case *int64:
 			addConfigField(fs, ps, opt, fs.Int64, fs.Int64P, cast.ToInt64(def))
-		case uint:
+		case *uint:
 			addConfigField(fs, ps, opt, fs.Uint, fs.UintP, cast.ToUint(def))
-		case uint8:
+		case *uint8:
 			addConfigField(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint8(def))
-		case uint16:
+		case *uint16:
 			addConfigField(fs, ps, opt, fs.Uint8, fs.Uint8P, cast.ToUint16(def))
-		case uint32:
+		case *uint32:
 			addConfigField(fs, ps, opt, fs.Uint32, fs.Uint32P, cast.ToUint32(def))
-		case uint64:
+		case *uint64:
 			addConfigField(fs, ps, opt, fs.Uint64, fs.Uint64P, cast.ToUint64(def))
-		case float32, float64:
+		case *float32, *float64:
 			addConfigField(fs, ps, opt, fs.Float64, fs.Float64P, cast.ToFloat64(def))
-		case time.Duration:
+		case *time.Duration:
 			addConfigField(fs, ps, opt, fs.Duration, fs.DurationP, cast.ToDuration(def))
-		case []string:
+		case *[]string:
 			addConfigField(fs, ps, opt, fs.StringArray, fs.StringArrayP, cast.ToStringSlice(def))
-		case []int:
+		case *[]int:
 			addConfigField(fs, ps, opt, fs.IntSlice, fs.IntSliceP, cast.ToIntSlice(def))
-		case map[string]string:
+		case *map[string]string:
 			addConfigField(fs, ps, opt, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(def))
 		default:
-			klog.V(6).InfoS("add config unsupported", "type", ft.String(), "path", joinPath(path...), "kind", ft.Kind())
+			klog.InfoS("add config unsupported", "type", ft.String(), "path", ps, "kind", ft.Kind())
 		}
 	}
 	return nil
+}
+
+type FlagSetValue interface {
+	NewFlagSet(f *pflag.FlagSet) interface{}
+	NewFlagSetP(f *pflag.FlagSet) interface{}
+	New(string) interface{}
 }
 
 func (p *options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
@@ -199,10 +207,9 @@ func (p *options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
 }
 
 type TagOpts struct {
-	name   string // field name
-	json   string // json:"{json}"
-	skip   bool   // if json:"-"
-	inline bool   // if json:",inline"
+	name string // field name
+	json string // json:"{json}"
+	skip bool   // if json:"-"
 
 	Flag        []string // flag:"{long},{short}"
 	Default     string   // default:"{default}"
@@ -222,7 +229,7 @@ func (p TagOpts) String() string {
 }
 
 func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
-	tag = &TagOpts{name: sf.Name, json: sf.Name}
+	tag = &TagOpts{name: sf.Name}
 	if sf.Anonymous {
 		return
 	}
@@ -233,11 +240,10 @@ func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
 		return
 	}
 
-	if opts.Contains("inline") {
-		tag.inline = true
-		tag.json = ""
-	} else if json != "" {
+	if json != "" {
 		tag.json = json
+	} else {
+		tag.json = sf.Name
 	}
 
 	if opts.Contains("arg1") {
@@ -338,9 +344,12 @@ func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn,
 func getFieldDefaultValue(path string, opts *TagOpts, o *options) string {
 	def := opts.Default
 
-	if v, err := Values(o.defualtValues).PathValue(path); err == nil {
-		if s := cast.ToString(v); len(s) > 0 {
-			def = s
+	if v, err := Values(o.defaultValues).PathValue(path); err == nil {
+		rf := reflect.ValueOf(v)
+		if rf.IsValid() && !rf.IsZero() {
+			if s := cast.ToString(v); len(s) > 0 {
+				def = s
+			}
 		}
 	}
 
