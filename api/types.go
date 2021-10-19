@@ -696,14 +696,38 @@ const (
 // intent and helps make sure that UIDs and names do not get conflated.
 type UID string
 
+type LabelSelectorWrapper struct {
+	labels.Selector
+}
+
+func (p *LabelSelectorWrapper) Parse(in string) (err error) {
+	if in == "" {
+		return nil
+	}
+	p.Selector, err = labels.Parse(in)
+	return
+}
+
+type FieldSelectorWrapper struct {
+	fields.Selector
+}
+
+func (p *FieldSelectorWrapper) Parse(in string) (err error) {
+	if in == "" {
+		return nil
+	}
+	p.Selector, err = fields.ParseSelector(in)
+	return
+}
+
 // ListOptions is the query options to a standard REST list call.
 type ListOptions struct {
 	TypeMeta `param:"-"`
 
 	// A selector based on labels
-	LabelSelector labels.Selector `param:"-"`
+	LabelSelector *LabelSelectorWrapper `param:"query"`
 	// A selector based on fields
-	FieldSelector fields.Selector `param:"-"`
+	FieldSelector *FieldSelectorWrapper `param:"query"`
 	// If true, watch for changes to this list
 	Watch bool `param:"query"`
 	// allowWatchBookmarks requests watch events with type "BOOKMARK".

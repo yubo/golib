@@ -696,6 +696,10 @@ func toInt64(v interface{}) int64 {
 	}
 }
 
+type Parser interface {
+	Parse(in string) error
+}
+
 func SetValue(rv reflect.Value, data []string) error {
 	rt := rv.Type()
 	if len(data) == 0 {
@@ -704,6 +708,12 @@ func SetValue(rv reflect.Value, data []string) error {
 
 	// Dereference ptr
 	PrepareValue(rv, rt)
+
+	// rv must can interface
+	if v, ok := rv.Interface().(Parser); ok {
+		return v.Parse(data[0])
+	}
+
 	if rv.Kind() == reflect.Ptr {
 		// fmt.Printf("rt %s is ptr, derefreence\n", rt.String())
 		rv = rv.Elem()
