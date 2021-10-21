@@ -764,3 +764,24 @@ type ListOptions struct {
 
 	Offset int64 `param:"query"`
 }
+
+// CreateOptions may be provided when creating an API object.
+type CreateOptions struct {
+	TypeMeta `json:",inline"`
+
+	// When present, indicates that modifications should not be
+	// persisted. An invalid or unrecognized dryRun directive will
+	// result in an error response and no further processing of the
+	// request. Valid values are:
+	// - All: all dry run stages will be processed
+	// +optional
+	DryRun []string `json:"dryRun,omitempty" protobuf:"bytes,1,rep,name=dryRun"`
+	// +k8s:deprecated=includeUninitialized,protobuf=2
+
+	// fieldManager is a name associated with the actor or entity
+	// that is making these changes. The value must be less than or
+	// 128 characters long, and only contain printable characters,
+	// as defined by https://golang.org/pkg/unicode/#IsPrint.
+	// +optional
+	FieldManager string `json:"fieldManager,omitempty" protobuf:"bytes,3,name=fieldManager"`
+}
