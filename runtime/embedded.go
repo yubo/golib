@@ -82,8 +82,6 @@ func (e Unknown) MarshalJSON() ([]byte, error) {
 	return e.Raw, nil
 }
 
-/*
-
 func Convert_runtime_Object_To_runtime_RawExtension(in *Object, out *RawExtension) error {
 	if in == nil {
 		out.Raw = []byte("null")
@@ -124,17 +122,16 @@ func Convert_runtime_RawExtension_To_runtime_Object(in *RawExtension, out *Objec
 	return nil
 }
 
-func RegisterEmbeddedConversions(s *Scheme) error {
-	if err := s.AddConversionFunc((*Object)(nil), (*RawExtension)(nil), func(a, b interface{}) error {
-		return Convert_runtime_Object_To_runtime_RawExtension(a.(*Object), b.(*RawExtension), scope)
-	}); err != nil {
-		return err
-	}
-	if err := s.AddConversionFunc((*RawExtension)(nil), (*Object)(nil), func(a, b interface{}) error {
-		return Convert_runtime_RawExtension_To_runtime_Object(a.(*RawExtension), b.(*Object))
-	}); err != nil {
-		return err
-	}
-	return nil
-}
-*/
+//func RegisterEmbeddedConversions(s *Scheme) error {
+//	if err := s.AddConversionFunc((*Object)(nil), (*RawExtension)(nil), func(a, b interface{}) error {
+//		return Convert_runtime_Object_To_runtime_RawExtension(a.(*Object), b.(*RawExtension), scope)
+//	}); err != nil {
+//		return err
+//	}
+//	if err := s.AddConversionFunc((*RawExtension)(nil), (*Object)(nil), func(a, b interface{}) error {
+//		return Convert_runtime_RawExtension_To_runtime_Object(a.(*RawExtension), b.(*Object))
+//	}); err != nil {
+//		return err
+//	}
+//	return nil
+//}
