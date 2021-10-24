@@ -67,6 +67,6 @@ func InitFlags(cmd *cobra.Command, group, allowEnv, allowEmptyEnv bool, maxDepth
 
 }
 
-func RegisterFlags(path, groupName string, sample interface{}, opts ...configer.Option) {
-	configer.AddConfigs(NamedFlagSets().FlagSet(groupName), path, sample, opts...)
+func RegisterFlags(configPath, groupName string, sample interface{}, opts ...configer.Option) {
+	configer.AddConfigs(NamedFlagSets().FlagSet(groupName), configPath, sample, opts...)
 }

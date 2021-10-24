@@ -153,7 +153,7 @@ func (p *Process) init() error {
 
 	for i := ACTION_START; i < ACTION_SIZE; i++ {
 		x := p.hookOps[i]
-		sort.Slice(x, func(i, j int) bool { return x[i].priority < x[j].priority })
+		sort.SliceStable(x, func(i, j int) bool { return x[i].priority < x[j].priority })
 	}
 
 	p.ctx = ctx

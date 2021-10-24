@@ -235,3 +235,120 @@ type LocalObjectReference struct {
 	// +optional
 	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
 }
+
+// EventSource contains information for an event.
+type EventSource struct {
+	// Component from which the event is generated.
+	// +optional
+	Component string `json:"component,omitempty" protobuf:"bytes,1,opt,name=component"`
+	// Node name on which the event is generated.
+	// +optional
+	Host string `json:"host,omitempty" protobuf:"bytes,2,opt,name=host"`
+}
+
+// Valid values for event types (new types could be added in future)
+const (
+	// Information only and will not cause any problems
+	EventTypeNormal string = "Normal"
+	// These events are to warn that something might go wrong
+	EventTypeWarning string = "Warning"
+)
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Event is a report of an event somewhere in the cluster.  Events
+// have a limited retention time and triggers and messages may evolve
+// with time.  Event consumers should not rely on the timing of an event
+// with a given Reason reflecting a consistent underlying trigger, or the
+// continued existence of events with that Reason.  Events should be
+// treated as informative, best-effort, supplemental data.
+type Event struct {
+	TypeMeta `json:",inline"`
+	// Standard object's metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
+	ObjectMeta `json:"metadata" protobuf:"bytes,1,opt,name=metadata"`
+
+	// The object that this event is about.
+	InvolvedObject ObjectReference `json:"involvedObject" protobuf:"bytes,2,opt,name=involvedObject"`
+
+	// This should be a short, machine understandable string that gives the reason
+	// for the transition into the object's current status.
+	// TODO: provide exact specification for format.
+	// +optional
+	Reason string `json:"reason,omitempty" protobuf:"bytes,3,opt,name=reason"`
+
+	// A human-readable description of the status of this operation.
+	// TODO: decide on maximum length.
+	// +optional
+	Message string `json:"message,omitempty" protobuf:"bytes,4,opt,name=message"`
+
+	// The component reporting this event. Should be a short machine understandable string.
+	// +optional
+	Source EventSource `json:"source,omitempty" protobuf:"bytes,5,opt,name=source"`
+
+	// The time at which the event was first recorded. (Time of server receipt is in TypeMeta.)
+	// +optional
+	FirstTimestamp Time `json:"firstTimestamp,omitempty" protobuf:"bytes,6,opt,name=firstTimestamp"`
+
+	// The time at which the most recent occurrence of this event was recorded.
+	// +optional
+	LastTimestamp Time `json:"lastTimestamp,omitempty" protobuf:"bytes,7,opt,name=lastTimestamp"`
+
+	// The number of times this event has occurred.
+	// +optional
+	Count int32 `json:"count,omitempty" protobuf:"varint,8,opt,name=count"`
+
+	// Type of this event (Normal, Warning), new types could be added in the future
+	// +optional
+	Type string `json:"type,omitempty" protobuf:"bytes,9,opt,name=type"`
+
+	// Time when this Event was first observed.
+	// +optional
+	EventTime MicroTime `json:"eventTime,omitempty" protobuf:"bytes,10,opt,name=eventTime"`
+
+	// Data about the Event series this event represents or nil if it's a singleton Event.
+	// +optional
+	Series *EventSeries `json:"series,omitempty" protobuf:"bytes,11,opt,name=series"`
+
+	// What action was taken/failed regarding to the Regarding object.
+	// +optional
+	Action string `json:"action,omitempty" protobuf:"bytes,12,opt,name=action"`
+
+	// Optional secondary object for more complex actions.
+	// +optional
+	Related *ObjectReference `json:"related,omitempty" protobuf:"bytes,13,opt,name=related"`
+
+	// Name of the controller that emitted this Event, e.g. `kubernetes.io/kubelet`.
+	// +optional
+	ReportingController string `json:"reportingComponent" protobuf:"bytes,14,opt,name=reportingComponent"`
+
+	// ID of the controller instance, e.g. `kubelet-xyzf`.
+	// +optional
+	ReportingInstance string `json:"reportingInstance" protobuf:"bytes,15,opt,name=reportingInstance"`
+}
+
+// EventSeries contain information on series of events, i.e. thing that was/is happening
+// continuously for some time.
+type EventSeries struct {
+	// Number of occurrences in this series up to the last heartbeat time
+	Count int32 `json:"count,omitempty" protobuf:"varint,1,name=count"`
+	// Time of the last occurrence observed
+	LastObservedTime MicroTime `json:"lastObservedTime,omitempty" protobuf:"bytes,2,name=lastObservedTime"`
+
+	// +k8s:deprecated=state,protobuf=3
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// EventList is a list of events.
+type EventList struct {
+	TypeMeta `json:",inline"`
+	// Standard list metadata.
+	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+	// +optional
+	ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// List of events
+	Items []Event `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
