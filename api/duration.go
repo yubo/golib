@@ -3,8 +3,6 @@ package api
 import (
 	"encoding/json"
 	"time"
-
-	"github.com/spf13/pflag"
 )
 
 // Duration is a wrapper around time.Duration which supports correct
@@ -47,31 +45,4 @@ func (d *Duration) Set(val string) error {
 
 func (d *Duration) Type() string {
 	return "duration"
-}
-
-func newDurationValue(val Duration, p *Duration) *Duration {
-	*p = val
-	return p
-}
-
-func (d *Duration) NewFlagSet(f *pflag.FlagSet) interface{} {
-	return func(name string, value Duration, usage string) *Duration {
-		p := new(Duration)
-		f.VarP(newDurationValue(value, p), name, "", usage)
-		return p
-	}
-}
-
-func (d *Duration) NewFlagSetP(f *pflag.FlagSet) interface{} {
-	return func(name, shorthand string, value Duration, usage string) *Duration {
-		p := new(Duration)
-		f.VarP(newDurationValue(value, p), name, shorthand, usage)
-		return p
-	}
-}
-
-func (d *Duration) New(val string) interface{} {
-	p := new(Duration)
-	p.Set(val)
-	return *p
 }

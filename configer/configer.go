@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cast"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	"k8s.io/klog/v2"
@@ -207,11 +208,7 @@ func (p *Configer) GetString(path string) string {
 		return ""
 	}
 
-	s, ok := v.(string)
-	if !ok {
-		return ""
-	}
-	return s
+	return cast.ToString(v)
 }
 
 func (p *Configer) GetBool(path string) (bool, error) {
@@ -220,11 +217,7 @@ func (p *Configer) GetBool(path string) (bool, error) {
 		return false, err
 	}
 
-	b, ok := v.(bool)
-	if !ok {
-		return false, fmt.Errorf("%v is not bool", path)
-	}
-	return b, nil
+	return cast.ToBool(v), nil
 }
 
 func (p *Configer) GetBoolDef(path string, def bool) bool {
@@ -241,12 +234,7 @@ func (p *Configer) GetFloat64(path string) (float64, error) {
 		return 0, err
 	}
 
-	f, ok := v.(float64)
-	if !ok {
-		return 0, fmt.Errorf("%v is not number", path)
-	}
-
-	return f, nil
+	return cast.ToFloat64(v), nil
 }
 
 func (p *Configer) GetFloat64Def(path string, def float64) float64 {
@@ -264,7 +252,7 @@ func (p *Configer) GetInt64(path string) (int64, error) {
 		return 0, err
 	}
 
-	return int64(v), nil
+	return cast.ToInt64(v), nil
 }
 
 func (p *Configer) GetInt64Def(path string, def int64) int64 {
@@ -281,7 +269,7 @@ func (p *Configer) GetInt(path string) (int, error) {
 		return 0, err
 	}
 
-	return int(v), nil
+	return cast.ToInt(v), nil
 }
 
 func (p *Configer) GetIntDef(path string, def int) int {

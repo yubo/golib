@@ -8,9 +8,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/yubo/golib/api"
 	"github.com/yubo/golib/util"
 )
 
@@ -444,6 +446,15 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 	}
 }
 
+func setFlagSet(fs *pflag.FlagSet, values map[string]string) {
+	fs.VisitAll(func(flag *pflag.Flag) {
+		if v, ok := values[flag.Name]; ok && len(v) > 0 {
+			flag.Value.Set(v)
+			flag.Changed = true
+		}
+	})
+}
+
 func TestConfigerPriority(t *testing.T) {
 	type Foo struct {
 		A string `json:"a" flag:"test-a" env:"TEST_A" default:"default-a"`
@@ -476,12 +487,7 @@ func TestConfigerPriority(t *testing.T) {
 		assert.NoError(t, err)
 
 		if c.flag != "" {
-			fs.VisitAll(func(flag *pflag.Flag) {
-				if flag.Name == "test-a" {
-					flag.Value.Set(c.flag)
-					flag.Changed = true
-				}
-			})
+			setFlagSet(fs, map[string]string{"test-a": c.flag})
 		}
 		if c.env != "" {
 			os.Setenv("TEST_A", c.env)
@@ -521,6 +527,39 @@ func TestConfigerDef(t *testing.T) {
 
 	assert.Equalf(t, "default-a", cf.GetRaw("bar.foo.a"), "config [%s]", cf)
 	assert.Equalf(t, "default-b", cf.GetRaw("bar.foo.b"), "config [%s]", cf)
+}
+
+func TestConfigerFlags(t *testing.T) {
+	type Foo struct {
+		Duration api.Duration `json:"duration" flag:"timeout" default:"5s"`
+	}
+
+	var cases = []struct {
+		flag string
+		want Foo
+	}{
+		{"", Foo{Duration: api.Duration{Duration: 5 * time.Second}}},
+		{"10s", Foo{Duration: api.Duration{Duration: 10 * time.Second}}},
+	}
+	for _, c := range cases {
+		teardown()
+
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		SetOptions(true, false, 5, fs)
+		err := AddConfigs(fs, "", &Foo{})
+		assert.NoError(t, err)
+
+		if c.flag != "" {
+			setFlagSet(fs, map[string]string{"timeout": c.flag})
+		}
+
+		cf, err := New()
+		assert.NoError(t, err)
+
+		got := Foo{}
+		cf.Read("", &got)
+		assert.Equal(t, c.want, got)
+	}
 }
 
 func teardown() {

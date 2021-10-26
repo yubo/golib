@@ -136,11 +136,11 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		}
 
 		ps := joinPath(curPath...)
-		def := getFieldDefaultValue(ps, opt, p)
+		def := getDefaultValue(ps, opt, p)
 
-		switch t := reflect.New(ft).Interface().(type) {
-		case FlagSetValue:
-			addConfigField(fs, ps, opt, t.NewFlagSet(fs), t.NewFlagSetP(fs), t.New(def))
+		switch sample := reflect.New(ft).Interface().(type) {
+		case pflag.Value:
+			addConfigFieldByValue(fs, ps, opt, sample, def)
 		case *bool:
 			addConfigField(fs, ps, opt, fs.Bool, fs.BoolP, cast.ToBool(def))
 		case *string:
@@ -174,12 +174,6 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		}
 	}
 	return nil
-}
-
-type FlagSetValue interface {
-	NewFlagSet(f *pflag.FlagSet) interface{}
-	NewFlagSetP(f *pflag.FlagSet) interface{}
-	New(string) interface{}
 }
 
 func (p *options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
@@ -302,6 +296,43 @@ func (o tagOptions) Contains(optionName string) bool {
 	return false
 }
 
+func addConfigFieldByValue(fs *pflag.FlagSet, path string, opt *TagOpts, value pflag.Value, defValue string) {
+	rt := reflect.Indirect(reflect.ValueOf(value)).Type()
+	def := reflect.New(rt).Interface().(pflag.Value)
+
+	// set value
+	if defValue != "" {
+		def.Set(defValue)
+		value.Set(defValue)
+	}
+
+	v := &param{
+		configPath: path,
+		envName:    opt.Env,
+		flagValue:  value,
+	}
+
+	if opt.Default != "" {
+		v.defaultValue = def
+	}
+
+	switch len(opt.Flag) {
+	case 0:
+	// nothing
+	case 1:
+		v.flag = opt.Flag[0]
+		fs.Var(value, opt.Flag[0], opt.Description)
+	case 2:
+		v.flag = opt.Flag[0]
+		v.shothand = opt.Flag[1]
+		fs.VarP(value, opt.Flag[0], opt.Flag[1], opt.Description)
+	default:
+		panic("invalid flag value")
+	}
+
+	configerOptions.params = append(configerOptions.params, v)
+}
+
 func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn, def interface{}) {
 	v := &param{
 		configPath: path,
@@ -341,27 +372,38 @@ func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn,
 	configerOptions.params = append(configerOptions.params, v)
 }
 
-func getFieldDefaultValue(path string, opts *TagOpts, o *options) string {
-	def := opts.Default
-
-	if v, err := Values(o.defaultValues).PathValue(path); err == nil {
-		rf := reflect.ValueOf(v)
-		if rf.IsValid() && !rf.IsZero() {
-			if s := cast.ToString(v); len(s) > 0 {
-				def = s
+// env > value from registered config > structField tag
+func getDefaultValue(path string, opts *TagOpts, o *options) string {
+	// env
+	if o.enableEnv && opts.Env != "" {
+		if def, ok := o.getEnv(opts.Env); ok {
+			if len(def) > 0 {
+				opts.Default = def
+				return def
 			}
 		}
 	}
 
-	if o.enableEnv && opts.Env != "" {
-		if v, ok := o.getEnv(opts.Env); ok {
-			def = v
+	// sample value
+	if v, err := Values(o.defaultValues).PathValue(path); err == nil {
+		if !isZero(v) {
+			if def := cast.ToString(v); len(def) > 0 {
+				// ugly hack! for ignore time.Duration
+				if def != "0s" {
+					opts.Default = def
+					return def
+				}
+			}
 		}
 	}
 
-	if len(def) > 0 {
-		opts.Default = def
+	return opts.Default
+}
+
+func isZero(in interface{}) bool {
+	if in == nil {
+		return true
 	}
 
-	return def
+	return reflect.ValueOf(in).IsZero()
 }
