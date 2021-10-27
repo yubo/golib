@@ -5,6 +5,15 @@ import (
 	"time"
 )
 
+func NewDuration(val string) Duration {
+	d := Duration{}
+	if err := d.Set(val); err != nil {
+		panic(err)
+	}
+
+	return d
+}
+
 // Duration is a wrapper around time.Duration which supports correct
 // marshaling to YAML and JSON. In particular, it marshals into strings, which
 // can be used as map keys in json.
