@@ -5,8 +5,10 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -532,33 +534,61 @@ func TestConfigerDef(t *testing.T) {
 func TestConfigerFlags(t *testing.T) {
 	type Foo struct {
 		Duration api.Duration `json:"duration" flag:"timeout" default:"5s"`
+		IP       net.IP       `json:"ip" flag:"ip" default:"1.1.1.1"`
 	}
 
 	var cases = []struct {
-		flag string
-		want Foo
+		name        string
+		flag        string
+		fileContent string
+		want        Foo
 	}{
-		{"", Foo{Duration: api.Duration{Duration: 5 * time.Second}}},
-		{"10s", Foo{Duration: api.Duration{Duration: 10 * time.Second}}},
+		{"duration default", "", "", Foo{
+			Duration: api.Duration{Duration: 5 * time.Second},
+			IP:       net.ParseIP("1.1.1.1"),
+		}},
+		{"duration flag", "timeout=10s", "", Foo{
+			Duration: api.Duration{Duration: 10 * time.Second},
+			IP:       net.ParseIP("1.1.1.1"),
+		}},
+		{"duration file", "", "duration: 20s", Foo{
+			Duration: api.Duration{Duration: 20 * time.Second},
+			IP:       net.ParseIP("1.1.1.1"),
+		}},
+		{"ip default", "", "", Foo{
+			Duration: api.Duration{Duration: 5 * time.Second},
+			IP:       net.ParseIP("1.1.1.1"),
+		}},
+		{"ip flag", "ip=2.2.2.2", "", Foo{
+			Duration: api.Duration{Duration: 5 * time.Second},
+			IP:       net.ParseIP("2.2.2.2"),
+		}},
+		{"ip file", "", "ip: 3.3.3.3", Foo{
+			Duration: api.Duration{Duration: 5 * time.Second},
+			IP:       net.ParseIP("3.3.3.3"),
+		}},
 	}
 	for _, c := range cases {
-		teardown()
+		t.Run(c.name, func(t *testing.T) {
+			teardown()
 
-		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		SetOptions(true, false, 5, fs)
-		err := AddConfigs(fs, "", &Foo{})
-		assert.NoError(t, err)
+			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+			SetOptions(true, false, 5, fs)
+			err := AddConfigs(fs, "", &Foo{})
+			assert.NoError(t, err)
 
-		if c.flag != "" {
-			setFlagSet(fs, map[string]string{"timeout": c.flag})
-		}
+			if c.flag != "" {
+				v := strings.Split(c.flag, "=")
+				setFlagSet(fs, map[string]string{v[0]: v[1]})
+			}
 
-		cf, err := New()
-		assert.NoError(t, err)
+			cf, err := New(WithDefaultYaml("", c.fileContent))
+			assert.NoError(t, err)
 
-		got := Foo{}
-		cf.Read("", &got)
-		assert.Equal(t, c.want, got)
+			got := Foo{}
+			cf.Read("", &got)
+			assert.Equal(t, c.want, got)
+		})
 	}
 }
 

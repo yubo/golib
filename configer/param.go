@@ -2,6 +2,7 @@ package configer
 
 import (
 	"fmt"
+	"net"
 	"reflect"
 	"strings"
 	"time"
@@ -141,6 +142,12 @@ func (p *options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 		switch sample := reflect.New(ft).Interface().(type) {
 		case pflag.Value:
 			addConfigFieldByValue(fs, ps, opt, sample, def)
+		case *net.IP:
+			var df net.IP
+			if def != "" {
+				df = net.ParseIP(def)
+			}
+			addConfigField(fs, ps, opt, fs.IP, fs.IPP, df)
 		case *bool:
 			addConfigField(fs, ps, opt, fs.Bool, fs.BoolP, cast.ToBool(def))
 		case *string:
