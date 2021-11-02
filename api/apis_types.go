@@ -25,10 +25,6 @@ limitations under the License.
 // separate packages.
 package api
 
-import (
-	"github.com/yubo/golib/types"
-)
-
 // TypeMeta describes an individual object in an API response or request
 // with strings representing the type of the object and its API schema version.
 // Structures that are versioned or persisted should inline TypeMeta.
@@ -437,88 +433,88 @@ const (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // GetOptions is the standard query options to the standard REST get call.
-type GetOptions struct {
-	TypeMeta `json:",inline"`
-	// resourceVersion sets a constraint on what resource versions a request may be served from.
-	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions for
-	// details.
-	//
-	// Defaults to unset
-	// +optional
-	ResourceVersion string `json:"resourceVersion,omitempty" protobuf:"bytes,1,opt,name=resourceVersion"`
-	// +k8s:deprecated=includeUninitialized,protobuf=2
-}
+//type GetOptions struct {
+//	TypeMeta `json:",inline"`
+//	// resourceVersion sets a constraint on what resource versions a request may be served from.
+//	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#resource-versions for
+//	// details.
+//	//
+//	// Defaults to unset
+//	// +optional
+//	ResourceVersion string `json:"resourceVersion,omitempty" protobuf:"bytes,1,opt,name=resourceVersion"`
+//	// +k8s:deprecated=includeUninitialized,protobuf=2
+//}
 
 // DeletionPropagation decides if a deletion will propagate to the dependents of
 // the object, and how the garbage collector will handle the propagation.
-type DeletionPropagation string
-
-const (
-	// Orphans the dependents.
-	DeletePropagationOrphan DeletionPropagation = "Orphan"
-	// Deletes the object from the key-value store, the garbage collector will
-	// delete the dependents in the background.
-	DeletePropagationBackground DeletionPropagation = "Background"
-	// The object exists in the key-value store until the garbage collector
-	// deletes all the dependents whose ownerReference.blockOwnerDeletion=true
-	// from the key-value store.  API sever will put the "foregroundDeletion"
-	// finalizer on the object, and sets its deletionTimestamp.  This policy is
-	// cascading, i.e., the dependents will be deleted with Foreground.
-	DeletePropagationForeground DeletionPropagation = "Foreground"
-)
-
-const (
-	// DryRunAll means to complete all processing stages, but don't
-	// persist changes to storage.
-	DryRunAll = "All"
-)
+//type DeletionPropagation string
+//
+//const (
+//	// Orphans the dependents.
+//	DeletePropagationOrphan DeletionPropagation = "Orphan"
+//	// Deletes the object from the key-value store, the garbage collector will
+//	// delete the dependents in the background.
+//	DeletePropagationBackground DeletionPropagation = "Background"
+//	// The object exists in the key-value store until the garbage collector
+//	// deletes all the dependents whose ownerReference.blockOwnerDeletion=true
+//	// from the key-value store.  API sever will put the "foregroundDeletion"
+//	// finalizer on the object, and sets its deletionTimestamp.  This policy is
+//	// cascading, i.e., the dependents will be deleted with Foreground.
+//	DeletePropagationForeground DeletionPropagation = "Foreground"
+//)
+//
+//const (
+//	// DryRunAll means to complete all processing stages, but don't
+//	// persist changes to storage.
+//	DryRunAll = "All"
+//)
 
 // +k8s:conversion-gen:explicit-from=net/url.Values
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // DeleteOptions may be provided when deleting an API object.
-type DeleteOptions struct {
-	TypeMeta `json:",inline"`
-
-	// The duration in seconds before the object should be deleted. Value must be non-negative integer.
-	// The value zero indicates delete immediately. If this value is nil, the default grace period for the
-	// specified type will be used.
-	// Defaults to a per object value if not specified. zero means delete immediately.
-	// +optional
-	GracePeriodSeconds *int64 `json:"gracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=gracePeriodSeconds"`
-
-	// Must be fulfilled before a deletion is carried out. If not possible, a 409 Conflict status will be
-	// returned.
-	// +k8s:conversion-gen=false
-	// +optional
-	Preconditions *Preconditions `json:"preconditions,omitempty" protobuf:"bytes,2,opt,name=preconditions"`
-
-	// Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7.
-	// Should the dependent objects be orphaned. If true/false, the "orphan"
-	// finalizer will be added to/removed from the object's finalizers list.
-	// Either this field or PropagationPolicy may be set, but not both.
-	// +optional
-	OrphanDependents *bool `json:"orphanDependents,omitempty" protobuf:"varint,3,opt,name=orphanDependents"`
-
-	// Whether and how garbage collection will be performed.
-	// Either this field or OrphanDependents may be set, but not both.
-	// The default policy is decided by the existing finalizer set in the
-	// metadata.finalizers and the resource-specific default policy.
-	// Acceptable values are: 'Orphan' - orphan the dependents; 'Background' -
-	// allow the garbage collector to delete the dependents in the background;
-	// 'Foreground' - a cascading policy that deletes all dependents in the
-	// foreground.
-	// +optional
-	PropagationPolicy *DeletionPropagation `json:"propagationPolicy,omitempty" protobuf:"varint,4,opt,name=propagationPolicy"`
-
-	// When present, indicates that modifications should not be
-	// persisted. An invalid or unrecognized dryRun directive will
-	// result in an error response and no further processing of the
-	// request. Valid values are:
-	// - All: all dry run stages will be processed
-	// +optional
-	DryRun []string `json:"dryRun,omitempty" protobuf:"bytes,5,rep,name=dryRun"`
-}
+//type DeleteOptions struct {
+//	TypeMeta `json:",inline"`
+//
+//	// The duration in seconds before the object should be deleted. Value must be non-negative integer.
+//	// The value zero indicates delete immediately. If this value is nil, the default grace period for the
+//	// specified type will be used.
+//	// Defaults to a per object value if not specified. zero means delete immediately.
+//	// +optional
+//	GracePeriodSeconds *int64 `json:"gracePeriodSeconds,omitempty" protobuf:"varint,1,opt,name=gracePeriodSeconds"`
+//
+//	// Must be fulfilled before a deletion is carried out. If not possible, a 409 Conflict status will be
+//	// returned.
+//	// +k8s:conversion-gen=false
+//	// +optional
+//	Preconditions *Preconditions `json:"preconditions,omitempty" protobuf:"bytes,2,opt,name=preconditions"`
+//
+//	// Deprecated: please use the PropagationPolicy, this field will be deprecated in 1.7.
+//	// Should the dependent objects be orphaned. If true/false, the "orphan"
+//	// finalizer will be added to/removed from the object's finalizers list.
+//	// Either this field or PropagationPolicy may be set, but not both.
+//	// +optional
+//	OrphanDependents *bool `json:"orphanDependents,omitempty" protobuf:"varint,3,opt,name=orphanDependents"`
+//
+//	// Whether and how garbage collection will be performed.
+//	// Either this field or OrphanDependents may be set, but not both.
+//	// The default policy is decided by the existing finalizer set in the
+//	// metadata.finalizers and the resource-specific default policy.
+//	// Acceptable values are: 'Orphan' - orphan the dependents; 'Background' -
+//	// allow the garbage collector to delete the dependents in the background;
+//	// 'Foreground' - a cascading policy that deletes all dependents in the
+//	// foreground.
+//	// +optional
+//	PropagationPolicy *DeletionPropagation `json:"propagationPolicy,omitempty" protobuf:"varint,4,opt,name=propagationPolicy"`
+//
+//	// When present, indicates that modifications should not be
+//	// persisted. An invalid or unrecognized dryRun directive will
+//	// result in an error response and no further processing of the
+//	// request. Valid values are:
+//	// - All: all dry run stages will be processed
+//	// +optional
+//	DryRun []string `json:"dryRun,omitempty" protobuf:"bytes,5,rep,name=dryRun"`
+//}
 
 // +k8s:conversion-gen:explicit-from=net/url.Values
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -583,34 +579,34 @@ type DeleteOptions struct {
 
 // UpdateOptions may be provided when updating an API object.
 // All fields in UpdateOptions should also be present in PatchOptions.
-type UpdateOptions struct {
-	TypeMeta `json:",inline"`
-
-	// When present, indicates that modifications should not be
-	// persisted. An invalid or unrecognized dryRun directive will
-	// result in an error response and no further processing of the
-	// request. Valid values are:
-	// - All: all dry run stages will be processed
-	// +optional
-	DryRun []string `json:"dryRun,omitempty" protobuf:"bytes,1,rep,name=dryRun"`
-
-	// fieldManager is a name associated with the actor or entity
-	// that is making these changes. The value must be less than or
-	// 128 characters long, and only contain printable characters,
-	// as defined by https://golang.org/pkg/unicode/#IsPrint.
-	// +optional
-	FieldManager string `json:"fieldManager,omitempty" protobuf:"bytes,2,name=fieldManager"`
-}
+//type UpdateOptions struct {
+//	TypeMeta `json:",inline"`
+//
+//	// When present, indicates that modifications should not be
+//	// persisted. An invalid or unrecognized dryRun directive will
+//	// result in an error response and no further processing of the
+//	// request. Valid values are:
+//	// - All: all dry run stages will be processed
+//	// +optional
+//	DryRun []string `json:"dryRun,omitempty" protobuf:"bytes,1,rep,name=dryRun"`
+//
+//	// fieldManager is a name associated with the actor or entity
+//	// that is making these changes. The value must be less than or
+//	// 128 characters long, and only contain printable characters,
+//	// as defined by https://golang.org/pkg/unicode/#IsPrint.
+//	// +optional
+//	FieldManager string `json:"fieldManager,omitempty" protobuf:"bytes,2,name=fieldManager"`
+//}
 
 // Preconditions must be fulfilled before an operation (update, delete, etc.) is carried out.
-type Preconditions struct {
-	// Specifies the target UID.
-	// +optional
-	UID *types.UID `json:"uid,omitempty" protobuf:"bytes,1,opt,name=uid,casttype=k8s.io/apimachinery/pkg/types.UID"`
-	// Specifies the target ResourceVersion
-	// +optional
-	ResourceVersion *string `json:"resourceVersion,omitempty" protobuf:"bytes,2,opt,name=resourceVersion"`
-}
+//type Preconditions struct {
+//	// Specifies the target UID.
+//	// +optional
+//	UID *types.UID `json:"uid,omitempty" protobuf:"bytes,1,opt,name=uid,casttype=k8s.io/apimachinery/pkg/types.UID"`
+//	// Specifies the target ResourceVersion
+//	// +optional
+//	ResourceVersion *string `json:"resourceVersion,omitempty" protobuf:"bytes,2,opt,name=resourceVersion"`
+//}
 
 //
 //// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

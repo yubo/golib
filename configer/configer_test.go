@@ -541,7 +541,7 @@ func TestConfigerFlags(t *testing.T) {
 		name        string
 		flag        string
 		fileContent string
-		want        Foo
+		expected    Foo
 	}{
 		{"duration default", "", "", Foo{
 			Duration: api.Duration{Duration: 5 * time.Second},
@@ -587,12 +587,12 @@ func TestConfigerFlags(t *testing.T) {
 
 			got := Foo{}
 			cf.Read("", &got)
-			assert.Equal(t, c.want, got)
+			assert.Equal(t, c.expected, got)
 		})
 	}
 }
 
 func teardown() {
 	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	configerOptions = newOptions()
+	Reset()
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package flag
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"strings"
@@ -25,8 +26,9 @@ import (
 // +k8s:deepcopy-gen=true
 // NamedCertKey is a flag value parsing "certfile,keyfile" and "certfile,keyfile:name,name,name".
 type NamedCertKey struct {
-	Names             []string
-	CertFile, KeyFile string
+	Names    []string
+	CertFile string
+	KeyFile  string
 }
 
 func (in *NamedCertKey) DeepCopyInto(out *NamedCertKey) {
@@ -48,6 +50,24 @@ func (in *NamedCertKey) DeepCopy() *NamedCertKey {
 	out := new(NamedCertKey)
 	in.DeepCopyInto(out)
 	return out
+}
+
+func (a *NamedCertKey) UnmarshalJSON(b []byte) error {
+	if len(b) == 4 && string(b) == "null" {
+		return nil
+	}
+
+	var str string
+	err := json.Unmarshal(b, &str)
+	if err != nil {
+		return err
+	}
+
+	return a.Set(str)
+}
+
+func (a NamedCertKey) MarshalJSON() ([]byte, error) {
+	return json.Marshal(a.String())
 }
 
 var _ flag.Value = &NamedCertKey{}
@@ -93,8 +113,39 @@ func (*NamedCertKey) Type() string {
 // NamedCertKeyArray is a flag value parsing NamedCertKeys, each passed with its own
 // flag instance (in contrast to comma separated slices).
 type NamedCertKeyArray struct {
-	value   *[]NamedCertKey
+	Value   *[]NamedCertKey
 	changed bool
+}
+
+func (a *NamedCertKeyArray) UnmarshalJSON(b []byte) error {
+	if len(b) == 4 && string(b) == "null" {
+		return nil
+	}
+
+	var str string
+	err := json.Unmarshal(b, &str)
+	if err != nil {
+		return err
+	}
+
+	return a.SetDefault(str)
+}
+
+func (a NamedCertKeyArray) MarshalJSON() ([]byte, error) {
+	if a.IsZero() {
+		// Encode unset/nil objects as JSON's "null".
+		return []byte("null"), nil
+	}
+
+	return json.Marshal(a.String())
+}
+
+// IsZero returns true if the value is nil
+func (a *NamedCertKeyArray) IsZero() bool {
+	if a == nil || a.Value == nil || len(*a.Value) == 0 {
+		return true
+	}
+	return false
 }
 
 var _ flag.Value = &NamedCertKeyArray{}
@@ -103,21 +154,43 @@ var _ flag.Value = &NamedCertKeyArray{}
 // pointing to p.
 func NewNamedCertKeyArray(p *[]NamedCertKey) *NamedCertKeyArray {
 	return &NamedCertKeyArray{
-		value: p,
+		Value: p,
 	}
 }
 
+func (a *NamedCertKeyArray) SetDefault(val string) error {
+	if err := a.Set(val); err != nil {
+		return err
+	}
+	a.changed = false
+	return nil
+}
+
 func (a *NamedCertKeyArray) Set(val string) error {
+	for _, v := range strings.Split(val, ";") {
+		if err := a.set(v); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *NamedCertKeyArray) set(val string) error {
 	nkc := NamedCertKey{}
 	err := nkc.Set(val)
 	if err != nil {
 		return err
 	}
 	if !a.changed {
-		*a.value = []NamedCertKey{nkc}
+		if a.Value == nil {
+			a.Value = &[]NamedCertKey{nkc}
+		} else {
+			*a.Value = []NamedCertKey{nkc}
+		}
 		a.changed = true
 	} else {
-		*a.value = append(*a.value, nkc)
+		*a.Value = append(*a.Value, nkc)
 	}
 	return nil
 }
@@ -127,9 +200,13 @@ func (a *NamedCertKeyArray) Type() string {
 }
 
 func (a *NamedCertKeyArray) String() string {
-	nkcs := make([]string, 0, len(*a.value))
-	for i := range *a.value {
-		nkcs = append(nkcs, (*a.value)[i].String())
+	if a.Value == nil {
+		return ""
 	}
-	return "[" + strings.Join(nkcs, ";") + "]"
+
+	nkcs := make([]string, 0, len(*a.Value))
+	for i := range *a.Value {
+		nkcs = append(nkcs, (*a.Value)[i].String())
+	}
+	return strings.Join(nkcs, ";")
 }

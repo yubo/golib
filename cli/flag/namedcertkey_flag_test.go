@@ -23,7 +23,78 @@ import (
 	"testing"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
+	"github.com/yubo/golib/configer"
 )
+
+func TestNamedCertKeyArrayConfig(t *testing.T) {
+	type Foo struct {
+		Certs NamedCertKeyArray `json:"certs" flag:"tls-sni-cert-key" default:"foo.crt,foo.key:abc; bar.crt,bar.key"`
+	}
+	tests := []struct {
+		args        []string
+		fileContent string
+		def         *[]NamedCertKey
+		expected    *[]NamedCertKey
+	}{
+		{
+			expected: &[]NamedCertKey{{
+				Names:    []string{"abc"},
+				KeyFile:  "foo.key",
+				CertFile: "foo.crt",
+			}, {
+				KeyFile:  "bar.key",
+				CertFile: "bar.crt",
+			}},
+		},
+		{
+			def: &[]NamedCertKey{{
+				KeyFile:  "bar.key",
+				CertFile: "bar.crt",
+			}},
+			expected: &[]NamedCertKey{{
+				KeyFile:  "bar.key",
+				CertFile: "bar.crt",
+			}},
+		},
+		{
+			args: []string{"foo.crt,foo.key"},
+			expected: &[]NamedCertKey{{
+				KeyFile:  "foo.key",
+				CertFile: "foo.crt",
+			}},
+		},
+	}
+
+	for i, test := range tests {
+		configer.Reset()
+		fs := pflag.NewFlagSet("testNamedCertKeyArray", pflag.ContinueOnError)
+		configer.SetOptions(true, false, 5, fs)
+
+		{
+			err := configer.AddConfigs(fs, "",
+				&Foo{Certs: NamedCertKeyArray{Value: test.def}})
+			assert.NoError(t, err, i)
+		}
+
+		args := []string{}
+		for _, a := range test.args {
+			args = append(args, fmt.Sprintf("--tls-sni-cert-key=%s", a))
+		}
+		err := fs.Parse(args)
+		assert.NoError(t, err, i)
+
+		cf, err := configer.New(configer.WithDefaultYaml("", test.fileContent))
+		assert.NoError(t, err, i)
+
+		// debug
+		t.Logf("%v", cf.GetRaw(""))
+
+		got := Foo{}
+		cf.Read("", &got)
+		assert.Equal(t, test.expected, got.Certs.Value, i)
+	}
+}
 
 func TestNamedCertKeyArrayFlag(t *testing.T) {
 	tests := []struct {

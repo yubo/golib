@@ -303,14 +303,24 @@ func (o tagOptions) Contains(optionName string) bool {
 	return false
 }
 
+type defaultSetter interface {
+	SetDefault(string) error
+}
+
 func addConfigFieldByValue(fs *pflag.FlagSet, path string, opt *TagOpts, value pflag.Value, defValue string) {
 	rt := reflect.Indirect(reflect.ValueOf(value)).Type()
 	def := reflect.New(rt).Interface().(pflag.Value)
 
 	// set value
 	if defValue != "" {
-		def.Set(defValue)
-		value.Set(defValue)
+		if d, ok := def.(defaultSetter); ok {
+			d.SetDefault(defValue)
+			value.(defaultSetter).SetDefault(defValue)
+		} else {
+			// the changed flag may be affected
+			def.Set(defValue)
+			value.Set(defValue)
+		}
 	}
 
 	v := &param{
@@ -391,15 +401,11 @@ func getDefaultValue(path string, opts *TagOpts, o *options) string {
 		}
 	}
 
-	// sample value
 	if v, err := Values(o.defaultValues).PathValue(path); err == nil {
 		if !isZero(v) {
 			if def := cast.ToString(v); len(def) > 0 {
-				// ugly hack! for ignore time.Duration
-				if def != "0s" {
-					opts.Default = def
-					return def
-				}
+				opts.Default = def
+				return def
 			}
 		}
 	}
@@ -407,9 +413,16 @@ func getDefaultValue(path string, opts *TagOpts, o *options) string {
 	return opts.Default
 }
 
+type zeroChecker interface {
+	IsZero() bool
+}
+
 func isZero(in interface{}) bool {
 	if in == nil {
 		return true
+	}
+	if f, ok := in.(zeroChecker); ok {
+		return f.IsZero()
 	}
 
 	return reflect.ValueOf(in).IsZero()
