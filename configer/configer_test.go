@@ -1,7 +1,6 @@
 package configer
 
 import (
-	"flag"
 	"io"
 	"io/ioutil"
 	"log"
@@ -59,8 +58,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cfg := teardown()
-	_, err := cfg.NewConfiger(WithValueFile("conf.yml"))
+	_, err := NewFactory().NewConfiger(WithValueFile("conf.yml"))
 	assert.NoError(t, err)
 }
 func TestConfigWithConfig(t *testing.T) {
@@ -74,7 +72,7 @@ func TestConfigWithConfig(t *testing.T) {
 	v := Bar{Foo{2}, Foo{3}}
 
 	{
-		c, err := NewConfiger(WithConfig("foo", v.Foo))
+		c, err := NewFactory().NewConfiger(WithConfig("foo", v.Foo))
 		assert.NoError(t, err)
 
 		var got Bar
@@ -84,7 +82,7 @@ func TestConfigWithConfig(t *testing.T) {
 	}
 
 	{
-		c, err := NewConfiger(WithConfig("", v))
+		c, err := NewFactory().NewConfiger(WithConfig("", v))
 		assert.NoError(t, err)
 
 		var got Bar
@@ -105,7 +103,7 @@ func TestConfigSet(t *testing.T) {
 	v := Bar{Foo{2}, Foo{3}}
 
 	{
-		c, _ := NewConfiger(WithConfig("foo", v.Foo))
+		c, _ := NewFactory().NewConfiger(WithConfig("foo", v.Foo))
 		c.Set("foo", Foo{20})
 
 		var got Bar
@@ -118,7 +116,7 @@ func TestConfigSet(t *testing.T) {
 	}
 
 	{
-		c, _ := NewConfiger(WithConfig("a", v.Foo2))
+		c, _ := NewFactory().NewConfiger(WithConfig("a", v.Foo2))
 		c.Set("a", Foo{30})
 
 		var got Bar
@@ -141,7 +139,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := NewConfiger(WithValueFile("conf.yml"))
+	config, _ := NewFactory().NewConfiger(WithValueFile("conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -209,10 +207,10 @@ ctrl:
 		{"ctrl.auth.google.client_id", "string"},
 	}
 
-	conf, _ := NewConfiger(WithDefaultYaml("", yml))
+	cfg, _ := NewFactory().NewConfiger(WithDefaultYaml("", yml))
 	for _, c := range cases {
-		if got := util.GetType(conf.GetRaw(c.path)); got != c.want {
-			assert.Equalf(t, c.want, got, "data %+v", conf.data)
+		if got := util.GetType(cfg.GetRaw(c.path)); got != c.want {
+			assert.Equalf(t, c.want, got, "data %s", cfg)
 		}
 	}
 
@@ -238,7 +236,7 @@ ctrl:
 		{"ctrl.auth.google", "client_id", "string"},
 	}
 
-	conf, _ := NewConfiger(WithDefaultYaml("", yml))
+	conf, _ := NewFactory().NewConfiger(WithDefaultYaml("", yml))
 	for _, c := range cases {
 		cf := conf.GetConfiger(c.path1)
 		if cf == nil {
@@ -275,7 +273,7 @@ ctrl:
 
 	var got auth
 
-	conf, _ := NewConfiger(WithDefaultYaml("", yml))
+	conf, _ := NewFactory().NewConfiger(WithDefaultYaml("", yml))
 	conf2 := conf.GetConfiger("ctrl.auth")
 	err := conf2.Read("google", &got)
 	if err != nil {
@@ -293,7 +291,7 @@ func TestConfigWithBase(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := NewConfiger(WithValueFile("base.yml", "conf.yml"))
+	cf, _ := NewFactory().NewConfiger(WithValueFile("base.yml", "conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -318,7 +316,7 @@ func TestConfigWithBase2(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := NewConfiger(
+	cf, _ := NewFactory().NewConfiger(
 		WithValueFile("conf.yml"),
 		WithDefaultYaml("foo", "foo1: base1"),
 		WithDefaultYaml("foo", "foo3: base3"))
@@ -367,7 +365,7 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cfg := &Configer{
+	cfg := &configer{
 		valueFiles:   []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"},
 		values:       []string{"e=v2_e", "f1=f1,f2=f2"},
 		stringValues: []string{"sv1=sv1,sv2=sv2"},
@@ -432,10 +430,9 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		cfg := teardown()
-
+		factory := NewFactory()
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		err := cfg.RegisterConfigFields(fs, "", &Foo{})
+		err := factory.RegisterConfigFields(fs, "", &Foo{})
 		assert.NoError(t, err)
 
 		found := false
@@ -483,12 +480,12 @@ func TestConfigerPriority(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		cfg := teardown()
+		factory := NewFactory()
 
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		cfg.SetOptions(true, false, 5, fs)
+		factory.SetOptions(true, false, 5, fs)
 
-		err := cfg.RegisterConfigFields(fs, "", &Foo{})
+		err := factory.RegisterConfigFields(fs, "", &Foo{})
 		assert.NoError(t, err)
 
 		if c.flag != "" {
@@ -507,12 +504,10 @@ func TestConfigerPriority(t *testing.T) {
 			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("#"), 0666)
 		}
 
-		cfg.valueFiles = []string{"base.yml"}
-
-		cfg2, err := cfg.NewConfiger()
+		cfg, err := factory.NewConfiger(WithValueFile("base.yml"))
 		assert.NoError(t, err)
 
-		assert.Equalf(t, c.want, cfg2.GetRaw("a"), "flag [%s] env [%s] file [%s] config [%s]", c.flag, c.env, c.file, cfg2)
+		assert.Equalf(t, c.want, cfg.GetRaw("a"), "flag [%s] env [%s] file [%s] config [%s]", c.flag, c.env, c.file, cfg)
 	}
 }
 
@@ -525,17 +520,17 @@ func TestConfigerDef(t *testing.T) {
 		Foo *Foo `json:"foo"`
 	}
 
-	cfg := teardown()
+	factory := NewFactory()
 
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	err := cfg.RegisterConfigFields(fs, "bar", &Bar{Foo: &Foo{B: "default-b"}})
+	err := factory.RegisterConfigFields(fs, "bar", &Bar{Foo: &Foo{B: "default-b"}})
 	assert.NoError(t, err)
 
-	cfg2, err := cfg.NewConfiger()
+	cfg, err := factory.NewConfiger()
 	assert.NoError(t, err)
 
-	assert.Equalf(t, "default-a", cfg2.GetRaw("bar.foo.a"), "config [%s]", cfg2)
-	assert.Equalf(t, "default-b", cfg2.GetRaw("bar.foo.b"), "config [%s]", cfg2)
+	assert.Equalf(t, "default-a", cfg.GetRaw("bar.foo.a"), "config [%s]", cfg)
+	assert.Equalf(t, "default-b", cfg.GetRaw("bar.foo.b"), "config [%s]", cfg)
 }
 
 func TestConfigerFlags(t *testing.T) {
@@ -577,12 +572,12 @@ func TestConfigerFlags(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			cfg := teardown()
+			factory := NewFactory()
 
 			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-			cfg.SetOptions(true, false, 5, fs)
+			factory.SetOptions(true, false, 5, fs)
 
-			err := cfg.RegisterConfigFields(fs, "", &Foo{})
+			err := factory.RegisterConfigFields(fs, "", &Foo{})
 			assert.NoError(t, err)
 
 			if c.flag != "" {
@@ -590,17 +585,12 @@ func TestConfigerFlags(t *testing.T) {
 				setFlagSet(fs, map[string]string{v[0]: v[1]})
 			}
 
-			cfg2, err := cfg.NewConfiger(WithDefaultYaml("", c.fileContent))
+			cfg, err := factory.NewConfiger(WithDefaultYaml("", c.fileContent))
 			assert.NoError(t, err)
 
 			got := Foo{}
-			cfg2.Read("", &got)
+			cfg.Read("", &got)
 			assert.Equal(t, c.expected, got)
 		})
 	}
-}
-
-func teardown() *Configer {
-	flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ContinueOnError)
-	return newConfiger()
 }

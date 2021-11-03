@@ -19,127 +19,111 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-var (
-	DefaultConfiger = newConfiger()
-)
-
-// for testing
-func Reset() {
-	DefaultConfiger = newConfiger()
+type Factory interface {
+	RegisterConfigFields(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error
+	NewConfiger(opts ...ConfigerOption) (Configer, error)
+	SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet)
+	AddFlags(f *pflag.FlagSet)
+	ValueFiles() []string
+	Envs() []string
+	Flags() []string
 }
 
-type Configer struct {
-	data     map[string]interface{}
-	path     []string
-	prepared bool
+type Configer interface {
+	SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet)
+	AddFlags(f *pflag.FlagSet)
+	ValueFiles() []string
+	Envs() []string
+	Flags() []string
 
-	// options
-	pathsBase     map[string]string // data in yaml format with path
-	pathsOverride map[string]string // data in yaml format with path
-	valueFiles    []string          // files, -f/--values
-	values        []string          // values, --set
-	stringValues  []string          // values, --set-string
-	fileValues    []string          // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
+	Set(path string, v interface{}) error
+	GetConfiger(path string) Configer
+	GetRaw(path string) interface{}
+	GetString(path string) string
+	GetBool(path string) (bool, error)
+	GetBoolDef(path string, def bool) bool
+	GetFloat64(path string) (float64, error)
+	GetFloat64Def(path string, def float64) float64
+	GetInt64(path string) (int64, error)
+	GetInt64Def(path string, def int64) int64
+	GetInt(path string) (int, error)
+	GetIntDef(path string, def int) int
+	IsSet(path string) bool
+	Read(path string, into interface{}) error
+	String() string
+}
+
+var (
+	DefaultFactory = NewFactory()
+)
+
+func NewFactory() Factory {
+	return newConfiger()
+}
+func NewConfiger(opts ...ConfigerOption) (Configer, error) {
+	return DefaultFactory.NewConfiger(opts...)
+}
+func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
+	DefaultFactory.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
+}
+func AddFlags(f *pflag.FlagSet) {
+	DefaultFactory.AddFlags(f)
+}
+func ValueFiles() []string {
+	return DefaultFactory.ValueFiles()
+}
+func Envs() []string {
+	return DefaultFactory.Envs()
+}
+func Flags() []string {
+	return DefaultFactory.Flags()
+}
+
+type configer struct {
+	// factory options
+	valueFiles    []string // files, -f/--values
+	values        []string // values, --set
+	stringValues  []string // values, --set-string
+	fileValues    []string // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
 	enableFlag    bool
 	maxDepth      int
 	enableEnv     bool
 	allowEmptyEnv bool
 	flagSet       *pflag.FlagSet
 	fields        []*configField // all of config fields
+
+	ConfigerOptions
+
+	// data options
+	data   map[string]interface{}
+	path   []string
+	parsed bool
 }
 
-func NewConfiger(opts ...ConfigerOption) (*Configer, error) {
-	return DefaultConfiger.NewConfiger(opts...)
-}
-func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
-	DefaultConfiger.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
-}
-func AddFlags(f *pflag.FlagSet) {
-	DefaultConfiger.AddFlags(f)
-}
-func ValueFiles() []string {
-	return DefaultConfiger.ValueFiles()
-}
-func Envs() []string {
-	return DefaultConfiger.Envs()
-}
-func Flags() []string {
-	return DefaultConfiger.Flags()
+func newConfiger() *configer {
+	return &configer{
+		enableFlag:    true,
+		enableEnv:     true,
+		allowEmptyEnv: false,
+		maxDepth:      5,
+		data:          map[string]interface{}{},
+		path:          []string{},
+	}
 }
 
-func (p *Configer) NewConfiger(opts ...ConfigerOption) (*Configer, error) {
-	cfg := p.newConfiger(nil, nil)
-
+func (p *configer) NewConfiger(opts ...ConfigerOption) (Configer, error) {
 	for _, opt := range opts {
-		opt(cfg)
+		opt(&p.ConfigerOptions)
 	}
 
-	if err := cfg.Prepare(); err != nil {
+	if err := p.parse(); err != nil {
 		return nil, err
 	}
 
-	return cfg, nil
+	return p, nil
 }
 
-func newConfiger() *Configer {
-	return (*Configer)(nil).newConfiger(nil, nil)
-}
-
-// clone copy all field except data, path, params
-func (p *Configer) newConfiger(path []string, data map[string]interface{}) (out *Configer) {
-	if data == nil {
-		data = map[string]interface{}{}
-	}
-	if path == nil {
-		path = []string{}
-	}
-	if p == nil {
-		return &Configer{
-			enableFlag:    true,
-			enableEnv:     true,
-			allowEmptyEnv: false,
-			maxDepth:      5,
-			data:          data,
-			path:          path,
-		}
-	}
-
-	out = new(Configer)
-	*out = *p
-	out.data = data
-	out.path = path
-
-	if p.pathsBase != nil {
-		in, out := &p.pathsBase, &out.pathsBase
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
-
-	if p.valueFiles != nil {
-		in, out := &p.valueFiles, &out.valueFiles
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-
-	if p.values != nil {
-		in, out := &p.values, &out.values
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-
-	if p.fileValues != nil {
-		in, out := &p.fileValues, &out.fileValues
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-
-	// skip in.params
-	return
-}
-
-func (p *Configer) PrintFlags(out io.Writer) {
+func (p *configer) PrintFlags(out io.Writer) {
 	fmt.Fprintf(out, "configer FLAG:\n")
 	for _, value := range p.valueFiles {
 		fmt.Fprintf(out, "  --values=%s\n", value)
@@ -155,8 +139,8 @@ func (p *Configer) PrintFlags(out io.Writer) {
 	}
 }
 
-func (p *Configer) Prepare() (err error) {
-	if p.prepared {
+func (p *configer) parse() (err error) {
+	if p.parsed {
 		return nil
 	}
 
@@ -166,14 +150,14 @@ func (p *Configer) Prepare() (err error) {
 	p.mergeDefaultValues(base)
 
 	// base with path
-	for path, b := range p.pathsBase {
+	for path, b := range p.ConfigerOptions.PathsBase {
 		if base, err = yaml2ValuesWithPath(base, path, []byte(b)); err != nil {
 			return err
 		}
 	}
 
 	// configFile & valueFile --values
-	for _, filePath := range p.valueFiles {
+	for _, filePath := range append(p.valueFiles, p.ConfigerOptions.FilesOverride...) {
 		m := map[string]interface{}{}
 
 		bytes, err := template.ParseTemplateFile(nil, filePath)
@@ -221,28 +205,62 @@ func (p *Configer) Prepare() (err error) {
 	//p.mergeEnvValues(base)
 	p.mergeFlagValues(base)
 
-	for path, b := range p.pathsOverride {
+	for path, b := range p.ConfigerOptions.PathsOverride {
 		if base, err = yaml2ValuesWithPath(base, path, []byte(b)); err != nil {
 			return err
 		}
 	}
 
 	p.data = base
-	p.prepared = true
+	p.parsed = true
 	return nil
 }
-
-func (p *Configer) GetConfiger(path string) *Configer {
-	if p == nil || !p.prepared {
-		return nil
+func (p *configer) mergeDefaultValues(into map[string]interface{}) {
+	for _, f := range p.fields {
+		if v := f.defaultValue; v != nil {
+			//klog.V(7).InfoS("def", "path", joinPath(append(p.path, f.configPath)...), "value", v)
+			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
+		}
 	}
-
-	data, _ := p.GetRaw(path).(map[string]interface{})
-
-	return p.newConfiger(append(clonePath(p.path), parsePath(path)...), data)
 }
 
-func (p *Configer) Set(path string, v interface{}) error {
+// merge flag value into ${into}
+func (p *configer) mergeFlagValues(into map[string]interface{}) {
+	if !p.enableFlag {
+		return
+	}
+	for _, f := range p.fields {
+		if v := p.getFlagValue(f); v != nil {
+			//klog.V(7).InfoS("flag", "path", joinPath(append(p.path, f.configPath)...), "value", v)
+			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
+		}
+	}
+}
+func (p *configer) Envs() (names []string) {
+	if !p.enableEnv {
+		return
+	}
+	for _, f := range p.fields {
+		if f.envName != "" {
+			names = append(names, f.envName)
+		}
+	}
+	return
+}
+
+func (p *configer) Flags() (names []string) {
+	if !p.enableFlag {
+		return
+	}
+	for _, f := range p.fields {
+		if f.flag != "" {
+			names = append(names, f.flag)
+		}
+	}
+	return
+}
+
+func (p *configer) Set(path string, v interface{}) error {
 	if path == "" {
 		b, err := yaml.Marshal(v)
 		if err != nil {
@@ -263,30 +281,24 @@ func (p *Configer) Set(path string, v interface{}) error {
 	return nil
 }
 
-func (p *Configer) Envs() (names []string) {
-	if !p.enableEnv {
-		return
+func (p *configer) GetConfiger(path string) Configer {
+	if p == nil || !p.parsed {
+		return nil
 	}
-	for _, f := range p.fields {
-		if f.envName != "" {
-			names = append(names, f.envName)
-		}
-	}
-	return
+
+	data, _ := p.GetRaw(path).(map[string]interface{})
+
+	// noneed deepCopy
+	out := new(configer)
+	*out = *p
+
+	out.path = append(clonePath(p.path), parsePath(path)...)
+	out.data = data
+
+	return out
 }
 
-func (p *Configer) Flags() (names []string) {
-	if !p.enableFlag {
-		return
-	}
-	for _, f := range p.fields {
-		if f.flag != "" {
-			names = append(names, f.flag)
-		}
-	}
-	return
-}
-func (p *Configer) GetRaw(path string) interface{} {
+func (p *configer) GetRaw(path string) interface{} {
 	if path == "" {
 		return Values(p.data)
 	}
@@ -299,7 +311,7 @@ func (p *Configer) GetRaw(path string) interface{} {
 	return v
 }
 
-func (p *Configer) GetString(path string) string {
+func (p *configer) GetString(path string) string {
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
 		return ""
@@ -308,7 +320,7 @@ func (p *Configer) GetString(path string) string {
 	return cast.ToString(v)
 }
 
-func (p *Configer) GetBool(path string) (bool, error) {
+func (p *configer) GetBool(path string) (bool, error) {
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
 		return false, err
@@ -317,7 +329,7 @@ func (p *Configer) GetBool(path string) (bool, error) {
 	return cast.ToBool(v), nil
 }
 
-func (p *Configer) GetBoolDef(path string, def bool) bool {
+func (p *configer) GetBoolDef(path string, def bool) bool {
 	v, err := p.GetBool(path)
 	if err != nil {
 		return def
@@ -325,7 +337,7 @@ func (p *Configer) GetBoolDef(path string, def bool) bool {
 	return v
 }
 
-func (p *Configer) GetFloat64(path string) (float64, error) {
+func (p *configer) GetFloat64(path string) (float64, error) {
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
 		return 0, err
@@ -334,7 +346,7 @@ func (p *Configer) GetFloat64(path string) (float64, error) {
 	return cast.ToFloat64(v), nil
 }
 
-func (p *Configer) GetFloat64Def(path string, def float64) float64 {
+func (p *configer) GetFloat64Def(path string, def float64) float64 {
 	v, err := p.GetFloat64(path)
 	if err != nil {
 		return def
@@ -343,7 +355,7 @@ func (p *Configer) GetFloat64Def(path string, def float64) float64 {
 	return v
 }
 
-func (p *Configer) GetInt64(path string) (int64, error) {
+func (p *configer) GetInt64(path string) (int64, error) {
 	v, err := p.GetFloat64(path)
 	if err != nil {
 		return 0, err
@@ -352,7 +364,7 @@ func (p *Configer) GetInt64(path string) (int64, error) {
 	return cast.ToInt64(v), nil
 }
 
-func (p *Configer) GetInt64Def(path string, def int64) int64 {
+func (p *configer) GetInt64Def(path string, def int64) int64 {
 	v, err := p.GetInt64(path)
 	if err != nil {
 		return def
@@ -360,7 +372,7 @@ func (p *Configer) GetInt64Def(path string, def int64) int64 {
 	return v
 }
 
-func (p *Configer) GetInt(path string) (int, error) {
+func (p *configer) GetInt(path string) (int, error) {
 	v, err := p.GetFloat64(path)
 	if err != nil {
 		return 0, err
@@ -369,7 +381,7 @@ func (p *Configer) GetInt(path string) (int, error) {
 	return cast.ToInt(v), nil
 }
 
-func (p *Configer) GetIntDef(path string, def int) int {
+func (p *configer) GetIntDef(path string, def int) int {
 	v, err := p.GetInt(path)
 	if err != nil {
 		return def
@@ -381,12 +393,12 @@ type validator interface {
 	Validate() error
 }
 
-func (p *Configer) IsSet(path string) bool {
+func (p *configer) IsSet(path string) bool {
 	_, err := Values(p.data).PathValue(path)
 	return err == nil
 }
 
-func (p *Configer) Read(path string, into interface{}) error {
+func (p *configer) Read(path string, into interface{}) error {
 	if into == nil {
 		return nil
 	}
@@ -421,7 +433,7 @@ func (p *Configer) Read(path string, into interface{}) error {
 	return nil
 }
 
-func (p *Configer) String() string {
+func (p *configer) String() string {
 	buf, err := yaml.Marshal(p.data)
 	if err != nil {
 		return err.Error()
@@ -429,13 +441,13 @@ func (p *Configer) String() string {
 	return string(buf)
 }
 
-func (p *Configer) getEnv(key string) (string, bool) {
+func (p *configer) getEnv(key string) (string, bool) {
 	val, ok := os.LookupEnv(key)
 	return val, ok && (p.allowEmptyEnv || val != "")
 }
 
 // default value priority: env > sample > comstom tags > fieldstruct tags
-func (p *Configer) SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
+func (p *configer) SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
 	p.enableEnv = allowEnv
 	p.maxDepth = maxDepth
 	p.allowEmptyEnv = allowEmptyEnv
@@ -447,7 +459,7 @@ func (p *Configer) SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pf
 
 }
 
-func (p *Configer) AddFlags(f *pflag.FlagSet) {
+func (p *configer) AddFlags(f *pflag.FlagSet) {
 	f.StringSliceVarP(&p.valueFiles, "values", "f", p.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
 	f.StringArrayVar(&p.values, "set", p.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&p.stringValues, "set-string", p.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
@@ -455,11 +467,17 @@ func (p *Configer) AddFlags(f *pflag.FlagSet) {
 
 }
 
-func (p *Configer) ValueFiles() []string {
-	return p.valueFiles
+func (p *configer) ValueFiles() []string {
+	return append(p.valueFiles, p.FilesOverride...)
 }
 
-type ConfigerOption func(*Configer)
+type ConfigerOptions struct {
+	FilesOverride []string // same as valueFiles
+	PathsBase     map[string]string
+	PathsOverride map[string]string
+}
+
+type ConfigerOption func(*ConfigerOptions)
 
 // with config object
 func WithConfig(path string, config interface{}) ConfigerOption {
@@ -473,27 +491,28 @@ func WithConfig(path string, config interface{}) ConfigerOption {
 
 // with config yaml
 func WithDefaultYaml(path, yamlData string) ConfigerOption {
-	return func(c *Configer) {
-		if c.pathsBase == nil {
-			c.pathsBase = map[string]string{path: yamlData}
+	return func(c *ConfigerOptions) {
+		if c.PathsBase == nil {
+			c.PathsBase = map[string]string{path: yamlData}
 		} else {
-			c.pathsBase[path] = yamlData
+			c.PathsBase[path] = yamlData
 		}
 	}
 }
 
 func WithOverrideYaml(path, yamlData string) ConfigerOption {
-	return func(c *Configer) {
-		if c.pathsOverride == nil {
-			c.pathsOverride = map[string]string{path: yamlData}
+	return func(c *ConfigerOptions) {
+		if c.PathsOverride == nil {
+			c.PathsOverride = map[string]string{path: yamlData}
 		} else {
-			c.pathsOverride[path] = yamlData
+			c.PathsOverride[path] = yamlData
 		}
 	}
 }
 
+// WithValueFile priority greater than --values
 func WithValueFile(valueFiles ...string) ConfigerOption {
-	return func(c *Configer) {
-		c.valueFiles = append(c.valueFiles, valueFiles...)
+	return func(c *ConfigerOptions) {
+		c.FilesOverride = append(c.FilesOverride, valueFiles...)
 	}
 }

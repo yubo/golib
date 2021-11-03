@@ -2,7 +2,6 @@ package configer_test
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/yubo/golib/configer"
 )
@@ -12,10 +11,11 @@ type User struct {
 }
 
 func ExampleNewConfiger() {
-	configer.Reset()
 
-	c, err := configer.NewConfiger()
-	fmt.Printf("%s, %v\n", strings.TrimSpace(c.String()), err)
+	c, err := configer.NewFactory().NewConfiger()
+	fmt.Printf("%s", c)
+	fmt.Printf("%v", err)
 	// Output:
-	// {}, <nil>
+	// {}
+	// <nil>
 }

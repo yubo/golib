@@ -14,12 +14,12 @@ import (
 
 // RegisterConfigFields set config fields to yaml configfile reader and pflags.FlagSet from sample
 func RegisterConfigFields(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
-	return DefaultConfiger.RegisterConfigFields(fs, path, sample, opts...)
+	return DefaultFactory.RegisterConfigFields(fs, path, sample, opts...)
 }
 
 // addConfigs: add flags and env from sample's tags
 // defualt priority sample > tagsGetter > tags
-func (p *Configer) RegisterConfigFields(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
+func (p *configer) RegisterConfigFields(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
 	if p == nil {
 		return errors.New("configer pointer is nil")
 	}
@@ -46,7 +46,7 @@ func (p *Configer) RegisterConfigFields(fs *pflag.FlagSet, path string, sample i
 	return p.addConfigs(parsePath(path), fs, rt, o)
 }
 
-func (p *Configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type, opt *configFieldsOptions) error {
+func (p *configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type, opt *configFieldsOptions) error {
 	if len(path) > p.maxDepth {
 		return fmt.Errorf("path.depth is larger than the maximum allowed depth of %d", p.maxDepth)
 	}
@@ -151,29 +151,7 @@ type configField struct {
 	defaultValue interface{} // field's default value
 }
 
-func (p *Configer) mergeDefaultValues(into map[string]interface{}) {
-	for _, f := range p.fields {
-		if v := f.defaultValue; v != nil {
-			//klog.V(7).InfoS("def", "path", joinPath(append(p.path, f.configPath)...), "value", v)
-			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
-		}
-	}
-}
-
-// merge flag value into ${into}
-func (p *Configer) mergeFlagValues(into map[string]interface{}) {
-	if !p.enableFlag {
-		return
-	}
-	for _, f := range p.fields {
-		if v := p.getFlagValue(f); v != nil {
-			//klog.V(7).InfoS("flag", "path", joinPath(append(p.path, f.configPath)...), "value", v)
-			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
-		}
-	}
-}
-
-func (p *Configer) getFlagValue(f *configField) interface{} {
+func (p *configer) getFlagValue(f *configField) interface{} {
 	if f.flag == "" {
 		return nil
 	}
@@ -283,13 +261,13 @@ func newConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn,
 	return field
 }
 
-func newConfigFieldsOptions(c *Configer) *configFieldsOptions {
-	return &configFieldsOptions{Configer: c}
+func newConfigFieldsOptions(c *configer) *configFieldsOptions {
+	return &configFieldsOptions{configer: c}
 }
 
 // for addConfigs
 type configFieldsOptions struct {
-	*Configer
+	*configer
 	tags          map[string]*TagOpts
 	prefixPath    string
 	defaultValues map[string]interface{}

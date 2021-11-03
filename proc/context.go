@@ -74,20 +74,20 @@ func WgMustFrom(ctx context.Context) *sync.WaitGroup {
 	return wg
 }
 
-func WithConfiger(ctx context.Context, cf *configer.Configer) {
+func WithConfiger(ctx context.Context, cf *configer.ConfigerABCDEFG) {
 	if _, ok := ConfigerFrom(ctx); ok {
 		panic("configer has been exist")
 	}
 	AttrMustFrom(ctx)[configerKey] = cf
 }
 
-func ConfigerFrom(ctx context.Context) (*configer.Configer, bool) {
-	cf, ok := AttrMustFrom(ctx)[configerKey].(*configer.Configer)
+func ConfigerFrom(ctx context.Context) (*configer.ConfigerABCDEFG, bool) {
+	cf, ok := AttrMustFrom(ctx)[configerKey].(*configer.ConfigerABCDEFG)
 	return cf, ok
 }
 
-func ConfigerMustFrom(ctx context.Context) *configer.Configer {
-	cf, ok := AttrMustFrom(ctx)[configerKey].(*configer.Configer)
+func ConfigerMustFrom(ctx context.Context) *configer.ConfigerABCDEFG {
+	cf, ok := AttrMustFrom(ctx)[configerKey].(*configer.ConfigerABCDEFG)
 	if !ok {
 		panic("unable to get configer from context")
 	}
