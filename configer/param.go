@@ -109,7 +109,7 @@ func (p TagOpts) String() string {
 		p.json, p.Flag, p.Env, p.Description)
 }
 
-func getTagOpts(sf reflect.StructField, o *Options) (tag *TagOpts) {
+func getTagOpts(sf reflect.StructField, o *Configer) (tag *TagOpts) {
 	tag = &TagOpts{name: sf.Name}
 	if sf.Anonymous {
 		return
@@ -233,7 +233,7 @@ func addConfigFieldByValue(fs *pflag.FlagSet, path string, opt *TagOpts, value p
 		fs.Lookup(v.flag).Hidden = false
 	}
 
-	DefaultOptions.params = append(DefaultOptions.params, v)
+	DefaultConfiger.params = append(DefaultConfiger.params, v)
 }
 
 func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn, def interface{}) {
@@ -277,11 +277,11 @@ func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn,
 		fs.Lookup(v.flag).Hidden = false
 	}
 
-	DefaultOptions.params = append(DefaultOptions.params, v)
+	DefaultConfiger.params = append(DefaultConfiger.params, v)
 }
 
 // env > value from registered config > structField tag
-func getDefaultValue(path string, opts *TagOpts, o *Options) string {
+func getDefaultValue(path string, opts *TagOpts, o *Configer) string {
 	// env
 	if o.enableEnv && opts.Env != "" {
 		if def, ok := o.getEnv(opts.Env); ok {

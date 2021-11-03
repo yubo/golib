@@ -15,34 +15,34 @@ import (
 
 // default value priority: env > sample > comstom tags > fieldstruct tags
 
-type Options struct {
-	pathsBase     map[string]string // data in yaml format with path
-	pathsOverride map[string]string // data in yaml format with path
-	valueFiles    []string          // files, -f/--values
-	values        []string          // values, --set
-	stringValues  []string          // values, --set-string
-	fileValues    []string          // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
-	enableFlag    bool
-	enableEnv     bool
-	maxDepth      int
-	allowEmptyEnv bool
-	flagSet       *pflag.FlagSet
-	params        []*param // all of config fields
-	tags          map[string]*TagOpts
-	prefixPath    string
-	defaultValues map[string]interface{} // from sample
-}
+//type Options struct {
+//	pathsBase     map[string]string // data in yaml format with path
+//	pathsOverride map[string]string // data in yaml format with path
+//	valueFiles    []string          // files, -f/--values
+//	values        []string          // values, --set
+//	stringValues  []string          // values, --set-string
+//	fileValues    []string          // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
+//	enableFlag    bool
+//	enableEnv     bool
+//	maxDepth      int
+//	allowEmptyEnv bool
+//	flagSet       *pflag.FlagSet
+//	params        []*param // all of config fields
+//	tags          map[string]*TagOpts
+//	prefixPath    string
+//	defaultValues map[string]interface{} // from sample
+//}
 
-func NewOptions() *Options {
-	return &Options{
-		enableFlag:    true,
-		enableEnv:     true,
-		allowEmptyEnv: false,
-		maxDepth:      5,
-	}
-}
+//func NewOptions() *Options {
+//	return &Options{
+//		enableFlag:    true,
+//		enableEnv:     true,
+//		allowEmptyEnv: false,
+//		maxDepth:      5,
+//	}
+//}
 
-func (s *Options) set(enableEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
+func (s *Configer) set(enableEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
 	s.enableEnv = enableEnv
 	s.maxDepth = maxDepth
 	s.allowEmptyEnv = allowEmptyEnv
@@ -53,57 +53,57 @@ func (s *Options) set(enableEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.Fla
 	}
 }
 
-func (s *Options) addFlags(f *pflag.FlagSet) {
+func (s *Configer) addFlags(f *pflag.FlagSet) {
 	f.StringSliceVarP(&s.valueFiles, "values", "f", s.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
 	f.StringArrayVar(&s.values, "set", s.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&s.stringValues, "set-string", s.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&s.fileValues, "set-file", s.fileValues, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
 }
 
-func (in *Options) deepCopy() (out *Options) {
-	if in == nil {
-		return nil
-	}
+//func (in *Configer) deepCopy() (out *Options) {
+//	if in == nil {
+//		return nil
+//	}
+//
+//	out = new(Options)
+//	*out = *in
+//
+//	if in.pathsBase != nil {
+//		in, out := &in.pathsBase, &out.pathsBase
+//		*out = make(map[string]string, len(*in))
+//		for key, val := range *in {
+//			(*out)[key] = val
+//		}
+//	}
+//
+//	if in.valueFiles != nil {
+//		in, out := &in.valueFiles, &out.valueFiles
+//		*out = make([]string, len(*in))
+//		copy(*out, *in)
+//	}
+//
+//	if in.values != nil {
+//		in, out := &in.values, &out.values
+//		*out = make([]string, len(*in))
+//		copy(*out, *in)
+//	}
+//
+//	if in.fileValues != nil {
+//		in, out := &in.fileValues, &out.fileValues
+//		*out = make([]string, len(*in))
+//		copy(*out, *in)
+//	}
+//
+//	// skip in.params
+//
+//	return
+//}
 
-	out = new(Options)
-	*out = *in
+//func (p *Options) validate() (err error) {
+//	return nil
+//}
 
-	if in.pathsBase != nil {
-		in, out := &in.pathsBase, &out.pathsBase
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
-
-	if in.valueFiles != nil {
-		in, out := &in.valueFiles, &out.valueFiles
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-
-	if in.values != nil {
-		in, out := &in.values, &out.values
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-
-	if in.fileValues != nil {
-		in, out := &in.fileValues, &out.fileValues
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-
-	// skip in.params
-
-	return
-}
-
-func (p *Options) validate() (err error) {
-	return nil
-}
-
-func (p *Options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
+func (p *Configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) error {
 	if len(path) > p.maxDepth {
 		return fmt.Errorf("path.depth is larger than the maximum allowed depth of %d", p.maxDepth)
 	}
@@ -197,7 +197,7 @@ func (p *Options) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type) 
 	return nil
 }
 
-func (p *Options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
+func (p *Configer) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
 	opts := getTagOpts(sf, p)
 
 	if p.tags != nil {
@@ -221,7 +221,7 @@ func (p *Options) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
 	return opts
 }
 
-type Option func(*Options)
+type Option func(*Configer)
 
 // with config object
 func WithConfig(path string, config interface{}) Option {
@@ -235,33 +235,33 @@ func WithConfig(path string, config interface{}) Option {
 
 // with config yaml
 func WithDefaultYaml(path, yamlData string) Option {
-	return func(o *Options) {
-		if o.pathsBase == nil {
-			o.pathsBase = map[string]string{path: yamlData}
+	return func(c *Configer) {
+		if c.pathsBase == nil {
+			c.pathsBase = map[string]string{path: yamlData}
 		} else {
-			o.pathsBase[path] = yamlData
+			c.pathsBase[path] = yamlData
 		}
 	}
 }
 
 func WithOverrideYaml(path, yamlData string) Option {
-	return func(o *Options) {
-		if o.pathsOverride == nil {
-			o.pathsOverride = map[string]string{path: yamlData}
+	return func(c *Configer) {
+		if c.pathsOverride == nil {
+			c.pathsOverride = map[string]string{path: yamlData}
 		} else {
-			o.pathsOverride[path] = yamlData
+			c.pathsOverride[path] = yamlData
 		}
 	}
 }
 
 func WithValueFile(valueFiles ...string) Option {
-	return func(o *Options) {
-		o.valueFiles = append(o.valueFiles, valueFiles...)
+	return func(c *Configer) {
+		c.valueFiles = append(c.valueFiles, valueFiles...)
 	}
 }
 
 func WithTags(tags map[string]*TagOpts) Option {
-	return func(o *Options) {
-		o.tags = tags
+	return func(c *Configer) {
+		c.tags = tags
 	}
 }

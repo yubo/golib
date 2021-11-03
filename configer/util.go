@@ -10,25 +10,25 @@ import (
 )
 
 func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
-	DefaultOptions.set(allowEnv, allowEmptyEnv, maxDepth, fs)
+	DefaultConfiger.set(allowEnv, allowEmptyEnv, maxDepth, fs)
 }
 
 func AddFlags(f *pflag.FlagSet) {
-	DefaultOptions.addFlags(f)
+	DefaultConfiger.addFlags(f)
 }
 
 func GetTagOpts(sf reflect.StructField) (tag *TagOpts) {
-	return DefaultOptions.getTagOpts(sf, nil)
+	return DefaultConfiger.getTagOpts(sf, nil)
 }
 
 func ValueFiles() []string {
-	return DefaultOptions.valueFiles
+	return DefaultConfiger.valueFiles
 }
 
 // addConfigs: add flags and env from sample's tags
 // defualt priority sample > tagsGetter > tags
 func AddConfigs(fs *pflag.FlagSet, path string, sample interface{}, opts ...Option) error {
-	options := DefaultOptions.deepCopy()
+	options := DefaultConfiger.clone()
 	for _, opt := range opts {
 		opt(options)
 	}
@@ -74,7 +74,7 @@ func yamlToMap(y []byte) (map[string]interface{}, error) {
 
 // AddFlagsVar registry var into fs
 func AddFlagsVar(fs *pflag.FlagSet, in interface{}) {
-	DefaultOptions.addFlagsVar(fs, in, 0)
+	DefaultConfiger.addFlagsVar(fs, in, 0)
 }
 
 // merge path.bytes -> into

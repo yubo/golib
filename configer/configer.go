@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cast"
+	"github.com/spf13/pflag"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	"k8s.io/klog/v2"
@@ -19,42 +20,108 @@ import (
 )
 
 var (
-	DefaultOptions = NewOptions()
+	DefaultConfiger = newConfiger()
 )
 
 // for testing
 func Reset() {
-	DefaultOptions = NewOptions()
+	DefaultConfiger = newConfiger()
 }
 
 type Configer struct {
-	*Options
-
 	data     map[string]interface{}
 	path     []string
 	prepared bool
+
+	// options
+	pathsBase     map[string]string // data in yaml format with path
+	pathsOverride map[string]string // data in yaml format with path
+	valueFiles    []string          // files, -f/--values
+	values        []string          // values, --set
+	stringValues  []string          // values, --set-string
+	fileValues    []string          // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
+	enableFlag    bool
+	enableEnv     bool
+	maxDepth      int
+	allowEmptyEnv bool
+	flagSet       *pflag.FlagSet
+	params        []*param // all of config fields
+	tags          map[string]*TagOpts
+	prefixPath    string
+	defaultValues map[string]interface{} // from sample
+}
+
+func newConfiger() *Configer {
+	return &Configer{
+		enableFlag:    true,
+		enableEnv:     true,
+		allowEmptyEnv: false,
+		maxDepth:      5,
+	}
 }
 
 func NewConfiger(opts ...Option) (*Configer, error) {
-	options := DefaultOptions.deepCopy()
+	return DefaultConfiger.NewConfiger(opts...)
+}
+
+func (p *Configer) NewConfiger(opts ...Option) (*Configer, error) {
+	cfg := DefaultConfiger.clone()
+
+	if len(opts) == 0 && p.prepared {
+		return cfg, nil
+	}
+
 	for _, opt := range opts {
-		opt(options)
+		opt(cfg)
 	}
-
-	if err := options.validate(); err != nil {
-		return nil, err
-	}
-
-	cfg := &Configer{
-		data:    map[string]interface{}{},
-		Options: options,
-	}
+	cfg.data = map[string]interface{}{}
+	cfg.path = []string{}
+	cfg.prepared = false
 
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
 	}
 
 	return cfg, nil
+}
+
+// clone copy all field except data, path, params
+func (in *Configer) clone() (out *Configer) {
+	if in == nil {
+		return nil
+	}
+
+	out = new(Configer)
+	*out = *in
+
+	if in.pathsBase != nil {
+		in, out := &in.pathsBase, &out.pathsBase
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
+
+	if in.valueFiles != nil {
+		in, out := &in.valueFiles, &out.valueFiles
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+
+	if in.values != nil {
+		in, out := &in.values, &out.values
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+
+	if in.fileValues != nil {
+		in, out := &in.fileValues, &out.fileValues
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+
+	// skip in.params
+	return
 }
 
 func (p *Configer) PrintFlags(out io.Writer) {
@@ -151,26 +218,26 @@ func (p *Configer) Prepare() (err error) {
 }
 
 func (p *Configer) ValueFiles() []string {
-	if p == nil || p.Options == nil {
+	if p == nil {
 		return nil
 	}
 	return p.valueFiles
 }
 
 func (p *Configer) GetConfiger(path string) *Configer {
-	if data, ok := p.GetRaw(path).(map[string]interface{}); ok {
-		return &Configer{
-			Options: p.Options,
-			path:    append(clonePath(p.path), parsePath(path)...),
-			data:    data,
-		}
+	if p == nil || !p.prepared {
+		return nil
 	}
 
-	return &Configer{
-		Options: p.Options,
-		path:    append(clonePath(p.path), parsePath(path)...),
-		data:    map[string]interface{}{},
+	data, ok := p.GetRaw(path).(map[string]interface{})
+	if !ok {
+		data = map[string]interface{}{}
 	}
+
+	cfg := p.clone()
+	cfg.path = append(clonePath(p.path), parsePath(path)...)
+	cfg.data = data
+	return cfg
 }
 
 func (p *Configer) Set(path string, v interface{}) error {
@@ -337,7 +404,7 @@ func (p *Configer) String() string {
 	return string(buf)
 }
 
-func (p *Options) getEnv(key string) (string, bool) {
+func (p *Configer) getEnv(key string) (string, bool) {
 	val, ok := os.LookupEnv(key)
 	return val, ok && (p.allowEmptyEnv || val != "")
 }

@@ -366,11 +366,11 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	DefaultOptions.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
-	DefaultOptions.values = []string{"e=v2_e", "f1=f1,f2=f2"}
-	DefaultOptions.stringValues = []string{"sv1=sv1,sv2=sv2"}
+	DefaultConfiger.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
+	DefaultConfiger.values = []string{"e=v2_e", "f1=f1,f2=f2"}
+	DefaultConfiger.stringValues = []string{"sv1=sv1,sv2=sv2"}
 	cf, err := NewConfiger()
-	defer func() { DefaultOptions = NewOptions() }()
+	defer func() { Reset() }()
 
 	assert.NoError(t, err)
 
@@ -503,7 +503,7 @@ func TestConfigerPriority(t *testing.T) {
 			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("#"), 0666)
 		}
 
-		DefaultOptions.valueFiles = []string{"base.yml"}
+		DefaultConfiger.valueFiles = []string{"base.yml"}
 		cf, err := NewConfiger()
 		assert.NoError(t, err)
 
