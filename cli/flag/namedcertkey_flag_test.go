@@ -73,7 +73,7 @@ func TestNamedCertKeyArrayConfig(t *testing.T) {
 
 		{
 			err := configer.AddConfigs(fs, "",
-				&Foo{Certs: NamedCertKeyArray{Value: test.def}})
+				&Foo{Certs: NamedCertKeyArray{value: test.def}})
 			assert.NoError(t, err, i)
 		}
 
@@ -92,7 +92,7 @@ func TestNamedCertKeyArrayConfig(t *testing.T) {
 
 		got := Foo{}
 		cf.Read("", &got)
-		assert.Equal(t, test.expected, got.Certs.Value, i)
+		assert.Equal(t, test.expected, got.Certs.value, i)
 	}
 }
 

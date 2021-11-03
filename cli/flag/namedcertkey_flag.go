@@ -113,8 +113,16 @@ func (*NamedCertKey) Type() string {
 // NamedCertKeyArray is a flag value parsing NamedCertKeys, each passed with its own
 // flag instance (in contrast to comma separated slices).
 type NamedCertKeyArray struct {
-	Value   *[]NamedCertKey
+	value   *[]NamedCertKey
 	changed bool
+}
+
+func (a *NamedCertKeyArray) Certs() (ret []NamedCertKey) {
+	if a == nil || a.value == nil {
+		return
+	}
+
+	return *a.value
 }
 
 func (a *NamedCertKeyArray) UnmarshalJSON(b []byte) error {
@@ -142,7 +150,7 @@ func (a NamedCertKeyArray) MarshalJSON() ([]byte, error) {
 
 // IsZero returns true if the value is nil
 func (a *NamedCertKeyArray) IsZero() bool {
-	if a == nil || a.Value == nil || len(*a.Value) == 0 {
+	if a == nil || a.value == nil || len(*a.value) == 0 {
 		return true
 	}
 	return false
@@ -154,7 +162,7 @@ var _ flag.Value = &NamedCertKeyArray{}
 // pointing to p.
 func NewNamedCertKeyArray(p *[]NamedCertKey) *NamedCertKeyArray {
 	return &NamedCertKeyArray{
-		Value: p,
+		value: p,
 	}
 }
 
@@ -183,14 +191,14 @@ func (a *NamedCertKeyArray) set(val string) error {
 		return err
 	}
 	if !a.changed {
-		if a.Value == nil {
-			a.Value = &[]NamedCertKey{nkc}
+		if a.value == nil {
+			a.value = &[]NamedCertKey{nkc}
 		} else {
-			*a.Value = []NamedCertKey{nkc}
+			*a.value = []NamedCertKey{nkc}
 		}
 		a.changed = true
 	} else {
-		*a.Value = append(*a.Value, nkc)
+		*a.value = append(*a.value, nkc)
 	}
 	return nil
 }
@@ -200,13 +208,13 @@ func (a *NamedCertKeyArray) Type() string {
 }
 
 func (a *NamedCertKeyArray) String() string {
-	if a.Value == nil {
+	if a.value == nil {
 		return ""
 	}
 
-	nkcs := make([]string, 0, len(*a.Value))
-	for i := range *a.Value {
-		nkcs = append(nkcs, (*a.Value)[i].String())
+	nkcs := make([]string, 0, len(*a.value))
+	for i := range *a.value {
+		nkcs = append(nkcs, (*a.value)[i].String())
 	}
 	return strings.Join(nkcs, ";")
 }

@@ -3,6 +3,7 @@ package proc
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/daemon"
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/yubo/golib/cli/flag"
 	"github.com/yubo/golib/configer"
@@ -30,7 +32,11 @@ type Process struct {
 	status        ProcessStatus
 	hookOps       [ACTION_SIZE][]*HookOps
 	namedFlagSets flag.NamedFlagSets
-	initDone      bool //
+	initDone      bool
+
+	debugConfig bool // print config after proc.init()
+	debugFlags  bool // print flags after proc.init()
+	dryrun      bool // will exit after proc.init()
 
 	wg     sync.WaitGroup
 	cancel context.CancelFunc
@@ -57,8 +63,8 @@ func WithContext(ctx context.Context) {
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
 }
 
-func Start() error {
-	return proc.Start()
+func Start(cmd *cobra.Command) error {
+	return proc.Start(cmd)
 }
 
 func Init() error {
@@ -67,6 +73,18 @@ func Init() error {
 
 func Stop() error {
 	return proc.stop()
+}
+
+func PrintConfig(w io.Writer) {
+	proc.PrintConfig(w)
+}
+
+func PrintFlags(fs *pflag.FlagSet, w io.Writer) {
+	proc.PrintFlags(fs, w)
+}
+
+func AddFlags(f *pflag.FlagSet) {
+	proc.AddFlags(f)
 }
 
 func RegisterHooks(in []HookOps) error {
@@ -101,9 +119,21 @@ func hookNumName(n ProcessAction) string {
 	}
 }
 
-func (p *Process) Start() error {
+func (p *Process) Start(cmd *cobra.Command) error {
 	if err := p.init(); err != nil {
 		return err
+	}
+
+	if p.debugConfig {
+		p.PrintConfig(os.Stdout)
+	}
+	if p.debugFlags {
+		p.PrintFlags(cmd.Flags(), os.Stdout)
+	}
+	if p.dryrun {
+		//return errors.New("dryrun")
+		//pflag.Parse()
+		return nil
 	}
 
 	if err := p.start(); err != nil {
@@ -194,7 +224,6 @@ func (p *Process) loop() error {
 	}
 
 	shutdown := false
-
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -234,13 +263,13 @@ func (p *Process) stop() error {
 		wgCh <- struct{}{}
 	}()
 
-	ss := p.hookOps[ACTION_STOP]
-	for i := len(ss) - 1; i >= 0; i-- {
-		ops := ss[i]
+	stopHooks := p.hookOps[ACTION_STOP]
+	for i := len(stopHooks) - 1; i >= 0; i-- {
+		stop := stopHooks[i]
 
-		logOps(ops)
-		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
-			p.err = fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
+		logOps(stop)
+		if err := stop.Hook(WithHookOps(p.ctx, stop)); err != nil {
+			p.err = fmt.Errorf("%s.%s() err: %s", stop.Owner, nameOfFunction(stop.Hook), err)
 
 			return p.err
 		}
@@ -251,9 +280,9 @@ func (p *Process) stop() error {
 	closeTimeout := serverGracefulCloseTimeout
 	select {
 	case <-wgCh:
-		klog.Info("server closed")
+		klog.Info("See ya!")
 	case <-time.After(closeTimeout):
-		p.err = fmt.Errorf("server closed after timeout %ds", closeTimeout/time.Second)
+		p.err = fmt.Errorf("%s closed after timeout %s", p.name, closeTimeout.String())
 
 	}
 
@@ -285,4 +314,20 @@ func (p *Process) reload() (err error) {
 
 	p.err = nil
 	return nil
+}
+
+func (p *Process) PrintConfig(out io.Writer) {
+	if c, _ := ConfigerFrom(p.ctx); c != nil {
+		out.Write([]byte(c.String()))
+	}
+}
+
+func (p *Process) PrintFlags(fs *pflag.FlagSet, w io.Writer) {
+	flag.PrintFlags(fs, os.Stdout)
+}
+
+func (p *Process) AddFlags(f *pflag.FlagSet) {
+	f.BoolVar(&p.debugConfig, "debug-config", p.debugConfig, "print config")
+	f.BoolVar(&p.debugFlags, "debug-flags", p.debugFlags, "print flags")
+	f.BoolVar(&p.dryrun, "dry-run", p.debugFlags, "exit before proc.Start()")
 }

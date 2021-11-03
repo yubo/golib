@@ -216,6 +216,7 @@ type TagOpts struct {
 	Default     string   // default:"{default}"
 	Env         string   // env:"{env}"
 	Description string   // description:"{description}"
+	Deprecated  string   // deprecated:""
 	Arg         string   // arg:"{arg}"  args[0] arg1... -- arg2... (deprecated)
 
 }
@@ -260,6 +261,7 @@ func getTagOpts(sf reflect.StructField, o *options) (tag *TagOpts) {
 
 	tag.Default = sf.Tag.Get("default")
 	tag.Description = sf.Tag.Get("description")
+	tag.Deprecated = sf.Tag.Get("deprecated")
 	tag.Env = strings.Replace(strings.ToUpper(sf.Tag.Get("env")), "-", "_", -1)
 	if tag.Env != "" {
 		tag.Description = fmt.Sprintf("%s (env %s)", tag.Description, tag.Env)
@@ -347,6 +349,11 @@ func addConfigFieldByValue(fs *pflag.FlagSet, path string, opt *TagOpts, value p
 		panic("invalid flag value")
 	}
 
+	if len(v.flag) > 0 && len(opt.Deprecated) > 0 {
+		fs.MarkDeprecated(v.flag, opt.Deprecated)
+		fs.Lookup(v.flag).Hidden = false
+	}
+
 	configerOptions.params = append(configerOptions.params, v)
 }
 
@@ -384,6 +391,11 @@ func addConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn,
 		v.flagValue = ret[0].Interface()
 	default:
 		panic("invalid flag value")
+	}
+
+	if len(v.flag) > 0 && len(opt.Deprecated) > 0 {
+		fs.MarkDeprecated(v.flag, opt.Deprecated)
+		fs.Lookup(v.flag).Hidden = false
 	}
 
 	configerOptions.params = append(configerOptions.params, v)

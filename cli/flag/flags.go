@@ -18,6 +18,8 @@ package flag
 
 import (
 	goflag "flag"
+	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -54,8 +56,9 @@ func InitFlags() {
 }
 
 // PrintFlags logs the flags in the flagset
-func PrintFlags(flags *pflag.FlagSet) {
+func PrintFlags(flags *pflag.FlagSet, w io.Writer) {
+	fmt.Fprintf(w, "Flags:\n")
 	flags.VisitAll(func(flag *pflag.Flag) {
-		klog.V(1).Infof("FLAG: --%s=%q", flag.Name, flag.Value)
+		fmt.Fprintf(w, "  --%s=%q\n", flag.Name, flag.Value)
 	})
 }

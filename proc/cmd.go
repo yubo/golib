@@ -7,10 +7,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yubo/golib/cli/flag"
 	"github.com/yubo/golib/cli/globalflag"
 	"github.com/yubo/golib/configer"
-	"k8s.io/klog/v2"
 )
 
 // with flag section
@@ -25,21 +23,18 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		Short:        DescriptionFrom(ctx),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if klog.V(5).Enabled() {
-				flag.PrintFlags(cmd.Flags())
-			}
-			return proc.Start()
+			return proc.Start(cmd)
 		},
 	}
 
-	InitFlags(cmd, true, true, false, 5)
+	InitProcFlags(cmd, true, true, false, 5)
 
 	proc.ctx, proc.cancel = context.WithCancel(ctx)
 
 	return cmd
 }
 
-func InitFlags(cmd *cobra.Command, group, allowEnv, allowEmptyEnv bool, maxDepth int) {
+func InitProcFlags(cmd *cobra.Command, group, allowEnv, allowEmptyEnv bool, maxDepth int) {
 
 	// add flags
 	fs := cmd.Flags()
@@ -52,6 +47,9 @@ func InitFlags(cmd *cobra.Command, group, allowEnv, allowEmptyEnv bool, maxDepth
 
 	// add configer flags
 	configer.AddFlags(nfs.FlagSet("global"))
+
+	// add process flags
+	AddFlags(nfs.FlagSet("global"))
 
 	// set configer options for init configer options fro parser
 	configer.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
