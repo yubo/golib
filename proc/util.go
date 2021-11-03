@@ -48,7 +48,6 @@ func nameOfFunction(f interface{}) string {
 	last = strings.TrimSuffix(last, "·fm")  // < Go 1.5
 	last = strings.TrimSuffix(last, "-fm")  // Go 1.5
 	return last
-
 }
 
 func setGroupCommandFunc(cmd *cobra.Command) {

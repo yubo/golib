@@ -24,7 +24,7 @@ const (
 )
 
 var (
-	proc = newProcess()
+	DefaultProcess = NewProcess()
 )
 
 type Process struct {
@@ -44,7 +44,7 @@ type Process struct {
 	err    error
 }
 
-func newProcess() *Process {
+func NewProcess() *Process {
 	hookOps := [ACTION_SIZE][]*HookOps{}
 	for i := ACTION_START; i < ACTION_SIZE; i++ {
 		hookOps[i] = []*HookOps{}
@@ -59,64 +59,52 @@ func newProcess() *Process {
 	}
 }
 
+// for test
+func Reset() {
+	DefaultProcess = NewProcess()
+}
+
 func WithContext(ctx context.Context) {
-	proc.ctx, proc.cancel = context.WithCancel(ctx)
+	DefaultProcess.ctx, DefaultProcess.cancel = context.WithCancel(ctx)
 }
 
 func Start(cmd *cobra.Command) error {
-	return proc.Start(cmd)
+	return DefaultProcess.Start(cmd)
 }
 
 func Init() error {
-	return proc.init()
+	return DefaultProcess.init()
 }
 
 func Stop() error {
-	return proc.stop()
+	return DefaultProcess.stop()
 }
 
 func PrintConfig(w io.Writer) {
-	proc.PrintConfig(w)
+	DefaultProcess.PrintConfig(w)
 }
 
 func PrintFlags(fs *pflag.FlagSet, w io.Writer) {
-	proc.PrintFlags(fs, w)
+	DefaultProcess.PrintFlags(fs, w)
 }
 
 func AddFlags(f *pflag.FlagSet) {
-	proc.AddFlags(f)
+	DefaultProcess.AddFlags(f)
 }
 
 func RegisterHooks(in []HookOps) error {
 	for i := range in {
 		v := &in[i]
-		v.process = proc
+		v.process = DefaultProcess
 		v.priority = ProcessPriority(uint32(v.Priority)<<(16-3) + uint32(v.SubPriority))
 
-		proc.hookOps[v.HookNum] = append(proc.hookOps[v.HookNum], v)
+		DefaultProcess.hookOps[v.HookNum] = append(DefaultProcess.hookOps[v.HookNum], v)
 	}
 	return nil
 }
 
-type addFlags interface {
-	AddFlags(fs *pflag.FlagSet)
-}
-
 func NamedFlagSets() *flag.NamedFlagSets {
-	return &proc.namedFlagSets
-}
-
-func hookNumName(n ProcessAction) string {
-	switch n {
-	case ACTION_START:
-		return "start"
-	case ACTION_RELOAD:
-		return "reload"
-	case ACTION_STOP:
-		return "stop"
-	default:
-		return "unknown"
-	}
+	return &DefaultProcess.namedFlagSets
 }
 
 func (p *Process) Start(cmd *cobra.Command) error {
@@ -195,7 +183,7 @@ func (p *Process) init() error {
 // only be called once
 func (p *Process) start() error {
 	for _, ops := range p.hookOps[ACTION_START] {
-		logOps(ops)
+		ops.dlog()
 
 		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
 			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
@@ -203,16 +191,6 @@ func (p *Process) start() error {
 	}
 	p.status.Set(STATUS_RUNNING)
 	return nil
-}
-
-func logOps(ops *HookOps) {
-	if klog.V(5).Enabled() {
-		klog.InfoSDepth(1, "dispatch hook",
-			"hookName", hookNumName(ops.HookNum),
-			"owner", ops.Owner,
-			"priority", fmt.Sprintf("0x%08x", ops.priority),
-			"nameOfFunction", nameOfFunction(ops.Hook))
-	}
 }
 
 func (p *Process) loop() error {
@@ -267,7 +245,7 @@ func (p *Process) stop() error {
 	for i := len(stopHooks) - 1; i >= 0; i-- {
 		stop := stopHooks[i]
 
-		logOps(stop)
+		stop.dlog()
 		if err := stop.Hook(WithHookOps(p.ctx, stop)); err != nil {
 			p.err = fmt.Errorf("%s.%s() err: %s", stop.Owner, nameOfFunction(stop.Hook), err)
 
@@ -304,7 +282,7 @@ func (p *Process) reload() (err error) {
 	WithConfiger(p.ctx, configer)
 
 	for _, ops := range p.hookOps[ACTION_RELOAD] {
-		logOps(ops)
+		ops.dlog()
 		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
 			p.err = err
 			return err

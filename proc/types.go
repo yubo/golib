@@ -2,9 +2,11 @@ package proc
 
 import (
 	"context"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/yubo/golib/configer"
+	"k8s.io/klog/v2"
 )
 
 type HookFn func(context.Context) error
@@ -20,20 +22,6 @@ type HookOps struct {
 	priority ProcessPriority
 	process  *Process
 }
-
-//type HookOpsBucket []*HookOps
-//
-//func (p HookOpsBucket) Len() int {
-//	return len(p)
-//}
-//
-//func (p HookOpsBucket) Swap(i, j int) {
-//	p[i], p[j] = p[j], p[i]
-//}
-//
-//func (p HookOpsBucket) Less(i, j int) bool {
-//	return p[i].priority < p[j].priority
-//}
 
 func (p HookOps) SetContext(ctx context.Context) {
 	p.process.ctx = ctx
@@ -51,6 +39,16 @@ func (p HookOps) ContextAndConfiger() (context.Context, *configer.Configer) {
 	return p.Context(), p.Configer()
 }
 
+func (p HookOps) dlog() {
+	if klog.V(5).Enabled() {
+		klog.InfoSDepth(1, "dispatch hook",
+			"hookName", p.HookNum.String(),
+			"owner", p.Owner,
+			"priority", p.priority.String(),
+			"nameOfFunction", nameOfFunction(p.Hook))
+	}
+}
+
 type ProcessPriority uint32
 
 const (
@@ -61,6 +59,10 @@ const (
 	PRI_SYS_START            // start each system.module
 	PRI_SYS_POSTSTART        // no use
 )
+
+func (p ProcessPriority) String() string {
+	return fmt.Sprintf("0x%08x", p)
+}
 
 type ProcessAction uint32
 
@@ -83,4 +85,18 @@ const (
 
 func (p *ProcessStatus) Set(v ProcessStatus) {
 	atomic.StoreUint32((*uint32)(p), uint32(STATUS_RUNNING))
+}
+
+func (p ProcessAction) String() string {
+	switch p {
+	case ACTION_START:
+		return "start"
+	case ACTION_RELOAD:
+		return "reload"
+	case ACTION_STOP:
+		return "stop"
+	default:
+		return "unknown"
+	}
+
 }

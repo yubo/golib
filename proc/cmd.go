@@ -23,13 +23,13 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		Short:        DescriptionFrom(ctx),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return proc.Start(cmd)
+			return DefaultProcess.Start(cmd)
 		},
 	}
 
 	InitProcFlags(cmd, true, true, false, 5)
 
-	proc.ctx, proc.cancel = context.WithCancel(ctx)
+	DefaultProcess.ctx, DefaultProcess.cancel = context.WithCancel(ctx)
 
 	return cmd
 }
