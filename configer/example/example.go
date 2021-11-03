@@ -51,11 +51,11 @@ func newRootCmd() *cobra.Command {
 	}
 
 	fs := cmd.Flags()
-	if err := configer.AddConfigs(fs, "http", &Http{}); err != nil {
+	if err := configer.RegisterConfigFields(fs, "http", &Http{}); err != nil {
 		klog.Infof("addflag err %s", err)
 	}
 
-	if err := configer.AddConfigs(fs, "ctrl", &Ctrl{}); err != nil {
+	if err := configer.RegisterConfigFields(fs, "ctrl", &Ctrl{}); err != nil {
 		klog.Infof("addflag err %s", err)
 	}
 

@@ -72,7 +72,7 @@ func TestNamedCertKeyArrayConfig(t *testing.T) {
 		configer.SetOptions(true, false, 5, fs)
 
 		{
-			err := configer.AddConfigs(fs, "",
+			err := configer.RegisterConfigFields(fs, "",
 				&Foo{Certs: NamedCertKeyArray{value: test.def}})
 			assert.NoError(t, err, i)
 		}

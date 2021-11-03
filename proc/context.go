@@ -94,8 +94,8 @@ func ConfigerMustFrom(ctx context.Context) *configer.Configer {
 	return cf
 }
 
-func WithConfigOps(parent context.Context, optsInput ...configer.Option) context.Context {
-	opts, ok := parent.Value(configOptsKey).(*[]configer.Option)
+func WithConfigOps(parent context.Context, optsInput ...configer.ConfigerOption) context.Context {
+	opts, ok := parent.Value(configOptsKey).(*[]configer.ConfigerOption)
 	if ok {
 		*opts = append(*opts, optsInput...)
 		return parent
@@ -104,8 +104,8 @@ func WithConfigOps(parent context.Context, optsInput ...configer.Option) context
 	return WithValue(parent, configOptsKey, &optsInput)
 }
 
-func ConfigOptsFrom(ctx context.Context) ([]configer.Option, bool) {
-	opts, ok := ctx.Value(configOptsKey).(*[]configer.Option)
+func ConfigOptsFrom(ctx context.Context) ([]configer.ConfigerOption, bool) {
+	opts, ok := ctx.Value(configOptsKey).(*[]configer.ConfigerOption)
 	if ok {
 		return *opts, true
 	}

@@ -41,42 +41,38 @@ type Configer struct {
 	stringValues  []string          // values, --set-string
 	fileValues    []string          // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
 	enableFlag    bool
-	enableEnv     bool
 	maxDepth      int
+	enableEnv     bool
 	allowEmptyEnv bool
 	flagSet       *pflag.FlagSet
-	params        []*param // all of config fields
-	tags          map[string]*TagOpts
-	prefixPath    string
-	defaultValues map[string]interface{} // from sample
+	fields        []*configField // all of config fields
 }
 
-func newConfiger() *Configer {
-	return &Configer{
-		enableFlag:    true,
-		enableEnv:     true,
-		allowEmptyEnv: false,
-		maxDepth:      5,
-	}
-}
-
-func NewConfiger(opts ...Option) (*Configer, error) {
+func NewConfiger(opts ...ConfigerOption) (*Configer, error) {
 	return DefaultConfiger.NewConfiger(opts...)
 }
+func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
+	DefaultConfiger.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
+}
+func AddFlags(f *pflag.FlagSet) {
+	DefaultConfiger.AddFlags(f)
+}
+func ValueFiles() []string {
+	return DefaultConfiger.ValueFiles()
+}
+func Envs() []string {
+	return DefaultConfiger.Envs()
+}
+func Flags() []string {
+	return DefaultConfiger.Flags()
+}
 
-func (p *Configer) NewConfiger(opts ...Option) (*Configer, error) {
-	cfg := DefaultConfiger.clone()
-
-	if len(opts) == 0 && p.prepared {
-		return cfg, nil
-	}
+func (p *Configer) NewConfiger(opts ...ConfigerOption) (*Configer, error) {
+	cfg := p.newConfiger(nil, nil)
 
 	for _, opt := range opts {
 		opt(cfg)
 	}
-	cfg.data = map[string]interface{}{}
-	cfg.path = []string{}
-	cfg.prepared = false
 
 	if err := cfg.Prepare(); err != nil {
 		return nil, err
@@ -85,37 +81,56 @@ func (p *Configer) NewConfiger(opts ...Option) (*Configer, error) {
 	return cfg, nil
 }
 
+func newConfiger() *Configer {
+	return (*Configer)(nil).newConfiger(nil, nil)
+}
+
 // clone copy all field except data, path, params
-func (in *Configer) clone() (out *Configer) {
-	if in == nil {
-		return nil
+func (p *Configer) newConfiger(path []string, data map[string]interface{}) (out *Configer) {
+	if data == nil {
+		data = map[string]interface{}{}
+	}
+	if path == nil {
+		path = []string{}
+	}
+	if p == nil {
+		return &Configer{
+			enableFlag:    true,
+			enableEnv:     true,
+			allowEmptyEnv: false,
+			maxDepth:      5,
+			data:          data,
+			path:          path,
+		}
 	}
 
 	out = new(Configer)
-	*out = *in
+	*out = *p
+	out.data = data
+	out.path = path
 
-	if in.pathsBase != nil {
-		in, out := &in.pathsBase, &out.pathsBase
+	if p.pathsBase != nil {
+		in, out := &p.pathsBase, &out.pathsBase
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}
 	}
 
-	if in.valueFiles != nil {
-		in, out := &in.valueFiles, &out.valueFiles
+	if p.valueFiles != nil {
+		in, out := &p.valueFiles, &out.valueFiles
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
 
-	if in.values != nil {
-		in, out := &in.values, &out.values
+	if p.values != nil {
+		in, out := &p.values, &out.values
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
 
-	if in.fileValues != nil {
-		in, out := &in.fileValues, &out.fileValues
+	if p.fileValues != nil {
+		in, out := &p.fileValues, &out.fileValues
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
@@ -217,27 +232,14 @@ func (p *Configer) Prepare() (err error) {
 	return nil
 }
 
-func (p *Configer) ValueFiles() []string {
-	if p == nil {
-		return nil
-	}
-	return p.valueFiles
-}
-
 func (p *Configer) GetConfiger(path string) *Configer {
 	if p == nil || !p.prepared {
 		return nil
 	}
 
-	data, ok := p.GetRaw(path).(map[string]interface{})
-	if !ok {
-		data = map[string]interface{}{}
-	}
+	data, _ := p.GetRaw(path).(map[string]interface{})
 
-	cfg := p.clone()
-	cfg.path = append(clonePath(p.path), parsePath(path)...)
-	cfg.data = data
-	return cfg
+	return p.newConfiger(append(clonePath(p.path), parsePath(path)...), data)
 }
 
 func (p *Configer) Set(path string, v interface{}) error {
@@ -261,6 +263,29 @@ func (p *Configer) Set(path string, v interface{}) error {
 	return nil
 }
 
+func (p *Configer) Envs() (names []string) {
+	if !p.enableEnv {
+		return
+	}
+	for _, f := range p.fields {
+		if f.envName != "" {
+			names = append(names, f.envName)
+		}
+	}
+	return
+}
+
+func (p *Configer) Flags() (names []string) {
+	if !p.enableFlag {
+		return
+	}
+	for _, f := range p.fields {
+		if f.flag != "" {
+			names = append(names, f.flag)
+		}
+	}
+	return
+}
 func (p *Configer) GetRaw(path string) interface{} {
 	if path == "" {
 		return Values(p.data)
@@ -407,4 +432,68 @@ func (p *Configer) String() string {
 func (p *Configer) getEnv(key string) (string, bool) {
 	val, ok := os.LookupEnv(key)
 	return val, ok && (p.allowEmptyEnv || val != "")
+}
+
+// default value priority: env > sample > comstom tags > fieldstruct tags
+func (p *Configer) SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
+	p.enableEnv = allowEnv
+	p.maxDepth = maxDepth
+	p.allowEmptyEnv = allowEmptyEnv
+
+	if fs != nil {
+		p.enableFlag = true
+		p.flagSet = fs
+	}
+
+}
+
+func (p *Configer) AddFlags(f *pflag.FlagSet) {
+	f.StringSliceVarP(&p.valueFiles, "values", "f", p.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
+	f.StringArrayVar(&p.values, "set", p.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
+	f.StringArrayVar(&p.stringValues, "set-string", p.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
+	f.StringArrayVar(&p.fileValues, "set-file", p.fileValues, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
+
+}
+
+func (p *Configer) ValueFiles() []string {
+	return p.valueFiles
+}
+
+type ConfigerOption func(*Configer)
+
+// with config object
+func WithConfig(path string, config interface{}) ConfigerOption {
+	b, err := yaml.Marshal(config)
+	if err != nil {
+		panic(err)
+	}
+
+	return WithDefaultYaml(path, string(b))
+}
+
+// with config yaml
+func WithDefaultYaml(path, yamlData string) ConfigerOption {
+	return func(c *Configer) {
+		if c.pathsBase == nil {
+			c.pathsBase = map[string]string{path: yamlData}
+		} else {
+			c.pathsBase[path] = yamlData
+		}
+	}
+}
+
+func WithOverrideYaml(path, yamlData string) ConfigerOption {
+	return func(c *Configer) {
+		if c.pathsOverride == nil {
+			c.pathsOverride = map[string]string{path: yamlData}
+		} else {
+			c.pathsOverride[path] = yamlData
+		}
+	}
+}
+
+func WithValueFile(valueFiles ...string) ConfigerOption {
+	return func(c *Configer) {
+		c.valueFiles = append(c.valueFiles, valueFiles...)
+	}
 }
