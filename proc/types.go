@@ -31,11 +31,11 @@ func (p HookOps) Context() context.Context {
 	return p.process.ctx
 }
 
-func (p HookOps) Configer() *configer.ConfigerABCDEFG {
+func (p HookOps) Configer() configer.Configer {
 	return ConfigerMustFrom(p.process.ctx)
 }
 
-func (p HookOps) ContextAndConfiger() (context.Context, *configer.ConfigerABCDEFG) {
+func (p HookOps) ContextAndConfiger() (context.Context, configer.Configer) {
 	return p.Context(), p.Configer()
 }
 
@@ -61,7 +61,7 @@ const (
 )
 
 func (p ProcessPriority) String() string {
-	return fmt.Sprintf("0x%08x", p)
+	return fmt.Sprintf("0x%08x", uint32(p))
 }
 
 type ProcessAction uint32
