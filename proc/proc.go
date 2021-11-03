@@ -157,7 +157,7 @@ func (p *Process) init() error {
 
 	if _, ok := ConfigerFrom(ctx); !ok {
 		opts, _ := ConfigOptsFrom(ctx)
-		configer, err := configer.New(opts...)
+		configer, err := configer.NewConfiger(opts...)
 		if err != nil {
 			return err
 		}
@@ -273,7 +273,7 @@ func (p *Process) reload() (err error) {
 	p.status.Set(STATUS_RELOADING)
 
 	opts, _ := ConfigOptsFrom(p.ctx)
-	configer, err := configer.New(opts...)
+	configer, err := configer.NewConfiger(opts...)
 	if err != nil {
 		p.err = err
 		return err

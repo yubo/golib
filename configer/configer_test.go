@@ -59,7 +59,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	_, err := New(WithValueFile("conf.yml"))
+	_, err := NewConfiger(WithValueFile("conf.yml"))
 	assert.NoError(t, err)
 }
 func TestConfigWithConfig(t *testing.T) {
@@ -73,7 +73,7 @@ func TestConfigWithConfig(t *testing.T) {
 	v := Bar{Foo{2}, Foo{3}}
 
 	{
-		c, err := New(WithConfig("foo", v.Foo))
+		c, err := NewConfiger(WithConfig("foo", v.Foo))
 		assert.NoError(t, err)
 
 		var got Bar
@@ -83,7 +83,7 @@ func TestConfigWithConfig(t *testing.T) {
 	}
 
 	{
-		c, err := New(WithConfig("", v))
+		c, err := NewConfiger(WithConfig("", v))
 		assert.NoError(t, err)
 
 		var got Bar
@@ -104,7 +104,7 @@ func TestConfigSet(t *testing.T) {
 	v := Bar{Foo{2}, Foo{3}}
 
 	{
-		c, _ := New(WithConfig("foo", v.Foo))
+		c, _ := NewConfiger(WithConfig("foo", v.Foo))
 		c.Set("foo", Foo{20})
 
 		var got Bar
@@ -117,7 +117,7 @@ func TestConfigSet(t *testing.T) {
 	}
 
 	{
-		c, _ := New(WithConfig("a", v.Foo2))
+		c, _ := NewConfiger(WithConfig("a", v.Foo2))
 		c.Set("a", Foo{30})
 
 		var got Bar
@@ -140,7 +140,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := New(WithValueFile("conf.yml"))
+	config, _ := NewConfiger(WithValueFile("conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -172,7 +172,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := New(WithValueFile("conf.yml"))
+	config, _ := NewConfiger(WithValueFile("conf.yml"))
 
 	var (
 		got  []string
@@ -208,7 +208,7 @@ ctrl:
 		{"ctrl.auth.google.client_id", "string"},
 	}
 
-	conf, _ := New(WithDefaultYaml("", yml))
+	conf, _ := NewConfiger(WithDefaultYaml("", yml))
 	for _, c := range cases {
 		if got := util.GetType(conf.GetRaw(c.path)); got != c.want {
 			assert.Equalf(t, c.want, got, "data %+v", conf.data)
@@ -237,7 +237,7 @@ ctrl:
 		{"ctrl.auth.google", "client_id", "string"},
 	}
 
-	conf, _ := New(WithDefaultYaml("", yml))
+	conf, _ := NewConfiger(WithDefaultYaml("", yml))
 	for _, c := range cases {
 		cf := conf.GetConfiger(c.path1)
 		if cf == nil {
@@ -274,7 +274,7 @@ ctrl:
 
 	var got auth
 
-	conf, _ := New(WithDefaultYaml("", yml))
+	conf, _ := NewConfiger(WithDefaultYaml("", yml))
 	conf2 := conf.GetConfiger("ctrl.auth")
 	err := conf2.Read("google", &got)
 	if err != nil {
@@ -292,7 +292,7 @@ func TestConfigWithBase(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := New(WithValueFile("base.yml", "conf.yml"))
+	cf, _ := NewConfiger(WithValueFile("base.yml", "conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -317,7 +317,7 @@ func TestConfigWithBase2(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := New(
+	cf, _ := NewConfiger(
 		WithValueFile("conf.yml"),
 		WithDefaultYaml("foo", "foo1: base1"),
 		WithDefaultYaml("foo", "foo3: base3"))
@@ -366,11 +366,11 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	configerOptions.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
-	configerOptions.values = []string{"e=v2_e", "f1=f1,f2=f2"}
-	configerOptions.stringValues = []string{"sv1=sv1,sv2=sv2"}
-	cf, err := New()
-	defer func() { configerOptions = newOptions() }()
+	DefaultOptions.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
+	DefaultOptions.values = []string{"e=v2_e", "f1=f1,f2=f2"}
+	DefaultOptions.stringValues = []string{"sv1=sv1,sv2=sv2"}
+	cf, err := NewConfiger()
+	defer func() { DefaultOptions = NewOptions() }()
 
 	assert.NoError(t, err)
 
@@ -503,8 +503,8 @@ func TestConfigerPriority(t *testing.T) {
 			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("#"), 0666)
 		}
 
-		configerOptions.valueFiles = []string{"base.yml"}
-		cf, err := New()
+		DefaultOptions.valueFiles = []string{"base.yml"}
+		cf, err := NewConfiger()
 		assert.NoError(t, err)
 
 		assert.Equalf(t, c.want, cf.GetRaw("a"), "flag [%s] env [%s] file [%s] config [%s]", c.flag, c.env, c.file, cf)
@@ -524,7 +524,7 @@ func TestConfigerDef(t *testing.T) {
 
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	err := AddConfigs(fs, "bar", &Bar{Foo: &Foo{B: "default-b"}})
-	cf, err := New()
+	cf, err := NewConfiger()
 	assert.NoError(t, err)
 
 	assert.Equalf(t, "default-a", cf.GetRaw("bar.foo.a"), "config [%s]", cf)
@@ -582,7 +582,7 @@ func TestConfigerFlags(t *testing.T) {
 				setFlagSet(fs, map[string]string{v[0]: v[1]})
 			}
 
-			cf, err := New(WithDefaultYaml("", c.fileContent))
+			cf, err := NewConfiger(WithDefaultYaml("", c.fileContent))
 			assert.NoError(t, err)
 
 			got := Foo{}

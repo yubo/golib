@@ -84,7 +84,7 @@ func TestNamedCertKeyArrayConfig(t *testing.T) {
 		err := fs.Parse(args)
 		assert.NoError(t, err, i)
 
-		cf, err := configer.New(configer.WithDefaultYaml("", test.fileContent))
+		cf, err := configer.NewConfiger(configer.WithDefaultYaml("", test.fileContent))
 		assert.NoError(t, err, i)
 
 		// debug

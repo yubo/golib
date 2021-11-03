@@ -66,7 +66,7 @@ func newRootCmd() *cobra.Command {
 
 func rootCmd(cmd *cobra.Command, args []string) error {
 	configer.SetOptions(true, false, 5, cmd.Flags())
-	conf, err := configer.New()
+	conf, err := configer.NewConfiger()
 	if err != nil {
 		klog.Fatal(err)
 	}

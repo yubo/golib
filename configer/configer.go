@@ -6,6 +6,7 @@ package configer
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -18,20 +19,24 @@ import (
 )
 
 var (
-	configerOptions = newOptions()
+	DefaultOptions = NewOptions()
 )
 
+// for testing
+func Reset() {
+	DefaultOptions = NewOptions()
+}
+
 type Configer struct {
-	*options
+	*Options
 
 	data     map[string]interface{}
 	path     []string
 	prepared bool
 }
 
-// must called after pflag parse
-func New(opts ...Option) (*Configer, error) {
-	options := configerOptions.deepCopy()
+func NewConfiger(opts ...Option) (*Configer, error) {
+	options := DefaultOptions.deepCopy()
 	for _, opt := range opts {
 		opt(options)
 	}
@@ -40,31 +45,31 @@ func New(opts ...Option) (*Configer, error) {
 		return nil, err
 	}
 
-	conf := &Configer{
+	cfg := &Configer{
 		data:    map[string]interface{}{},
-		options: options,
+		Options: options,
 	}
 
-	if err := conf.Prepare(); err != nil {
+	if err := cfg.Prepare(); err != nil {
 		return nil, err
 	}
 
-	return conf, nil
+	return cfg, nil
 }
 
-func (p *Configer) PrintFlags() {
-	printf := klog.V(1).Infof
+func (p *Configer) PrintFlags(out io.Writer) {
+	fmt.Fprintf(out, "configer FLAG:\n")
 	for _, value := range p.valueFiles {
-		printf("FLAG: --values=%s\n", value)
+		fmt.Fprintf(out, "  --values=%s\n", value)
 	}
 	for _, value := range p.values {
-		printf("FLAG: --set=%s\n", value)
+		fmt.Fprintf(out, "  --set=%s\n", value)
 	}
 	for _, value := range p.stringValues {
-		printf("FLAG: --set-string=%s\n", value)
+		fmt.Fprintf(out, "  --set-string=%s\n", value)
 	}
 	for _, value := range p.fileValues {
-		printf("FLAG: --set-file=%s\n", value)
+		fmt.Fprintf(out, "  --set-file=%s\n", value)
 	}
 }
 
@@ -146,7 +151,7 @@ func (p *Configer) Prepare() (err error) {
 }
 
 func (p *Configer) ValueFiles() []string {
-	if p == nil || p.options == nil {
+	if p == nil || p.Options == nil {
 		return nil
 	}
 	return p.valueFiles
@@ -155,14 +160,14 @@ func (p *Configer) ValueFiles() []string {
 func (p *Configer) GetConfiger(path string) *Configer {
 	if data, ok := p.GetRaw(path).(map[string]interface{}); ok {
 		return &Configer{
-			options: p.options,
+			Options: p.Options,
 			path:    append(clonePath(p.path), parsePath(path)...),
 			data:    data,
 		}
 	}
 
 	return &Configer{
-		options: p.options,
+		Options: p.Options,
 		path:    append(clonePath(p.path), parsePath(path)...),
 		data:    map[string]interface{}{},
 	}
@@ -332,7 +337,7 @@ func (p *Configer) String() string {
 	return string(buf)
 }
 
-func (p *options) getEnv(key string) (string, bool) {
+func (p *Options) getEnv(key string) (string, bool) {
 	val, ok := os.LookupEnv(key)
 	return val, ok && (p.allowEmptyEnv || val != "")
 }

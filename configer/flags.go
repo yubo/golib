@@ -10,9 +10,9 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func (p *options) addFlagsVar(fs *pflag.FlagSet, in interface{}, depth int) {
-	if depth > configerOptions.maxDepth {
-		panic(fmt.Sprintf("path.depth is larger than the maximum allowed depth of %d", configerOptions.maxDepth))
+func (p *Options) addFlagsVar(fs *pflag.FlagSet, in interface{}, depth int) {
+	if depth > DefaultOptions.maxDepth {
+		panic(fmt.Sprintf("path.depth is larger than the maximum allowed depth of %d", DefaultOptions.maxDepth))
 	}
 
 	if k := reflect.ValueOf(in).Kind(); k != reflect.Ptr {
