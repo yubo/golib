@@ -58,14 +58,13 @@ func TestRegisterConfigFields(t *testing.T) {
 				factory := NewFactory()
 
 				fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-				factory.SetOptions(true, false, 5, fs)
 
 				err := factory.RegisterConfigFields(fs, "", got)
 				assert.NoError(t, err)
 
 				setFlags(fs, args)
 
-				cfg, err := factory.NewConfiger(WithDefaultYaml("", yaml))
+				cfg, err := factory.NewConfiger(WithFlagSet(fs), WithDefaultYaml("", yaml))
 				assert.NoError(t, err)
 
 				cfg.Read("", got)

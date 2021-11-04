@@ -39,6 +39,12 @@ type Process struct {
 	debugFlags  bool // print flags after proc.init()
 	dryrun      bool // will exit after proc.init()
 
+	//configer options
+	group         bool
+	allowEnv      bool
+	allowEmptyEnv bool
+	maxDepth      int
+
 	wg     sync.WaitGroup
 	cancel context.CancelFunc
 	ctx    context.Context
@@ -54,9 +60,13 @@ func NewProcess() *Process {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Process{
-		hookOps: hookOps,
-		ctx:     ctx,
-		cancel:  cancel,
+		hookOps:       hookOps,
+		ctx:           ctx,
+		cancel:        cancel,
+		group:         true,
+		allowEnv:      true,
+		allowEmptyEnv: false,
+		maxDepth:      5,
 	}
 }
 
@@ -73,8 +83,8 @@ func Start(cmd *cobra.Command) error {
 	return DefaultProcess.Start(cmd)
 }
 
-func Init() error {
-	return DefaultProcess.init()
+func Init(cmd *cobra.Command) error {
+	return DefaultProcess.init(cmd)
 }
 
 func Stop() error {
@@ -115,7 +125,7 @@ func NamedFlagSets() *flag.NamedFlagSets {
 }
 
 func (p *Process) Start(cmd *cobra.Command) error {
-	if err := p.init(); err != nil {
+	if err := p.init(cmd); err != nil {
 		return err
 	}
 
@@ -147,7 +157,7 @@ func (p *Process) Start(cmd *cobra.Command) error {
 // parse configfile
 // validate config each module
 // sort hook options
-func (p *Process) init() error {
+func (p *Process) init(cmd *cobra.Command) error {
 	if p.initDone {
 		return nil
 	}
@@ -168,7 +178,10 @@ func (p *Process) init() error {
 
 	if _, ok := ConfigerFrom(ctx); !ok {
 		opts, _ := ConfigOptsFrom(ctx)
-		configer, err := configer.NewConfiger(opts...)
+		configer, err := configer.NewConfiger(append(opts,
+			configer.WithFlagSet(cmd.Flags()),
+			configer.WithEnv(p.allowEnv, p.allowEmptyEnv),
+		)...)
 		if err != nil {
 			return err
 		}

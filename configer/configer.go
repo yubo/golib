@@ -2,7 +2,17 @@
 // make sure not use it after call process.Start()
 package configer
 
-// def < env < config < valueFile < value < flag
+// ## value priority(desc order):
+//  - flag
+//  - value
+//  - valueFile
+//  - config
+//  - default
+//    * env
+//    * sample
+//    * tags
+//      - comstom tags
+//      - fieldstruct tags
 
 import (
 	"fmt"
@@ -22,7 +32,6 @@ import (
 type Factory interface {
 	RegisterConfigFields(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error
 	NewConfiger(opts ...ConfigerOption) (Configer, error)
-	SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet)
 	AddFlags(f *pflag.FlagSet)
 	ValueFiles() []string
 	Envs() []string
@@ -61,9 +70,7 @@ func NewFactory() Factory {
 func NewConfiger(opts ...ConfigerOption) (Configer, error) {
 	return DefaultFactory.NewConfiger(opts...)
 }
-func SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
-	DefaultFactory.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
-}
+
 func AddFlags(f *pflag.FlagSet) {
 	DefaultFactory.AddFlags(f)
 }
@@ -79,20 +86,15 @@ func Flags() []string {
 
 type configer struct {
 	// factory options
-	valueFiles    []string // files, -f/--values
-	values        []string // values, --set
-	stringValues  []string // values, --set-string
-	fileValues    []string // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
-	enableFlag    bool
-	maxDepth      int
-	enableEnv     bool
-	allowEmptyEnv bool
-	flagSet       *pflag.FlagSet
-	fields        []*configField // all of config fields
+	valueFiles   []string       // files, -f/--values
+	values       []string       // values, --set
+	stringValues []string       // values, --set-string
+	fileValues   []string       // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
+	fields       []*configField // all of config fields
 
 	ConfigerOptions
 
-	// data options
+	// instance data
 	data   map[string]interface{}
 	path   []string
 	parsed bool
@@ -100,12 +102,14 @@ type configer struct {
 
 func newConfiger() *configer {
 	return &configer{
-		enableFlag:    true,
-		enableEnv:     true,
-		allowEmptyEnv: false,
-		maxDepth:      5,
-		data:          map[string]interface{}{},
-		path:          []string{},
+		ConfigerOptions: ConfigerOptions{
+			enableFlag:    true,
+			enableEnv:     true,
+			allowEmptyEnv: false,
+			maxDepth:      5,
+		},
+		data: map[string]interface{}{},
+		path: []string{},
 	}
 }
 
@@ -148,14 +152,14 @@ func (p *configer) parse() (err error) {
 	p.mergeDefaultValues(base)
 
 	// base with path
-	for path, b := range p.ConfigerOptions.PathsBase {
+	for path, b := range p.ConfigerOptions.pathsBase {
 		if base, err = yaml2ValuesWithPath(base, path, []byte(b)); err != nil {
 			return err
 		}
 	}
 
 	// configFile & valueFile --values
-	for _, filePath := range append(p.valueFiles, p.ConfigerOptions.FilesOverride...) {
+	for _, filePath := range append(p.valueFiles, p.ConfigerOptions.filesOverride...) {
 		m := map[string]interface{}{}
 
 		bytes, err := template.ParseTemplateFile(nil, filePath)
@@ -203,7 +207,7 @@ func (p *configer) parse() (err error) {
 	//p.mergeEnvValues(base)
 	p.mergeFlagValues(base)
 
-	for path, b := range p.ConfigerOptions.PathsOverride {
+	for path, b := range p.ConfigerOptions.pathsOverride {
 		if base, err = yaml2ValuesWithPath(base, path, []byte(b)); err != nil {
 			return err
 		}
@@ -444,35 +448,26 @@ func (p *configer) getEnv(key string) (string, bool) {
 	return val, ok && (p.allowEmptyEnv || val != "")
 }
 
-// default value priority: env > sample > comstom tags > fieldstruct tags
-func (p *configer) SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet) {
-	p.enableEnv = allowEnv
-	p.maxDepth = maxDepth
-	p.allowEmptyEnv = allowEmptyEnv
-
-	if fs != nil {
-		p.enableFlag = true
-		p.flagSet = fs
-	}
-
-}
-
 func (p *configer) AddFlags(f *pflag.FlagSet) {
 	f.StringSliceVarP(&p.valueFiles, "values", "f", p.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
 	f.StringArrayVar(&p.values, "set", p.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&p.stringValues, "set-string", p.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&p.fileValues, "set-file", p.fileValues, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
-
 }
 
 func (p *configer) ValueFiles() []string {
-	return append(p.valueFiles, p.FilesOverride...)
+	return append(p.valueFiles, p.filesOverride...)
 }
 
 type ConfigerOptions struct {
-	FilesOverride []string // same as valueFiles
-	PathsBase     map[string]string
-	PathsOverride map[string]string
+	filesOverride []string // same as valueFiles
+	pathsBase     map[string]string
+	pathsOverride map[string]string
+	enableFlag    bool
+	flagSet       *pflag.FlagSet
+	maxDepth      int
+	enableEnv     bool
+	allowEmptyEnv bool
 }
 
 type ConfigerOption func(*ConfigerOptions)
@@ -490,20 +485,20 @@ func WithConfig(path string, config interface{}) ConfigerOption {
 // with config yaml
 func WithDefaultYaml(path, yamlData string) ConfigerOption {
 	return func(c *ConfigerOptions) {
-		if c.PathsBase == nil {
-			c.PathsBase = map[string]string{path: yamlData}
+		if c.pathsBase == nil {
+			c.pathsBase = map[string]string{path: yamlData}
 		} else {
-			c.PathsBase[path] = yamlData
+			c.pathsBase[path] = yamlData
 		}
 	}
 }
 
 func WithOverrideYaml(path, yamlData string) ConfigerOption {
 	return func(c *ConfigerOptions) {
-		if c.PathsOverride == nil {
-			c.PathsOverride = map[string]string{path: yamlData}
+		if c.pathsOverride == nil {
+			c.pathsOverride = map[string]string{path: yamlData}
 		} else {
-			c.PathsOverride[path] = yamlData
+			c.pathsOverride[path] = yamlData
 		}
 	}
 }
@@ -511,6 +506,31 @@ func WithOverrideYaml(path, yamlData string) ConfigerOption {
 // WithValueFile priority greater than --values
 func WithValueFile(valueFiles ...string) ConfigerOption {
 	return func(c *ConfigerOptions) {
-		c.FilesOverride = append(c.FilesOverride, valueFiles...)
+		c.filesOverride = append(c.filesOverride, valueFiles...)
+	}
+}
+
+func WithEnv(allowEnv, allowEmptyEnv bool) ConfigerOption {
+	return func(p *ConfigerOptions) {
+		p.enableEnv = allowEnv
+		p.allowEmptyEnv = allowEmptyEnv
+	}
+}
+
+func WithMaxDepth(maxDepth int) ConfigerOption {
+	return func(p *ConfigerOptions) {
+		p.maxDepth = maxDepth
+	}
+}
+
+func WithFlagSet(fs *pflag.FlagSet) ConfigerOption {
+	return func(p *ConfigerOptions) {
+		if fs == nil {
+			p.enableFlag = false
+			return
+		}
+
+		p.enableFlag = true
+		p.flagSet = fs
 	}
 }

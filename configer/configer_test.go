@@ -494,9 +494,7 @@ func TestConfigerPriority(t *testing.T) {
 
 	for _, c := range cases {
 		factory := NewFactory()
-
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		factory.SetOptions(true, false, 5, fs)
 
 		err := factory.RegisterConfigFields(fs, "", &Foo{})
 		assert.NoError(t, err)
@@ -517,7 +515,7 @@ func TestConfigerPriority(t *testing.T) {
 			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("#"), 0666)
 		}
 
-		cfg, err := factory.NewConfiger(WithValueFile("base.yml"))
+		cfg, err := factory.NewConfiger(WithFlagSet(fs), WithValueFile("base.yml"))
 		assert.NoError(t, err)
 
 		assert.Equalf(t, c.want, cfg.GetRaw("a"), "flag [%s] env [%s] file [%s] config [%s]", c.flag, c.env, c.file, cfg)

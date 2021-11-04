@@ -11,8 +11,16 @@ import (
 	"github.com/yubo/golib/configer"
 )
 
-// with flag section
 func NewRootCmd(ctx context.Context) *cobra.Command {
+	return DefaultProcess.NewRootCmd(ctx)
+}
+
+func InitProcFlags(cmd *cobra.Command) {
+	DefaultProcess.InitProcFlags(cmd)
+}
+
+// with flag section
+func (p *Process) NewRootCmd(ctx context.Context) *cobra.Command {
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -27,15 +35,14 @@ func NewRootCmd(ctx context.Context) *cobra.Command {
 		},
 	}
 
-	InitProcFlags(cmd, true, true, false, 5)
+	p.InitProcFlags(cmd)
 
 	DefaultProcess.ctx, DefaultProcess.cancel = context.WithCancel(ctx)
 
 	return cmd
 }
 
-func InitProcFlags(cmd *cobra.Command, group, allowEnv, allowEmptyEnv bool, maxDepth int) {
-
+func (p *Process) InitProcFlags(cmd *cobra.Command) {
 	// add flags
 	fs := cmd.Flags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
@@ -51,15 +58,12 @@ func InitProcFlags(cmd *cobra.Command, group, allowEnv, allowEmptyEnv bool, maxD
 	// add process flags
 	AddFlags(nfs.FlagSet("global"))
 
-	// set configer options for init configer options fro parser
-	configer.SetOptions(allowEnv, allowEmptyEnv, maxDepth, fs)
-
 	// add registed fs into cmd.Flags
 	for _, f := range nfs.FlagSets {
 		fs.AddFlagSet(f)
 	}
 
-	if group {
+	if p.group {
 		setGroupCommandFunc(cmd)
 	}
 
