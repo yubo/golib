@@ -1,6 +1,7 @@
 ## Go Library
 
-#### example
+## Examples
 
-[quick start](./example)
+- [Config](./examples/config)
+- [Process](./examples/proc)
 

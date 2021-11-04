@@ -4,16 +4,13 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
-	"github.com/yubo/golib/api"
 	"github.com/yubo/golib/util"
 )
 
@@ -447,6 +444,22 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 	}
 }
 
+// a=1,b=2
+func setFlags(fs *pflag.FlagSet, flags string) {
+	if flags == "" {
+		return
+	}
+
+	if a1 := strings.Split(flags, ","); len(a1) > 0 {
+		flags := map[string]string{}
+		for _, v := range a1 {
+			s := strings.Split(v, "=")
+			flags[s[0]] = s[1]
+		}
+		setFlagSet(fs, flags)
+	}
+}
+
 func setFlagSet(fs *pflag.FlagSet, values map[string]string) {
 	fs.VisitAll(func(flag *pflag.Flag) {
 		if v, ok := values[flag.Name]; ok && len(v) > 0 {
@@ -531,66 +544,4 @@ func TestConfigerDef(t *testing.T) {
 
 	assert.Equalf(t, "default-a", cfg.GetRaw("bar.foo.a"), "config [%s]", cfg)
 	assert.Equalf(t, "default-b", cfg.GetRaw("bar.foo.b"), "config [%s]", cfg)
-}
-
-func TestConfigerFlags(t *testing.T) {
-	type Foo struct {
-		Duration api.Duration `json:"duration" flag:"timeout" default:"5s"`
-		IP       net.IP       `json:"ip" flag:"ip" default:"1.1.1.1"`
-	}
-
-	var cases = []struct {
-		name        string
-		flag        string
-		fileContent string
-		expected    Foo
-	}{
-		{"duration default", "", "", Foo{
-			Duration: api.Duration{Duration: 5 * time.Second},
-			IP:       net.ParseIP("1.1.1.1"),
-		}},
-		{"duration flag", "timeout=10s", "", Foo{
-			Duration: api.Duration{Duration: 10 * time.Second},
-			IP:       net.ParseIP("1.1.1.1"),
-		}},
-		{"duration file", "", "duration: 20s", Foo{
-			Duration: api.Duration{Duration: 20 * time.Second},
-			IP:       net.ParseIP("1.1.1.1"),
-		}},
-		{"ip default", "", "", Foo{
-			Duration: api.Duration{Duration: 5 * time.Second},
-			IP:       net.ParseIP("1.1.1.1"),
-		}},
-		{"ip flag", "ip=2.2.2.2", "", Foo{
-			Duration: api.Duration{Duration: 5 * time.Second},
-			IP:       net.ParseIP("2.2.2.2"),
-		}},
-		{"ip file", "", "ip: 3.3.3.3", Foo{
-			Duration: api.Duration{Duration: 5 * time.Second},
-			IP:       net.ParseIP("3.3.3.3"),
-		}},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			factory := NewFactory()
-
-			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-			factory.SetOptions(true, false, 5, fs)
-
-			err := factory.RegisterConfigFields(fs, "", &Foo{})
-			assert.NoError(t, err)
-
-			if c.flag != "" {
-				v := strings.Split(c.flag, "=")
-				setFlagSet(fs, map[string]string{v[0]: v[1]})
-			}
-
-			cfg, err := factory.NewConfiger(WithDefaultYaml("", c.fileContent))
-			assert.NoError(t, err)
-
-			got := Foo{}
-			cfg.Read("", &got)
-			assert.Equal(t, c.expected, got)
-		})
-	}
 }

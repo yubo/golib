@@ -40,8 +40,8 @@ func newRootCmd() *cobra.Command {
 
 func start(ctx context.Context) error {
 	klog.Infof("entering start()")
-	defer klog.Infof("leaving start()")
 
+	klog.Infof("Press ctrl-c to leave process")
 	return nil
 }
 
@@ -51,8 +51,7 @@ func newHelloCmd() *cobra.Command {
 		Short:        "hello",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			klog.Infof("entering hello()")
-			defer klog.Infof("leaving hello()")
+			klog.Infof("hello")
 			return nil
 		},
 	}

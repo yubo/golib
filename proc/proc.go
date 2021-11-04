@@ -33,6 +33,7 @@ type Process struct {
 	hookOps       [ACTION_SIZE][]*HookOps
 	namedFlagSets flag.NamedFlagSets
 	initDone      bool
+	noloop        bool
 
 	debugConfig bool // print config after proc.init()
 	debugFlags  bool // print flags after proc.init()
@@ -92,6 +93,12 @@ func AddFlags(f *pflag.FlagSet) {
 	DefaultProcess.AddFlags(f)
 }
 
+// NoLoop disable listen signal notify
+func NoLoop() {
+	DefaultProcess.NoLoop()
+}
+
+// RegisterHooks register hookOps as a module
 func RegisterHooks(in []HookOps) error {
 	for i := range in {
 		v := &in[i]
@@ -126,6 +133,10 @@ func (p *Process) Start(cmd *cobra.Command) error {
 
 	if err := p.start(); err != nil {
 		return err
+	}
+
+	if p.noloop {
+		return p.stop()
 	}
 
 	return p.loop()
@@ -182,6 +193,9 @@ func (p *Process) init() error {
 
 // only be called once
 func (p *Process) start() error {
+	p.wg.Add(1)
+	defer p.wg.Done()
+
 	for _, ops := range p.hookOps[ACTION_START] {
 		ops.dlog()
 
@@ -308,4 +322,8 @@ func (p *Process) AddFlags(f *pflag.FlagSet) {
 	f.BoolVar(&p.debugConfig, "debug-config", p.debugConfig, "print config")
 	f.BoolVar(&p.debugFlags, "debug-flags", p.debugFlags, "print flags")
 	f.BoolVar(&p.dryrun, "dry-run", p.debugFlags, "exit before proc.Start()")
+}
+
+func (p *Process) NoLoop() {
+	p.noloop = true
 }

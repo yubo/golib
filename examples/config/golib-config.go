@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
 
 	"github.com/spf13/cobra"
 	"github.com/yubo/golib/proc"
@@ -38,8 +39,21 @@ func main() {
 }
 
 func newServerCmd() *cobra.Command {
+	// register hookOps as a module
 	proc.RegisterHooks(hookOps)
-	proc.RegisterFlags(moduleName, "golib examples", &config{})
+
+	// disable listen signal notify
+	proc.NoLoop()
+
+	// register config{} to configer.Factory
+	{
+		c := &config{}
+		if u, err := user.Current(); err == nil {
+			c.UserName = u.Username
+		}
+		proc.RegisterFlags(moduleName, "golib examples", c)
+	}
+
 	ctx := proc.WithName(context.Background(), "golibConfig")
 
 	return proc.NewRootCmd(ctx)
@@ -54,8 +68,7 @@ func start(ctx context.Context) error {
 	}
 
 	b, _ := yaml.Marshal(cf)
-	fmt.Printf("[%s]\n%s\n", moduleName, string(b))
+	fmt.Printf("%s", string(b))
 
-	os.Exit(0)
 	return nil
 }

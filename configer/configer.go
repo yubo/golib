@@ -30,8 +30,6 @@ type Factory interface {
 }
 
 type Configer interface {
-	SetOptions(allowEnv, allowEmptyEnv bool, maxDepth int, fs *pflag.FlagSet)
-	AddFlags(f *pflag.FlagSet)
 	ValueFiles() []string
 	Envs() []string
 	Flags() []string

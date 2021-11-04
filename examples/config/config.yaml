@@ -1,5 +1,5 @@
 golibConfig:
-  UserName: tom
-  UserAge: 18
-  City:
-  Phone:
+  userName: bajie
+  userAge: 16
+  city: gao
+  phone: 14159265359
