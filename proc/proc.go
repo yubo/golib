@@ -39,11 +39,7 @@ type Process struct {
 	debugFlags  bool // print flags after proc.init()
 	dryrun      bool // will exit after proc.init()
 
-	//configer options
-	group         bool
-	allowEnv      bool
-	allowEmptyEnv bool
-	maxDepth      int
+	ProcessOptions
 
 	wg     sync.WaitGroup
 	cancel context.CancelFunc
@@ -51,7 +47,45 @@ type Process struct {
 	err    error
 }
 
-func NewProcess() *Process {
+type ProcessOptions struct {
+	group         bool
+	allowEnv      bool
+	allowEmptyEnv bool
+	maxDepth      int
+}
+
+type ProcessOption func(*ProcessOptions)
+
+func WithGroup() ProcessOption {
+	return func(p *ProcessOptions) {
+		p.group = true
+	}
+}
+
+func WithEnv(allowEnv, allowEmptyEnv bool) ProcessOption {
+	return func(p *ProcessOptions) {
+		p.allowEnv = allowEnv
+		p.allowEmptyEnv = allowEmptyEnv
+	}
+}
+
+func WithMaxDepthParser(maxDepth int) ProcessOption {
+	return func(p *ProcessOptions) {
+		p.maxDepth = maxDepth
+	}
+}
+
+func NewProcess(opts ...ProcessOption) *Process {
+	p := newProcess()
+
+	for _, opt := range opts {
+		opt(&p.ProcessOptions)
+	}
+
+	return p
+}
+
+func newProcess() *Process {
 	hookOps := [ACTION_SIZE][]*HookOps{}
 	for i := ACTION_START; i < ACTION_SIZE; i++ {
 		hookOps[i] = []*HookOps{}
@@ -60,14 +94,17 @@ func NewProcess() *Process {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &Process{
-		hookOps:       hookOps,
-		ctx:           ctx,
-		cancel:        cancel,
-		group:         true,
-		allowEnv:      true,
-		allowEmptyEnv: false,
-		maxDepth:      5,
+		hookOps: hookOps,
+		ctx:     ctx,
+		cancel:  cancel,
+		ProcessOptions: ProcessOptions{
+			group:         true,
+			allowEnv:      true,
+			allowEmptyEnv: false,
+			maxDepth:      5,
+		},
 	}
+
 }
 
 // for test
