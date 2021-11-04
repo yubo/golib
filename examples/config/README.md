@@ -1,29 +1,12 @@
 ## Config example
 
-###
+you can set config by (descending order by priority)
 
-#### read from YAML file
+- [Command Line Arguments](#command-line-arguments)
+- [YAML file](#yaml-file)
+- [Environment Variables](#environment-variables)
 
-- [config.yaml](./config.yaml)
-
-```yaml
-golibConfig:
-  userName: bajie
-  userAge: 16
-  city: gao
-  phone: 14159265359
-```
-
-```shell
-$ go run ./golib-config.go -f ./config.yaml
-city: gao
-phone: "14159265359"
-userAge: 16
-userName: bajie
-I1104 14:18:54.172979   21185 proc.go:275] See ya!
-```
-
-#### set by command line arguments
+#### Command Line Arguments
 
 ```
 $ go run ./golib-config.go -h
@@ -75,4 +58,35 @@ phone: ""
 userAge: 0
 userName: yubo
 I1104 15:11:54.053312   54259 proc.go:275] See ya!
+```
+
+#### YAML file
+
+- [config.yaml](./config.yaml)
+
+```yaml
+golibConfig:
+  userName: bajie
+  userAge: 16
+  city: gao
+  phone: 14159265359
+```
+
+```shell
+$ go run ./golib-config.go -f ./config.yaml
+city: gao
+phone: "14159265359"
+userAge: 16
+userName: bajie
+I1104 14:18:54.172979   21185 proc.go:275] See ya!
+```
+
+#### Environment Variables
+```
+$ USER_NAME=wukong USER_CITY="Flowers and Fruit Mountain" go run ./golib-config.go
+city: Flowers and Fruit Mountain
+phone: ""
+userAge: 0
+userName: wukong
+I1104 15:30:33.678388   60856 proc.go:275] See ya!
 ```

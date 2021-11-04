@@ -12,9 +12,9 @@ import (
 )
 
 type config struct {
-	UserName string `json:"userName" flag:"user-name" description:"user name"`
-	UserAge  int    `json:"userAge" flag:"user-age" description:"user age"`
-	City     string `json:"city" flag:"city" default:"beijing" description:"city"`
+	UserName string `json:"userName" flag:"user-name" env:"USER_NAME" description:"user name"`
+	UserAge  int    `json:"userAge" flag:"user-age" env:"USER_AGE" description:"user age"`
+	City     string `json:"city" flag:"city" env:"USER_CITY" default:"beijing" description:"city"`
 	Phone    string `json:"phone" flag:"phone" description:"phone number"`
 }
 
