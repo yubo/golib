@@ -31,7 +31,7 @@ func main() {
 func newRootCmd() *cobra.Command {
 	proc.RegisterHooks(hookOps)
 
-	cmd := proc.NewRootCmd(AppName)
+	cmd := proc.NewRootCmd()
 
 	cmd.AddCommand(newHelloCmd())
 

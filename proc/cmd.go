@@ -10,8 +10,8 @@ import (
 	"github.com/yubo/golib/configer"
 )
 
-func NewRootCmd(name string, opts ...ProcessOption) *cobra.Command {
-	return DefaultProcess.NewRootCmd(name, opts...)
+func NewRootCmd(opts ...ProcessOption) *cobra.Command {
+	return DefaultProcess.NewRootCmd(opts...)
 }
 
 func InitProcFlags(cmd *cobra.Command) {
@@ -19,9 +19,7 @@ func InitProcFlags(cmd *cobra.Command) {
 }
 
 // with flag section
-func (p *Process) NewRootCmd(name string, opts ...ProcessOption) *cobra.Command {
-	p.name = name
-
+func (p *Process) NewRootCmd(opts ...ProcessOption) *cobra.Command {
 	for _, opt := range opts {
 		opt(p.ProcessOptions)
 	}

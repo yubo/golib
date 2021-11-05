@@ -51,7 +51,7 @@ func newServerCmd() *cobra.Command {
 		proc.RegisterFlags(moduleName, "golib examples", c)
 	}
 
-	return proc.NewRootCmd(moduleName, proc.WithoutLoop())
+	return proc.NewRootCmd(proc.WithoutLoop())
 }
 
 func start(ctx context.Context) error {

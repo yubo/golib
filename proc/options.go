@@ -40,6 +40,11 @@ func WithContext(ctx context.Context) ProcessOption {
 	}
 }
 
+func WithName(name string) ProcessOption {
+	return func(p *ProcessOptions) {
+		p.name = name
+	}
+}
 func WithDescription(description string) ProcessOption {
 	return func(p *ProcessOptions) {
 		p.description = description
