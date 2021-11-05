@@ -83,11 +83,11 @@ func (p config) String() string {
 	return util.Prettify(p)
 }
 
-func (p config) tags() map[string]*configer.TagOpts {
+func (p config) tags() map[string]*configer.FieldTag {
 	unsupportedFlags := fmt.Sprintf("--%s", strings.Join(logs.UnsupportedLoggingFlags(), ", --"))
 	formats := fmt.Sprintf(`"%s"`, strings.Join(logs.RegistryList(), `", "`))
 
-	return map[string]*configer.TagOpts{
+	return map[string]*configer.FieldTag{
 		"format": {Description: fmt.Sprintf("Sets the log format. Permitted formats: %s.\nNon-default formats don't honor these flags: %s.\nNon-default choices are currently alpha and subject to change without warning.", formats, unsupportedFlags)},
 	}
 

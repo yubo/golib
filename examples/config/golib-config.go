@@ -42,9 +42,6 @@ func newServerCmd() *cobra.Command {
 	// register hookOps as a module
 	proc.RegisterHooks(hookOps)
 
-	// disable listen signal notify
-	proc.NoLoop()
-
 	// register config{} to configer.Factory
 	{
 		c := &config{}
@@ -54,9 +51,7 @@ func newServerCmd() *cobra.Command {
 		proc.RegisterFlags(moduleName, "golib examples", c)
 	}
 
-	ctx := proc.WithName(context.Background(), "golibConfig")
-
-	return proc.NewRootCmd(ctx)
+	return proc.NewRootCmd(moduleName, proc.WithoutLoop())
 }
 
 func start(ctx context.Context) error {

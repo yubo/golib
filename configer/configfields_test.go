@@ -2,6 +2,7 @@ package configer
 
 import (
 	"net"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -55,6 +56,12 @@ func TestRegisterConfigFields(t *testing.T) {
 			name, args, yaml, want, got := c[0], c[1], c[2], fn(c[3]), fn("")
 
 			t.Run(name, func(t *testing.T) {
+				dir := createTestDir([]templateFile{
+					{"base.yml", yaml},
+				})
+				defer os.RemoveAll(dir)
+				os.Chdir(dir)
+
 				factory := NewFactory()
 
 				fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
@@ -64,7 +71,10 @@ func TestRegisterConfigFields(t *testing.T) {
 
 				setFlags(fs, args)
 
-				cfg, err := factory.NewConfiger(WithFlagSet(fs), WithDefaultYaml("", yaml))
+				cfg, err := factory.NewConfiger(
+					WithFlagSet(fs),
+					WithValueFile("base.yml"),
+				)
 				assert.NoError(t, err)
 
 				cfg.Read("", got)

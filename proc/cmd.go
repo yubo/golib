@@ -1,7 +1,6 @@
 package proc
 
 import (
-	"context"
 	"math/rand"
 	"runtime"
 	"time"
@@ -11,8 +10,8 @@ import (
 	"github.com/yubo/golib/configer"
 )
 
-func NewRootCmd(ctx context.Context) *cobra.Command {
-	return DefaultProcess.NewRootCmd(ctx)
+func NewRootCmd(name string, opts ...ProcessOption) *cobra.Command {
+	return DefaultProcess.NewRootCmd(name, opts...)
 }
 
 func InitProcFlags(cmd *cobra.Command) {
@@ -20,15 +19,19 @@ func InitProcFlags(cmd *cobra.Command) {
 }
 
 // with flag section
-func (p *Process) NewRootCmd(ctx context.Context) *cobra.Command {
+func (p *Process) NewRootCmd(name string, opts ...ProcessOption) *cobra.Command {
+	p.name = name
+
+	for _, opt := range opts {
+		opt(p.ProcessOptions)
+	}
+
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	name := NameFrom(ctx)
-
 	cmd := &cobra.Command{
-		Use:          name,
-		Short:        DescriptionFrom(ctx),
+		Use:          p.name,
+		Short:        p.description,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return DefaultProcess.Start(cmd)
@@ -36,8 +39,6 @@ func (p *Process) NewRootCmd(ctx context.Context) *cobra.Command {
 	}
 
 	p.InitProcFlags(cmd)
-
-	DefaultProcess.ctx, DefaultProcess.cancel = context.WithCancel(ctx)
 
 	return cmd
 }

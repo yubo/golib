@@ -9,26 +9,41 @@ import (
 )
 
 // merge path.bytes -> into
-func yaml2ValuesWithPath(into map[string]interface{}, path string, data []byte) (map[string]interface{}, error) {
-	currentMap := map[string]interface{}{}
-	if err := yaml.Unmarshal(data, &currentMap); err != nil {
-		return into, err
+func mergePathYaml(into map[string]interface{}, path string, yaml []byte) (map[string]interface{}, error) {
+	values, err := yamlToValues(yaml)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(path) > 0 {
-		ps := strings.Split(path, ".")
-		for i := len(ps) - 1; i >= 0; i-- {
-			currentMap = map[string]interface{}{ps[i]: currentMap}
-		}
-	}
-
-	into = mergeValues(into, currentMap)
-	return into, nil
+	return mergePathValues(into, path, values), nil
 }
 
-// Merges source and into map, preferring values from the source map ( src > into)
-func mergeValues(into map[string]interface{}, src map[string]interface{}) map[string]interface{} {
-	for k, v := range src {
+func mergePathObj(into map[string]interface{}, path string, obj interface{}) (map[string]interface{}, error) {
+	values, err := objToValues(obj)
+	if err != nil {
+		return nil, err
+	}
+
+	return mergePathValues(into, path, values), nil
+}
+
+func mergePathFields(into map[string]interface{}, path []string, fields []*configField) map[string]interface{} {
+	for _, f := range fields {
+		if v := f.defaultValue; v != nil {
+			into = mergeValues(into, pathValueToValues(
+				joinPath(append(path, f.configPath)...), v))
+		}
+	}
+	return into
+}
+
+func mergePathValues(into map[string]interface{}, path string, values map[string]interface{}) map[string]interface{} {
+	return mergeValues(into, pathValueToValues(path, values))
+}
+
+// Merges source and into map, preferring values from the source map ( values -> into)
+func mergeValues(into map[string]interface{}, values map[string]interface{}) map[string]interface{} {
+	for k, v := range values {
 		// If the key doesn't exist already, then just set the key to that value
 		if _, ok := into[k]; !ok {
 			into[k] = v
@@ -58,7 +73,7 @@ func clonePath(path []string) []string {
 	return ret
 }
 
-func objToMap(in interface{}) (map[string]interface{}, error) {
+func objToValues(in interface{}) (map[string]interface{}, error) {
 	b, err := yaml.Marshal(in)
 	if err != nil {
 		return nil, err
@@ -71,7 +86,7 @@ func objToMap(in interface{}) (map[string]interface{}, error) {
 	return out, nil
 }
 
-func yamlToMap(y []byte) (map[string]interface{}, error) {
+func yamlToValues(y []byte) (map[string]interface{}, error) {
 	out := map[string]interface{}{}
 	if err := yaml.Unmarshal(y, &out); err != nil {
 		return nil, err
@@ -95,7 +110,7 @@ func isZero(in interface{}) bool {
 	return reflect.ValueOf(in).IsZero()
 }
 
-func pathValueToTable(path string, val interface{}) map[string]interface{} {
+func pathValueToValues(path string, val interface{}) map[string]interface{} {
 	paths := parsePath(path)
 	p := val
 
@@ -111,31 +126,30 @@ func prepareValue(rv reflect.Value, rt reflect.Type) {
 	}
 }
 
-type TagOpts struct {
+type FieldTag struct {
 	name string // field name
 	json string // json:"{json}"
 	skip bool   // if json:"-"
 
 	Flag        []string // flag:"{long},{short}"
+	Arg         string   // arg:"{arg}"  args[0] arg1... -- arg2... (deprecated)
 	Default     string   // default:"{default}"
 	Env         string   // env:"{env}"
 	Description string   // description:"{description}"
 	Deprecated  string   // deprecated:""
-	Arg         string   // arg:"{arg}"  args[0] arg1... -- arg2... (deprecated)
-
 }
 
-func (p TagOpts) Skip() bool {
-	return p.skip
-}
-
-func (p TagOpts) String() string {
+func (p FieldTag) String() string {
 	return fmt.Sprintf("json %s flag %v env %s description %s",
 		p.json, p.Flag, p.Env, p.Description)
 }
 
-func getTagOpts(sf reflect.StructField) (tag *TagOpts) {
-	tag = &TagOpts{name: sf.Name}
+func (p FieldTag) Skip() bool {
+	return p.skip
+}
+
+func GetFieldTag(sf reflect.StructField) (tag *FieldTag) {
+	tag = &FieldTag{name: sf.Name}
 	if sf.Anonymous {
 		return
 	}
@@ -151,11 +165,9 @@ func getTagOpts(sf reflect.StructField) (tag *TagOpts) {
 	} else {
 		tag.json = sf.Name
 	}
-
 	if opts.Contains("arg1") {
 		tag.Arg = "arg1"
-	}
-	if opts.Contains("arg2") {
+	} else if opts.Contains("arg2") {
 		tag.Arg = "arg2"
 	}
 

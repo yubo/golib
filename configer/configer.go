@@ -3,16 +3,17 @@
 package configer
 
 // ## value priority(desc order):
-//  - flag
-//  - value
-//  - valueFile
-//  - config
+//  - WithOverrideYaml(), WithOverride()
+//  - flag (os.Args)
+//    - fileValues (--set-file)
+//    - value (--set, --set-string)
+//    - valueFile (--values, -f)
 //  - default
-//    * env
-//    * sample
-//    * tags
-//      - comstom tags
-//      - fieldstruct tags
+//    - RegisterConfigFields.sample.field.tags.env
+//    - WithDefaultYaml(), WithDefault()
+//    - RegisterConfigFields.WithTags(tags.default)
+//    - RegisterConfigFields.sample.field.value
+//    - RegisterConfigFields.sample.field.tags.default
 
 import (
 	"fmt"
@@ -85,6 +86,8 @@ func Flags() []string {
 }
 
 type configer struct {
+	*ConfigerOptions
+
 	// factory options
 	valueFiles   []string       // files, -f/--values
 	values       []string       // values, --set
@@ -92,30 +95,28 @@ type configer struct {
 	fileValues   []string       // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
 	fields       []*configField // all of config fields
 
-	ConfigerOptions
-
 	// instance data
 	data   map[string]interface{}
+	env    map[string]interface{}
 	path   []string
 	parsed bool
 }
 
 func newConfiger() *configer {
 	return &configer{
-		ConfigerOptions: ConfigerOptions{
-			enableFlag:    true,
-			enableEnv:     true,
-			allowEmptyEnv: false,
-			maxDepth:      5,
-		},
-		data: map[string]interface{}{},
-		path: []string{},
+		ConfigerOptions: newConfigerOptions(),
+		data:            map[string]interface{}{},
+		path:            []string{},
 	}
 }
 
 func (p *configer) NewConfiger(opts ...ConfigerOption) (Configer, error) {
 	for _, opt := range opts {
-		opt(&p.ConfigerOptions)
+		opt(p.ConfigerOptions)
+	}
+
+	if err := p.ConfigerOptions.Validate(); err != nil {
+		return nil, err
 	}
 
 	if err := p.parse(); err != nil {
@@ -148,15 +149,11 @@ func (p *configer) parse() (err error) {
 
 	base := map[string]interface{}{}
 
-	// init base from flag default
-	p.mergeDefaultValues(base)
+	// merge WithDefault values
+	base = mergeValues(base, p.defaultValues)
 
-	// base with path
-	for path, b := range p.ConfigerOptions.pathsBase {
-		if base, err = yaml2ValuesWithPath(base, path, []byte(b)); err != nil {
-			return err
-		}
-	}
+	// merge default from RegisterConfigFields.sample
+	base = mergePathFields(base, p.path, p.fields)
 
 	// configFile & valueFile --values
 	for _, filePath := range append(p.valueFiles, p.ConfigerOptions.filesOverride...) {
@@ -205,38 +202,28 @@ func (p *configer) parse() (err error) {
 
 	// override
 	//p.mergeEnvValues(base)
-	p.mergeFlagValues(base)
+	base = p.mergeFlagValues(base)
 
-	for path, b := range p.ConfigerOptions.pathsOverride {
-		if base, err = yaml2ValuesWithPath(base, path, []byte(b)); err != nil {
-			return err
-		}
-	}
+	base = mergeValues(base, p.overrideValues)
 
 	p.data = base
 	p.parsed = true
 	return nil
 }
-func (p *configer) mergeDefaultValues(into map[string]interface{}) {
-	for _, f := range p.fields {
-		if v := f.defaultValue; v != nil {
-			//klog.V(7).InfoS("def", "path", joinPath(append(p.path, f.configPath)...), "value", v)
-			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
-		}
-	}
-}
 
 // merge flag value into ${into}
-func (p *configer) mergeFlagValues(into map[string]interface{}) {
+func (p *configer) mergeFlagValues(into map[string]interface{}) map[string]interface{} {
 	if !p.enableFlag {
-		return
+		return into
 	}
 	for _, f := range p.fields {
 		if v := p.getFlagValue(f); v != nil {
 			//klog.V(7).InfoS("flag", "path", joinPath(append(p.path, f.configPath)...), "value", v)
-			mergeValues(into, pathValueToTable(joinPath(append(p.path, f.configPath)...), v))
+			mergeValues(into, pathValueToValues(joinPath(append(p.path, f.configPath)...), v))
 		}
 	}
+
+	return into
 }
 func (p *configer) Envs() (names []string) {
 	if !p.enableEnv {
@@ -457,80 +444,4 @@ func (p *configer) AddFlags(f *pflag.FlagSet) {
 
 func (p *configer) ValueFiles() []string {
 	return append(p.valueFiles, p.filesOverride...)
-}
-
-type ConfigerOptions struct {
-	filesOverride []string // same as valueFiles
-	pathsBase     map[string]string
-	pathsOverride map[string]string
-	enableFlag    bool
-	flagSet       *pflag.FlagSet
-	maxDepth      int
-	enableEnv     bool
-	allowEmptyEnv bool
-}
-
-type ConfigerOption func(*ConfigerOptions)
-
-// with config object
-func WithConfig(path string, config interface{}) ConfigerOption {
-	b, err := yaml.Marshal(config)
-	if err != nil {
-		panic(err)
-	}
-
-	return WithDefaultYaml(path, string(b))
-}
-
-// with config yaml
-func WithDefaultYaml(path, yamlData string) ConfigerOption {
-	return func(c *ConfigerOptions) {
-		if c.pathsBase == nil {
-			c.pathsBase = map[string]string{path: yamlData}
-		} else {
-			c.pathsBase[path] = yamlData
-		}
-	}
-}
-
-func WithOverrideYaml(path, yamlData string) ConfigerOption {
-	return func(c *ConfigerOptions) {
-		if c.pathsOverride == nil {
-			c.pathsOverride = map[string]string{path: yamlData}
-		} else {
-			c.pathsOverride[path] = yamlData
-		}
-	}
-}
-
-// WithValueFile priority greater than --values
-func WithValueFile(valueFiles ...string) ConfigerOption {
-	return func(c *ConfigerOptions) {
-		c.filesOverride = append(c.filesOverride, valueFiles...)
-	}
-}
-
-func WithEnv(allowEnv, allowEmptyEnv bool) ConfigerOption {
-	return func(p *ConfigerOptions) {
-		p.enableEnv = allowEnv
-		p.allowEmptyEnv = allowEmptyEnv
-	}
-}
-
-func WithMaxDepth(maxDepth int) ConfigerOption {
-	return func(p *ConfigerOptions) {
-		p.maxDepth = maxDepth
-	}
-}
-
-func WithFlagSet(fs *pflag.FlagSet) ConfigerOption {
-	return func(p *ConfigerOptions) {
-		if fs == nil {
-			p.enableFlag = false
-			return
-		}
-
-		p.enableFlag = true
-		p.flagSet = fs
-	}
 }

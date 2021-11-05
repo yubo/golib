@@ -58,18 +58,19 @@ fooo:
 	_, err := NewFactory().NewConfiger(WithValueFile("conf.yml"))
 	assert.NoError(t, err)
 }
+
 func TestConfigWithConfig(t *testing.T) {
 	type Foo struct {
 		A int `json:"a"`
 	}
 	type Bar struct {
 		Foo  Foo `json:"foo"`
-		Foo2 Foo `json:",inline"`
+		Foo2 Foo `json:"foo2"`
 	}
 	v := Bar{Foo{2}, Foo{3}}
 
 	{
-		c, err := NewFactory().NewConfiger(WithConfig("foo", v.Foo))
+		c, err := NewFactory().NewConfiger(WithDefault("foo", v.Foo))
 		assert.NoError(t, err)
 
 		var got Bar
@@ -79,7 +80,7 @@ func TestConfigWithConfig(t *testing.T) {
 	}
 
 	{
-		c, err := NewFactory().NewConfiger(WithConfig("", v))
+		c, err := NewFactory().NewConfiger(WithDefault("", v))
 		assert.NoError(t, err)
 
 		var got Bar
@@ -95,12 +96,12 @@ func TestConfigSet(t *testing.T) {
 	}
 	type Bar struct {
 		Foo  Foo `json:"foo"`
-		Foo2 Foo `json:",inline"`
+		Foo2 Foo `json:"foo2"`
 	}
 	v := Bar{Foo{2}, Foo{3}}
 
 	{
-		c, _ := NewFactory().NewConfiger(WithConfig("foo", v.Foo))
+		c, _ := NewFactory().NewConfiger(WithDefault("foo", v.Foo))
 		c.Set("foo", Foo{20})
 
 		var got Bar
@@ -113,7 +114,7 @@ func TestConfigSet(t *testing.T) {
 	}
 
 	{
-		c, _ := NewFactory().NewConfiger(WithConfig("a", v.Foo2))
+		c, _ := NewFactory().NewConfiger(WithDefault("a", v.Foo2))
 		c.Set("a", Foo{30})
 
 		var got Bar
@@ -362,13 +363,12 @@ e: v2_e
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cfg := &configer{
-		valueFiles:   []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"},
-		values:       []string{"e=v2_e", "f1=f1,f2=f2"},
-		stringValues: []string{"sv1=sv1,sv2=sv2"},
-	}
-	cf, err := cfg.NewConfiger()
+	cff := newConfiger()
+	cff.valueFiles = []string{"base.yml", "conf.yml", "v1.yml", "v2.yml"}
+	cff.values = []string{"e=v2_e", "f1=f1,f2=f2"}
+	cff.stringValues = []string{"sv1=sv1,sv2=sv2"}
 
+	cf, err := cff.NewConfiger()
 	assert.NoError(t, err)
 
 	var cases = []struct {
@@ -396,14 +396,14 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 		A string `json:"a" flag:"test-a" env:"TEST_A" default:"default-a"`
 	}
 
-	opts2 := &TagOpts{
+	opts2 := &FieldTag{
 		name:    "A",
 		json:    "a",
 		Flag:    []string{"test-a"},
 		Env:     "TEST_A",
 		Default: "default-a",
 	}
-	getter := func(path string) *TagOpts {
+	getter := func(path string) *FieldTag {
 		switch path {
 		case "a":
 			return opts2
@@ -413,10 +413,10 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 	}
 
 	var cases = []struct {
-		tagOptsGetter func(string) *TagOpts
-		want          *TagOpts
+		tagOptsGetter func(string) *FieldTag
+		want          *FieldTag
 	}{
-		{nil, &TagOpts{
+		{nil, &FieldTag{
 			name:    "A",
 			json:    "a",
 			Flag:    []string{"test-a"},

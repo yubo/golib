@@ -1,13 +1,11 @@
 package proc
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/coreos/go-systemd/daemon"
@@ -28,61 +26,18 @@ var (
 )
 
 type Process struct {
-	name          string
-	status        ProcessStatus
-	hookOps       [ACTION_SIZE][]*HookOps
-	namedFlagSets flag.NamedFlagSets
-	initDone      bool
-	noloop        bool
+	*ProcessOptions
 
 	debugConfig bool // print config after proc.init()
 	debugFlags  bool // print flags after proc.init()
 	dryrun      bool // will exit after proc.init()
 
-	ProcessOptions
-
-	wg     sync.WaitGroup
-	cancel context.CancelFunc
-	ctx    context.Context
-	err    error
-}
-
-type ProcessOptions struct {
-	group         bool
-	allowEnv      bool
-	allowEmptyEnv bool
-	maxDepth      int
-}
-
-type ProcessOption func(*ProcessOptions)
-
-func WithGroup() ProcessOption {
-	return func(p *ProcessOptions) {
-		p.group = true
-	}
-}
-
-func WithEnv(allowEnv, allowEmptyEnv bool) ProcessOption {
-	return func(p *ProcessOptions) {
-		p.allowEnv = allowEnv
-		p.allowEmptyEnv = allowEmptyEnv
-	}
-}
-
-func WithMaxDepthParser(maxDepth int) ProcessOption {
-	return func(p *ProcessOptions) {
-		p.maxDepth = maxDepth
-	}
-}
-
-func NewProcess(opts ...ProcessOption) *Process {
-	p := newProcess()
-
-	for _, opt := range opts {
-		opt(&p.ProcessOptions)
-	}
-
-	return p
+	initDone      bool
+	sigsCh        chan os.Signal
+	hookOps       [ACTION_SIZE][]*HookOps
+	namedFlagSets flag.NamedFlagSets
+	status        ProcessStatus
+	err           error
 }
 
 func newProcess() *Process {
@@ -91,29 +46,27 @@ func newProcess() *Process {
 		hookOps[i] = []*HookOps{}
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-
 	return &Process{
-		hookOps: hookOps,
-		ctx:     ctx,
-		cancel:  cancel,
-		ProcessOptions: ProcessOptions{
-			group:         true,
-			allowEnv:      true,
-			allowEmptyEnv: false,
-			maxDepth:      5,
-		},
+		hookOps:        hookOps,
+		sigsCh:         make(chan os.Signal, 2),
+		ProcessOptions: newProcessOptions(),
 	}
 
+}
+
+func NewProcess(opts ...ProcessOption) *Process {
+	p := newProcess()
+
+	for _, opt := range opts {
+		opt(p.ProcessOptions)
+	}
+
+	return p
 }
 
 // for test
 func Reset() {
 	DefaultProcess = NewProcess()
-}
-
-func WithContext(ctx context.Context) {
-	DefaultProcess.ctx, DefaultProcess.cancel = context.WithCancel(ctx)
 }
 
 func Start(cmd *cobra.Command) error {
@@ -124,8 +77,9 @@ func Init(cmd *cobra.Command) error {
 	return DefaultProcess.init(cmd)
 }
 
-func Stop() error {
-	return DefaultProcess.stop()
+func Shutdown() error {
+	DefaultProcess.sigsCh <- shutdownSignal
+	return nil
 }
 
 func PrintConfig(w io.Writer) {
@@ -140,9 +94,12 @@ func AddFlags(f *pflag.FlagSet) {
 	DefaultProcess.AddFlags(f)
 }
 
-// NoLoop disable listen signal notify
-func NoLoop() {
-	DefaultProcess.NoLoop()
+func Name() string {
+	return DefaultProcess.Name()
+}
+
+func Description() string {
+	return DefaultProcess.Description()
 }
 
 // RegisterHooks register hookOps as a module
@@ -213,19 +170,20 @@ func (p *Process) init(cmd *cobra.Command) error {
 		}()
 	}
 
+	// configer
 	if _, ok := ConfigerFrom(ctx); !ok {
-		opts, _ := ConfigOptsFrom(ctx)
-		configer, err := configer.NewConfiger(append(opts,
-			configer.WithFlagSet(cmd.Flags()),
-			configer.WithEnv(p.allowEnv, p.allowEmptyEnv),
-		)...)
+		configer, err := configer.NewConfiger(
+			append(p.configerOptions,
+				configer.WithFlagSet(cmd.Flags()),
+			)...)
 		if err != nil {
 			return err
 		}
 		WithConfiger(ctx, configer)
 	}
+
 	if _, ok := WgFrom(ctx); !ok {
-		WithWg(ctx, &p.wg)
+		WithWg(ctx, p.wg)
 	}
 
 	p.status = STATUS_PENDING
@@ -258,8 +216,7 @@ func (p *Process) start() error {
 }
 
 func (p *Process) loop() error {
-	sigs := make(chan os.Signal, 2)
-	signal.Notify(sigs, append(shutdownSignals, reloadSignals...)...)
+	signal.Notify(p.sigsCh, append(shutdownSignals, reloadSignals...)...)
 
 	if _, err := daemon.SdNotify(true, "READY=1\n"); err != nil {
 		klog.Errorf("Unable to send systemd daemon successful start message: %v\n", err)
@@ -270,11 +227,11 @@ func (p *Process) loop() error {
 		select {
 		case <-p.ctx.Done():
 			return p.err
-		case s := <-sigs:
+		case s := <-p.sigsCh:
 			if sigContains(s, shutdownSignals) {
-				klog.V(1).Infof("recv shutdown signal, exiting")
+				klog.Infof("recv shutdown signal, exiting")
 				if shutdown {
-					klog.V(1).Infof("recv shutdown signal, force exiting")
+					klog.Infof("recv shutdown signal, force exiting")
 					os.Exit(1)
 				}
 				shutdown = true
@@ -288,6 +245,14 @@ func (p *Process) loop() error {
 			}
 		}
 	}
+}
+
+func (p *Process) shutdown() error {
+	proc, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		return err
+	}
+	return proc.Signal(shutdownSignal)
 }
 
 // reverse order
@@ -336,8 +301,7 @@ func (p *Process) stop() error {
 func (p *Process) reload() (err error) {
 	p.status.Set(STATUS_RELOADING)
 
-	opts, _ := ConfigOptsFrom(p.ctx)
-	configer, err := configer.NewConfiger(opts...)
+	configer, err := configer.NewConfiger()
 	if err != nil {
 		p.err = err
 		return err
@@ -374,6 +338,9 @@ func (p *Process) AddFlags(f *pflag.FlagSet) {
 	f.BoolVar(&p.dryrun, "dry-run", p.debugFlags, "exit before proc.Start()")
 }
 
-func (p *Process) NoLoop() {
-	p.noloop = true
+func (p *Process) Name() string {
+	return p.name
+}
+func (p *Process) Description() string {
+	return p.description
 }

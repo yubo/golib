@@ -50,10 +50,10 @@ func TestMerge(t *testing.T) {
 		},
 	}
 	for i, c := range cases {
-		into, err := yamlToMap([]byte(c.into))
+		into, err := yamlToValues([]byte(c.into))
 		assert.NoError(t, err, i)
 
-		src, err := yamlToMap([]byte(c.src))
+		src, err := yamlToValues([]byte(c.src))
 		assert.NoError(t, err, i)
 
 		got, err := yaml.Marshal(mergeValues(into, src))

@@ -30,10 +30,10 @@ func (p *configer) RegisterConfigFields(fs *pflag.FlagSet, path string, sample i
 	}
 	o.prefixPath = path
 
-	if v, err := objToMap(sample); err != nil {
+	if v, err := objToValues(sample); err != nil {
 		return err
 	} else {
-		o.defaultValues = pathValueToTable(path, v)
+		o.defaultValues = pathValueToValues(path, v)
 	}
 
 	rv := reflect.Indirect(reflect.ValueOf(sample))
@@ -94,7 +94,7 @@ func (p *configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type,
 		}
 
 		ps := joinPath(curPath...)
-		def := opt.getDefaultValue(ps, tag)
+		def := opt.getDefaultValue(ps, tag, p.ConfigerOptions)
 		var field *configField
 
 		switch sample := reflect.New(ft).Interface().(type) {
@@ -167,7 +167,7 @@ type defaultSetter interface {
 	SetDefault(string) error
 }
 
-func newConfigFieldByValue(fs *pflag.FlagSet, path string, opt *TagOpts, value pflag.Value, defValue string) *configField {
+func newConfigFieldByValue(fs *pflag.FlagSet, path string, tag *FieldTag, value pflag.Value, defValue string) *configField {
 	rt := reflect.Indirect(reflect.ValueOf(value)).Type()
 	def := reflect.New(rt).Interface().(pflag.Value)
 
@@ -185,76 +185,76 @@ func newConfigFieldByValue(fs *pflag.FlagSet, path string, opt *TagOpts, value p
 
 	field := &configField{
 		configPath: path,
-		envName:    opt.Env,
+		envName:    tag.Env,
 		flagValue:  value,
 	}
 
-	if opt.Default != "" {
+	if tag.Default != "" {
 		field.defaultValue = def
 	}
 
-	switch len(opt.Flag) {
+	switch len(tag.Flag) {
 	case 0:
 		return field
 	// nothing
 	case 1:
-		field.flag = opt.Flag[0]
-		fs.Var(value, opt.Flag[0], opt.Description)
+		field.flag = tag.Flag[0]
+		fs.Var(value, tag.Flag[0], tag.Description)
 	case 2:
-		field.flag = opt.Flag[0]
-		field.shothand = opt.Flag[1]
-		fs.VarP(value, opt.Flag[0], opt.Flag[1], opt.Description)
+		field.flag = tag.Flag[0]
+		field.shothand = tag.Flag[1]
+		fs.VarP(value, tag.Flag[0], tag.Flag[1], tag.Description)
 	default:
 		panic("invalid flag value")
 	}
 
-	if len(field.flag) > 0 && len(opt.Deprecated) > 0 {
-		fs.MarkDeprecated(field.flag, opt.Deprecated)
+	if len(field.flag) > 0 && len(tag.Deprecated) > 0 {
+		fs.MarkDeprecated(field.flag, tag.Deprecated)
 		fs.Lookup(field.flag).Hidden = false
 	}
 
 	return field
 }
 
-func newConfigField(fs *pflag.FlagSet, path string, opt *TagOpts, varFn, varPFn, def interface{}) *configField {
+func newConfigField(fs *pflag.FlagSet, path string, tag *FieldTag, varFn, varPFn, def interface{}) *configField {
 	field := &configField{
 		configPath: path,
-		envName:    opt.Env,
+		envName:    tag.Env,
 	}
 
-	if opt.Default != "" {
+	if tag.Default != "" {
 		field.defaultValue = def
 	}
 
 	// add flag
-	switch len(opt.Flag) {
+	switch len(tag.Flag) {
 	case 0:
 		// nothing
 		return field
 	case 1:
-		field.flag = opt.Flag[0]
+		field.flag = tag.Flag[0]
 		ret := reflect.ValueOf(varFn).Call([]reflect.Value{
-			reflect.ValueOf(opt.Flag[0]),
+			reflect.ValueOf(tag.Flag[0]),
 			reflect.ValueOf(def),
-			reflect.ValueOf(opt.Description),
+			reflect.ValueOf(tag.Description),
 		})
 		field.flagValue = ret[0].Interface()
 	case 2:
-		field.flag = opt.Flag[0]
-		field.shothand = opt.Flag[1]
+		field.flag = tag.Flag[0]
+		field.shothand = tag.Flag[1]
 		ret := reflect.ValueOf(varPFn).Call([]reflect.Value{
-			reflect.ValueOf(opt.Flag[0]),
-			reflect.ValueOf(opt.Flag[1]),
+			reflect.ValueOf(tag.Flag[0]),
+			reflect.ValueOf(tag.Flag[1]),
 			reflect.ValueOf(def),
-			reflect.ValueOf(opt.Description),
+			reflect.ValueOf(tag.Description),
 		})
 		field.flagValue = ret[0].Interface()
 	default:
 		panic("invalid flag value")
 	}
 
-	if len(field.flag) > 0 && len(opt.Deprecated) > 0 {
-		fs.MarkDeprecated(field.flag, opt.Deprecated)
+	if len(field.flag) > 0 && len(tag.Deprecated) > 0 {
+		fs.MarkDeprecated(field.flag, tag.Deprecated)
 		fs.Lookup(field.flag).Hidden = false
 	}
 
@@ -268,13 +268,13 @@ func newConfigFieldsOptions(c *configer) *configFieldsOptions {
 // for addConfigs
 type configFieldsOptions struct {
 	*configer
-	tags          map[string]*TagOpts
+	tags          map[string]*FieldTag
 	prefixPath    string
 	defaultValues map[string]interface{}
 }
 
-func (p *configFieldsOptions) getTagOpts(sf reflect.StructField, paths []string) *TagOpts {
-	tag := getTagOpts(sf)
+func (p *configFieldsOptions) getTagOpts(sf reflect.StructField, paths []string) *FieldTag {
+	tag := GetFieldTag(sf)
 
 	if p == nil || p.tags == nil {
 		return tag
@@ -300,10 +300,32 @@ func (p *configFieldsOptions) getTagOpts(sf reflect.StructField, paths []string)
 }
 
 // env > value from registered config > structField tag
-func (p *configFieldsOptions) getDefaultValue(path string, tag *TagOpts) string {
+func (p *configFieldsOptions) getDefaultValue(path string, tag *FieldTag, opts *ConfigerOptions) string {
+	// overrideValues
+	if v, err := Values(opts.overrideValues).PathValue(path); err == nil {
+		if !isZero(v) {
+			if def := cast.ToString(v); len(def) > 0 {
+				tag.Default = def
+				tag.Description += " (Read Only)"
+				return def
+			}
+		}
+	}
+
+	// env
 	if p.enableEnv && tag.Env != "" {
 		if def, ok := p.getEnv(tag.Env); ok {
 			if len(def) > 0 {
+				tag.Default = def
+				return def
+			}
+		}
+	}
+
+	// defaultValues
+	if v, err := Values(opts.defaultValues).PathValue(path); err == nil {
+		if !isZero(v) {
+			if def := cast.ToString(v); len(def) > 0 {
 				tag.Default = def
 				return def
 			}
@@ -325,7 +347,7 @@ func (p *configFieldsOptions) getDefaultValue(path string, tag *TagOpts) string 
 type ConfigFieldsOption func(*configFieldsOptions)
 
 // WithTags just for AddConfigs
-func WithTags(tags map[string]*TagOpts) ConfigFieldsOption {
+func WithTags(tags map[string]*FieldTag) ConfigFieldsOption {
 	return func(o *configFieldsOptions) {
 		o.tags = tags
 	}

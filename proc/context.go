@@ -2,7 +2,6 @@ package proc
 
 import (
 	"context"
-	"os"
 	"sync"
 
 	"github.com/yubo/golib/configer"
@@ -12,12 +11,9 @@ import (
 type key int
 
 const (
-	nameKey key = iota
-	descriptionKey
-	wgKey
+	hookOptsKey key = iota
 	configerKey
-	configOptsKey
-	hookOptsKey
+	wgKey
 	attrKey // attributes
 )
 
@@ -28,32 +24,6 @@ func NewContext() context.Context {
 // WithValue returns a copy of parent in which the value associated with key is val.
 func WithValue(parent context.Context, key interface{}, val interface{}) context.Context {
 	return context.WithValue(parent, key, val)
-}
-
-func WithName(ctx context.Context, name string) context.Context {
-	return WithValue(ctx, nameKey, name)
-}
-
-// NameFrom returns the value of the name key on the ctx
-func NameFrom(ctx context.Context) string {
-	name, ok := ctx.Value(nameKey).(string)
-	if !ok {
-		return os.Args[0]
-	}
-	return name
-}
-
-func WithDescription(ctx context.Context, description string) context.Context {
-	return WithValue(ctx, descriptionKey, description)
-}
-
-// DescriptionFrom returns the value of the description key on the ctx
-func DescriptionFrom(ctx context.Context) string {
-	description, ok := ctx.Value(descriptionKey).(string)
-	if !ok {
-		return os.Args[0]
-	}
-	return description
 }
 
 // WithWg returns a copy of parent in which the user value is set
@@ -94,23 +64,23 @@ func ConfigerMustFrom(ctx context.Context) configer.Configer {
 	return cf
 }
 
-func WithConfigOps(parent context.Context, optsInput ...configer.ConfigerOption) context.Context {
-	opts, ok := parent.Value(configOptsKey).(*[]configer.ConfigerOption)
-	if ok {
-		*opts = append(*opts, optsInput...)
-		return parent
-	}
-
-	return WithValue(parent, configOptsKey, &optsInput)
-}
-
-func ConfigOptsFrom(ctx context.Context) ([]configer.ConfigerOption, bool) {
-	opts, ok := ctx.Value(configOptsKey).(*[]configer.ConfigerOption)
-	if ok {
-		return *opts, true
-	}
-	return nil, false
-}
+//func WithConfigOptions(parent context.Context, optsInput ...configer.ConfigerOption) context.Context {
+//	opts, ok := parent.Value(configOptsKey).(*[]configer.ConfigerOption)
+//	if ok {
+//		*opts = append(*opts, optsInput...)
+//		return parent
+//	}
+//
+//	return WithValue(parent, configOptsKey, &optsInput)
+//}
+//
+//func ConfigOptionsFrom(ctx context.Context) ([]configer.ConfigerOption, bool) {
+//	opts, ok := ctx.Value(configOptsKey).(*[]configer.ConfigerOption)
+//	if ok {
+//		return *opts, true
+//	}
+//	return nil, false
+//}
 
 func WithHookOps(parent context.Context, ops *HookOps) context.Context {
 	return WithValue(parent, hookOptsKey, ops)
