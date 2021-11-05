@@ -27,6 +27,11 @@ func mergePathObj(into map[string]interface{}, path string, obj interface{}) (ma
 	return mergePathValues(into, path, values), nil
 }
 
+func mergePathValue(into map[string]interface{}, path string, value interface{}) map[string]interface{} {
+	return mergeValues(into, pathValueToValues(path, value))
+
+}
+
 func mergePathFields(into map[string]interface{}, path []string, fields []*configField) map[string]interface{} {
 	for _, f := range fields {
 		if v := f.defaultValue; v != nil {
@@ -110,9 +115,9 @@ func isZero(in interface{}) bool {
 	return reflect.ValueOf(in).IsZero()
 }
 
-func pathValueToValues(path string, val interface{}) map[string]interface{} {
+func pathValueToValues(path string, value interface{}) map[string]interface{} {
 	paths := parsePath(path)
-	p := val
+	p := value
 
 	for i := len(paths) - 1; i >= 0; i-- {
 		p = map[string]interface{}{paths[i]: p}

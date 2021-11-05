@@ -5,6 +5,7 @@ package configer
 // ## value priority(desc order):
 //  - WithOverrideYaml(), WithOverride()
 //  - flag (os.Args)
+//    - args flag
 //    - fileValues (--set-file)
 //    - value (--set, --set-string)
 //    - valueFile (--values, -f)
@@ -106,6 +107,7 @@ func newConfiger() *configer {
 	return &configer{
 		ConfigerOptions: newConfigerOptions(),
 		data:            map[string]interface{}{},
+		env:             map[string]interface{}{},
 		path:            []string{},
 	}
 }
@@ -149,11 +151,14 @@ func (p *configer) parse() (err error) {
 
 	base := map[string]interface{}{}
 
+	// merge default from RegisterConfigFields.sample
+	base = mergePathFields(base, p.path, p.fields)
+
 	// merge WithDefault values
 	base = mergeValues(base, p.defaultValues)
 
-	// merge default from RegisterConfigFields.sample
-	base = mergePathFields(base, p.path, p.fields)
+	// merge env from RegisterConfigFields.sample
+	base = mergeValues(base, p.env)
 
 	// configFile & valueFile --values
 	for _, filePath := range append(p.valueFiles, p.ConfigerOptions.filesOverride...) {

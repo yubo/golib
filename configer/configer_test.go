@@ -280,7 +280,7 @@ ctrl:
 	assert.Equalf(t, want, got, "configer read %s", conf2)
 }
 
-func TestConfigWithBase(t *testing.T) {
+func TestWithValueFile(t *testing.T) {
 	dir := createTestDir([]templateFile{
 		{"base.yml", "foo1: base1\nfoo3: base3"},
 		{"conf.yml", "foo1: conf1\nfoo2: conf2"},
@@ -306,7 +306,7 @@ func TestConfigWithBase(t *testing.T) {
 	}
 }
 
-func TestConfigWithBase2(t *testing.T) {
+func TestWithDefaultYaml(t *testing.T) {
 	dir := createTestDir([]templateFile{
 		{"conf.yml", "foo:\n  foo1: conf1\n  foo2: conf2"},
 	})
@@ -334,7 +334,35 @@ func TestConfigWithBase2(t *testing.T) {
 	}
 }
 
-func TestConfigWithValueFile(t *testing.T) {
+func TestWithOverride(t *testing.T) {
+	dir := createTestDir([]templateFile{
+		{"conf.yml", "foo:\n  foo1: conf1\n  foo2: conf2"},
+	})
+	// Clean up after the test; another quirk of running as an example.
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	cf, _ := NewFactory().NewConfiger(
+		WithValueFile("conf.yml"),
+		WithOverrideYaml("foo", "foo1: override1"),
+	)
+
+	var cases = []struct {
+		path string
+		want interface{}
+	}{
+		{"foo.foo1", "override1"},
+		{"foo.foo2", "conf2"},
+	}
+
+	for _, c := range cases {
+		got := cf.GetRaw(c.path)
+		assert.Equal(t, c.want, got)
+	}
+
+}
+
+func TestConfigWithFlagSets(t *testing.T) {
 	dir := createTestDir([]templateFile{
 		{"base.yml", `
 a: base_a
@@ -469,7 +497,7 @@ func setFlagSet(fs *pflag.FlagSet, values map[string]string) {
 	})
 }
 
-func TestConfigerPriority(t *testing.T) {
+func TestPriority(t *testing.T) {
 	type Foo struct {
 		A string `json:"a" flag:"test-a" env:"TEST_A" default:"default-a"`
 	}
@@ -478,47 +506,137 @@ func TestConfigerPriority(t *testing.T) {
 	os.Chdir(dir)
 
 	var cases = []struct {
-		flag string
-		env  string
-		file string
-		want interface{}
-	}{
-		{"flag-a", "", "", "flag-a"},
-		{"flag-a", "env-a", "", "flag-a"},
-		{"flag-a", "env-a", "file-a", "flag-a"},
-		{"", "env-a", "", "env-a"},
-		{"", "env-a", "file-a", "file-a"},
-		{"", "", "file-a", "file-a"},
-		{"", "", "", "default-a"},
-	}
+		name         string
+		override     string
+		overrideYaml string
+		flag         string
+		setFile      string
+		set          string
+		setString    string
+		file         string
+		env          string
+		def          string // WithDefault
+		defYaml      string // WithDefaultYaml
+		sample       string // RegisterConfigFields
+		tag          string // withTags
+		want         interface{}
+	}{{
+		name: "override",
+		flag: "override-a",
+		want: "override-a",
+	}, {
+		name: "flag",
+		flag: "flag-a",
+		want: "flag-a",
+	}, {
+		name:    "--set-file",
+		setFile: "set-file-a",
+		want:    "set-file-a",
+	}, {
+		name: "--set",
+		set:  "set-a",
+		want: "set-a",
+	}, {
+		name:      "--set-string",
+		setString: "set-string-a",
+		want:      "set-string-a",
+	}, {
+		name: "--values",
+		file: "file-a",
+		want: "file-a",
+	}, {
+		name: "RegisterConfigFields env",
+		env:  "env-a",
+		want: "env-a",
+	}, {
+		name: "WithDefault",
+		def:  "def-a",
+		want: "def-a",
+	}, {
+		name:    "WithDefaultYaml",
+		defYaml: "def-yaml-a",
+		want:    "def-yaml-a",
+	}, {
+		name:   "RegisterConfigFields sample",
+		sample: "sample-a",
+		want:   "sample-a",
+	}, {
+		name: "RegisterConfigFields tag",
+		tag:  "tag-a",
+		want: "tag-a",
+	}, {
+		name: "RegisterConfigFields default",
+		want: "default-a",
+	}}
 
 	for _, c := range cases {
-		factory := NewFactory()
-		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+		t.Run(c.name, func(t *testing.T) {
+			cff := NewFactory()
+			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
-		err := factory.RegisterConfigFields(fs, "", &Foo{})
-		assert.NoError(t, err)
+			if c.env != "" {
+				os.Setenv("TEST_A", c.env)
+			} else {
+				os.Unsetenv("TEST_A")
+			}
 
-		if c.flag != "" {
-			setFlagSet(fs, map[string]string{"test-a": c.flag})
-		}
+			fopts := []ConfigFieldsOption{}
+			if c.tag != "" {
+				tags := map[string]*FieldTag{
+					"a": {Default: c.tag},
+				}
+				fopts = append(fopts, WithTags(tags))
+			}
 
-		if c.env != "" {
-			os.Setenv("TEST_A", c.env)
-		} else {
-			os.Unsetenv("TEST_A")
-		}
+			err := cff.RegisterConfigFields(fs, "", &Foo{A: c.sample}, fopts...)
+			assert.NoError(t, err)
 
-		if c.file != "" {
-			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("a: "+c.file), 0666)
-		} else {
-			ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("#"), 0666)
-		}
+			args := []string{}
 
-		cfg, err := factory.NewConfiger(WithFlagSet(fs), WithValueFile("base.yml"))
-		assert.NoError(t, err)
+			if c.flag != "" {
+				args = append(args, "--test-a="+c.flag)
+			}
+			if c.setFile != "" {
+				ioutil.WriteFile(filepath.Join(dir, "set_file.yml"), []byte(c.setFile), 0666)
+				args = append(args, "--set-file=a="+filepath.Join(dir, "set_file.yml"))
+			}
+			if c.set != "" {
+				args = append(args, "--set=a="+c.set)
+			}
+			if c.setString != "" {
+				args = append(args, "--set-string=a="+c.setString)
+			}
 
-		assert.Equalf(t, c.want, cfg.GetRaw("a"), "flag [%s] env [%s] file [%s] config [%s]", c.flag, c.env, c.file, cfg)
+			if c.file != "" {
+				ioutil.WriteFile(filepath.Join(dir, "base.yml"), []byte("a: "+c.file), 0666)
+				args = append(args, "--values="+filepath.Join(dir, "base.yml"))
+			}
+
+			cff.AddFlags(fs)
+
+			err = fs.Parse(args)
+			assert.NoError(t, err)
+
+			opts := []ConfigerOption{WithFlagSet(fs)}
+
+			if c.override != "" {
+				opts = append(opts, WithOverride("", &Foo{A: c.override}))
+			}
+			if c.overrideYaml != "" {
+				opts = append(opts, WithOverrideYaml("", "a: "+c.overrideYaml))
+			}
+			if c.def != "" {
+				opts = append(opts, WithDefault("", &Foo{A: c.def}))
+			}
+			if c.defYaml != "" {
+				opts = append(opts, WithDefaultYaml("", "a: "+c.defYaml))
+			}
+
+			cfg, err := cff.NewConfiger(opts...)
+			assert.NoError(t, err)
+
+			assert.Equalf(t, c.want, cfg.GetRaw("a"), "case %+v env [%s] cfg [%s]", c, os.Getenv("TEST_A"), cfg)
+		})
 	}
 }
 
