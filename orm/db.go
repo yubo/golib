@@ -325,9 +325,6 @@ func (p *Rows) Rows(dst interface{}) error {
 				break
 			}
 		}
-		if n == 0 && !p.ignoreNotFound {
-			return errors.NewNotFound("rows")
-		}
 		return nil
 	}
 
@@ -345,10 +342,6 @@ func (p *Rows) Rows(dst interface{}) error {
 		if n += 1; n >= limit {
 			break
 		}
-	}
-
-	if n == 0 && !p.ignoreNotFound {
-		return errors.NewNotFound("rows")
 	}
 	return nil
 }
