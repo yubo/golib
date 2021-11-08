@@ -71,6 +71,6 @@ func WithWaitGroup(wg *sync.WaitGroup) ProcessOption {
 
 func WithConfigOptions(options ...configer.ConfigerOption) ProcessOption {
 	return func(p *ProcessOptions) {
-		p.configerOptions = options
+		p.configerOptions = append(p.configerOptions, options...)
 	}
 }

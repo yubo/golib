@@ -26,7 +26,7 @@ func init() {
 	var err error
 
 	if db, err = orm.Open(driver, dsn); err == nil {
-		if err = db.DB().Ping(); err == nil {
+		if err = db.RawDB().Ping(); err == nil {
 			available = true
 		}
 		db.Close()

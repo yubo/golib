@@ -138,6 +138,15 @@ func (p *configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type,
 		case *map[string]string:
 			field = newConfigField(fs, ps, tag, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(def))
 		default:
+			if ft.Kind() == reflect.Slice {
+				if ft = ft.Elem(); ft.Kind() == reflect.Ptr {
+					ft = ft.Elem()
+				}
+				if ft.Kind() == reflect.Struct {
+					// ignore []struct{}
+					continue
+				}
+			}
 			panic(fmt.Sprintf("add config unsupported type %s path %s kind %s", ft.String(), ps, ft.Kind()))
 		}
 		p.fields = append(p.fields, field)

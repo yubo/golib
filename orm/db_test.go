@@ -33,7 +33,7 @@ func init() {
 	driver = envDef("TEST_DB_DRIVER", "sqlite3")
 	dsn = envDef("TEST_DB_DSN", "file:test2.db?cache=shared&mode=memory")
 	if db, err := Open(driver, dsn); err == nil {
-		if err = db.DB().Ping(); err == nil {
+		if err = db.RawDB().Ping(); err == nil {
 			available = true
 		}
 		db.Close()
@@ -432,7 +432,7 @@ func TestQueryRowsWithCount(t *testing.T) {
 
 func TestPing(t *testing.T) {
 	runTests(t, dsn, func(dbt *DBTest) {
-		if err := dbt.db.DB().Ping(); err != nil {
+		if err := dbt.db.RawDB().Ping(); err != nil {
 			dbt.fail("Ping", "Ping", err)
 		}
 	})

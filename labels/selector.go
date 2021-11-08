@@ -869,10 +869,10 @@ func (p *Parser) parseExactValue() (sets.String, error) {
 //
 func Parse(selector string, opts ...field.PathOption) (Selector, error) {
 	parsedSelector, err := parse(selector, field.ToPath(opts...))
-	if err == nil {
-		return parsedSelector, nil
+	if err != nil {
+		return nil, err
 	}
-	return nil, err
+	return parsedSelector, nil
 }
 
 // parse parses the string representation of the selector and returns the internalSelector struct.

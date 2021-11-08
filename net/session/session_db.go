@@ -47,7 +47,7 @@ func newDbStorage(cf *Config, opts *Options) (storage, error) {
 		return nil, fmt.Errorf("unable get db storage")
 	}
 
-	if err := st.db.DB().Ping(); err != nil {
+	if err := st.db.RawDB().Ping(); err != nil {
 		return nil, err
 	}
 

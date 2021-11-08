@@ -15,6 +15,7 @@ type Options struct {
 	greatest        string
 	driver          string
 	dsn             string
+	ignoreNotFound  bool
 	withoutPing     bool
 	maxRows         int
 	maxIdleCount    *int
@@ -36,6 +37,12 @@ func (p *Options) Validate() error {
 func WithContext(ctx context.Context) Option {
 	return func(o *Options) {
 		o.ctx = ctx
+	}
+}
+
+func WithIgnoreNotFound() Option {
+	return func(o *Options) {
+		o.ignoreNotFound = true
 	}
 }
 
@@ -74,7 +81,7 @@ func WithMaxIdleCount(n int) Option {
 		o.maxIdleCount = &n
 	}
 }
-func WithMxaOpenConns(n int) Option {
+func WithMaxOpenConns(n int) Option {
 	return func(o *Options) {
 		o.maxOpenConns = &n
 	}

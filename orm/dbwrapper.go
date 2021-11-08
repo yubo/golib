@@ -80,6 +80,7 @@ func (p *dbWrapper) Query(query string, args ...interface{}) *Rows {
 	dlogSql(2, query, args...)
 	ret := &Rows{
 		db:      p,
+		Options: p.Options,
 		query:   query,
 		args:    args,
 		maxRows: p.maxRows,

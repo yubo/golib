@@ -14,7 +14,7 @@ import (
 )
 
 type DB interface {
-	DB() *sql.DB
+	RawDB() *sql.DB
 	Close() error
 	Begin() (Tx, error)
 	BeginTx(ctx context.Context, ops *sql.TxOptions) (Tx, error)
@@ -111,7 +111,7 @@ func open(opts *Options) (DB, error) {
 	}, nil
 }
 
-func (p *ormDB) DB() *sql.DB {
+func (p *ormDB) RawDB() *sql.DB {
 	return p.db
 }
 
@@ -137,10 +137,8 @@ func (p *ormDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
 }
 
 func (p *ormDB) ExecRows(bytes []byte) (err error) {
-	var (
-		cmds []string
-		tx   *sql.Tx
-	)
+	var cmds []string
+	var tx *sql.Tx
 
 	if tx, err = p.db.Begin(); err != nil {
 		return fmt.Errorf("Begin() err: %s", err)
@@ -215,6 +213,7 @@ func (p *ormTx) Commit() error {
 }
 
 type Rows struct {
+	*Options
 	db    DBWrapper
 	query string
 	args  []interface{}
@@ -237,14 +236,17 @@ func (p *Rows) Row(dst ...interface{}) error {
 
 	if p.rows.Next() {
 		if len(dst) == 1 && isStructMode(dst[0]) {
-			// klog.V(5).Infof("enter row scan struct")
 			return p.scanRow(dst[0])
 		}
 
-		// klog.V(5).Infof("enter row scan")
 		return p.rows.Scan(dst...)
 	}
-	return errors.NewNotFound("rows")
+
+	if !p.ignoreNotFound {
+		return errors.NewNotFound("rows")
+	}
+
+	return nil
 }
 
 // scanRow scan row result into dst struct
@@ -323,6 +325,9 @@ func (p *Rows) Rows(dst interface{}) error {
 				break
 			}
 		}
+		if n == 0 && !p.ignoreNotFound {
+			return errors.NewNotFound("rows")
+		}
 		return nil
 	}
 
@@ -342,6 +347,9 @@ func (p *Rows) Rows(dst interface{}) error {
 		}
 	}
 
+	if n == 0 && !p.ignoreNotFound {
+		return errors.NewNotFound("rows")
+	}
 	return nil
 }
 
@@ -563,10 +571,8 @@ func (p *rowsIterator) Row(dst ...interface{}) error {
 	}
 
 	if len(dst) == 1 && isStructMode(dst[0]) {
-		// klog.V(5).Infof("enter row scan struct")
 		return p.Rows.scanRow(dst[0])
 	}
 
-	// klog.V(5).Infof("enter row scan")
 	return p.rows.Scan(dst...)
 }
