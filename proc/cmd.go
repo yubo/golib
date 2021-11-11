@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/yubo/golib/cli/globalflag"
 	"github.com/yubo/golib/configer"
 )
 
@@ -15,15 +14,11 @@ func NewRootCmd(opts ...ProcessOption) *cobra.Command {
 }
 
 func InitProcFlags(cmd *cobra.Command) {
-	DefaultProcess.InitProcFlags(cmd)
+	DefaultProcess.AddGlobalFlags(cmd)
 }
 
 // with flag section
 func (p *Process) NewRootCmd(opts ...ProcessOption) *cobra.Command {
-	for _, opt := range opts {
-		opt(p.ProcessOptions)
-	}
-
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -32,42 +27,17 @@ func (p *Process) NewRootCmd(opts ...ProcessOption) *cobra.Command {
 		Short:        p.description,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return DefaultProcess.Start(cmd)
+			return p.Start()
 		},
 	}
 
-	p.InitProcFlags(cmd)
+	p.Init(cmd, opts...)
+
+	p.AddRegisteredFlags(cmd.Flags())
 
 	return cmd
 }
 
-func (p *Process) InitProcFlags(cmd *cobra.Command) {
-	// add flags
-	fs := cmd.Flags()
-	fs.ParseErrorsWhitelist.UnknownFlags = true
-
-	nfs := NamedFlagSets()
-
-	// add klog, logs, help flags
-	globalflag.AddGlobalFlags(nfs.FlagSet("global"))
-
-	// add configer flags
-	configer.AddFlags(nfs.FlagSet("global"))
-
-	// add process flags
-	AddFlags(nfs.FlagSet("global"))
-
-	// add registed fs into cmd.Flags
-	for _, f := range nfs.FlagSets {
-		fs.AddFlagSet(f)
-	}
-
-	if p.group {
-		setGroupCommandFunc(cmd)
-	}
-
-}
-
 func RegisterFlags(configPath, groupName string, sample interface{}, opts ...configer.ConfigFieldsOption) {
-	configer.RegisterConfigFields(NamedFlagSets().FlagSet(groupName), configPath, sample, opts...)
+	configer.Register(NamedFlagSets().FlagSet(groupName), configPath, sample, opts...)
 }

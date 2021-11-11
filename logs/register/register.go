@@ -97,5 +97,5 @@ func init() {
 	proc.RegisterHooks(hookOps)
 
 	cf := newConfig()
-	proc.RegisterFlags(moduleName, "logs", cf, configer.WithTags(cf.tags()))
+	proc.RegisterFlags(moduleName, "logs", cf, configer.WithTags(cf.tags))
 }

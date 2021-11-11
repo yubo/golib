@@ -67,13 +67,15 @@ func TestNamedCertKeyArrayConfig(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		cff := configer.NewFactory()
+		cff := configer.NewConfiger()
 		fs := pflag.NewFlagSet("testNamedCertKeyArray", pflag.ContinueOnError)
 
 		{
-			err := cff.RegisterConfigFields(fs, "",
+			err := cff.Register(fs, "",
 				&Foo{Certs: NamedCertKeyArray{value: test.def}})
 			assert.NoError(t, err, i)
+
+			cff.AddRegisteredFlags(fs)
 		}
 
 		args := []string{}
@@ -83,7 +85,7 @@ func TestNamedCertKeyArrayConfig(t *testing.T) {
 		err := fs.Parse(args)
 		assert.NoError(t, err, i)
 
-		cf, err := cff.NewConfiger(configer.WithFlagSet(fs), configer.WithDefaultYaml("", test.fileContent))
+		cf, err := cff.Parse(configer.WithDefaultYaml("", test.fileContent))
 		assert.NoError(t, err, i)
 
 		// debug

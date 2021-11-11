@@ -7,6 +7,7 @@ import (
 	"os/user"
 
 	"github.com/spf13/cobra"
+	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/proc"
 	"sigs.k8s.io/yaml"
 )
@@ -51,7 +52,13 @@ func newServerCmd() *cobra.Command {
 		proc.RegisterFlags(moduleName, "golib examples", c)
 	}
 
-	return proc.NewRootCmd(proc.WithoutLoop())
+	return proc.NewRootCmd(
+		proc.WithoutLoop(),
+		proc.WithConfigOptions(
+			configer.WithDefaultYaml("golibConfig", "city: wuhan"),
+			configer.WithOverrideYaml("golibConfig", "phone: \"010-12345\""),
+		),
+	)
 }
 
 func start(ctx context.Context) error {

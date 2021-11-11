@@ -51,10 +51,6 @@ func NewAggregate(errlist []error) Aggregate {
 	var errs []error
 	for _, e := range errlist {
 		if e != nil {
-			if es, ok := e.(aggregate); ok {
-				errs = append(errs, es...)
-				continue
-			}
 			errs = append(errs, e)
 		}
 	}

@@ -637,6 +637,19 @@ func (q *Quantity) String() string {
 	return q.s
 }
 
+func (q *Quantity) Set(val string) error {
+	parsed, err := ParseQuantity(strings.TrimSpace(val))
+	if err != nil {
+		return err
+	}
+	*q = parsed
+	return nil
+}
+
+func (q *Quantity) Type() string {
+	return "quantity"
+}
+
 // MarshalJSON implements the json.Marshaller interface.
 func (q Quantity) MarshalJSON() ([]byte, error) {
 	if len(q.s) > 0 {
@@ -755,7 +768,7 @@ func (q *Quantity) ScaledValue(scale Scale) int64 {
 }
 
 // Set sets q's value to be value.
-func (q *Quantity) Set(value int64) {
+func (q *Quantity) SetValue(value int64) {
 	q.SetScaled(value, 0)
 }
 

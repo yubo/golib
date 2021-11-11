@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -24,15 +25,15 @@ func TestVerify(t *testing.T) {
 		ret, _ := strconv.ParseBool(env(key, def))
 		return ret
 	}
-	username := env("LDAP_USR", "yubo")
-	password := env("LDAP_PWD", "12341234")
+	username := env("LDAP_USR", "")
+	password := env("LDAP_PWD", "")
 
 	l := &Ldap{
 		LdapConfig: &LdapConfig{
 			Addr:    env("LDAP_ADDR", "localhost:389"),
-			BaseDN:  env("LDAP_BASE_DN", "dc=yubo,dc=org"),
-			BindDN:  env("LDAP_BIND_DN", "yubo"),
-			BindPwd: env("LDAP_BIND_PWD", "12341234"),
+			BaseDN:  env("LDAP_BASE_DN", "cn=root,dc=example,dc=com"),
+			BindDN:  env("LDAP_BIND_DN", ""),
+			BindPwd: env("LDAP_BIND_PWD", ""),
 			Filter:  env("LDAP_FILTER", "(&(objectClass=posixAccount)(cn=%s))"),
 			SSL:     envbool("LDAP_SSL", "false"),
 			TLS:     envbool("LDAP_TLS", "false"),
@@ -60,6 +61,10 @@ func TestVerify(t *testing.T) {
 		"uid",
 	)
 	if err != nil {
+		if strings.HasPrefix(err.Error(), "dial ldap") {
+			t.Logf("ignore err: %s", err)
+			return
+		}
 		t.Fatalf("err: %s\n", err)
 	}
 

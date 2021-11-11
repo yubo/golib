@@ -964,7 +964,7 @@ func TestNewSet(t *testing.T) {
 
 		for _, item := range table {
 			q := NewQuantity(0, item.format)
-			q.Set(item.value)
+			q.SetValue(item.value)
 			if asDec {
 				q.ToDec()
 			}
@@ -1060,7 +1060,7 @@ func TestUninitializedNoCrash(t *testing.T) {
 func TestDeepCopy(t *testing.T) {
 	q := NewQuantity(5, DecimalSI)
 	c := q.DeepCopy()
-	c.Set(6)
+	c.SetValue(6)
 	if q.Value() == 6 {
 		t.Errorf("Copy didn't")
 	}

@@ -37,6 +37,11 @@ func (v Values) YAML() (string, error) {
 	return string(b), err
 }
 
+func (v Values) String() string {
+	b, _ := yaml.Marshal(v)
+	return string(b)
+}
+
 // Table gets a table (YAML subsection) from a Values object.
 //
 // The table is returned as a Values.

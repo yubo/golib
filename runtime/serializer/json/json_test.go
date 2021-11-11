@@ -18,7 +18,6 @@ package json_test
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/yubo/golib/runtime"
@@ -93,60 +92,13 @@ func TestDecode(t *testing.T) {
 		//expectedGVK    *schema.GroupVersionKind
 	}{
 		{
-			data: []byte("{}"),
-
-			//expectedGVK: &schema.GroupVersionKind{},
-			errFn: func(err error) bool { return strings.Contains(err.Error(), "Object 'Kind' is missing in") },
-		},
-		{
-			data: []byte("{}"),
-			//defaultGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			//creater:    &mockCreater{err: fmt.Errorf("fake error")},
-
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			errFn: func(err error) bool { return err.Error() == "fake error" },
-		},
-		{
-			data: []byte("{}"),
-			//defaultGVK:     &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			//creater:        &mockCreater{obj: &testDecodable{}},
-			expectedObject: &testDecodable{},
-			//expectedGVK:    &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-		},
-
-		// version without group is not defaulted
-		{
-			data: []byte(`{"apiVersion":"blah"}`),
-			//defaultGVK:     &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			//creater:        &mockCreater{obj: &testDecodable{}},
-			expectedObject: &testDecodable{},
-			//expectedGVK:    &schema.GroupVersionKind{Kind: "Test", Group: "", Version: "blah"},
-		},
-		// group without version is defaulted
-		{
-			data: []byte(`{"apiVersion":"other/"}`),
-			//defaultGVK:     &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			//creater:        &mockCreater{obj: &testDecodable{}},
-			expectedObject: &testDecodable{},
-			//expectedGVK:    &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-		},
-		// group version, kind is defaulted
-		{
-			data: []byte(`{"apiVersion":"other1/blah1"}`),
-			//defaultGVK:     &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			//creater:        &mockCreater{obj: &testDecodable{}},
-			expectedObject: &testDecodable{},
-			//expectedGVK:    &schema.GroupVersionKind{Kind: "Test", Group: "other1", Version: "blah1"},
-		},
-		// gvk all provided then not defaulted at all
-		{
 			data: []byte(`{"kind":"Test","apiVersion":"other/blah"}`),
+			into: &testDecodable{},
 			//defaultGVK:     &schema.GroupVersionKind{Kind: "Test1", Group: "other1", Version: "blah1"},
 			//creater:        &mockCreater{obj: &testDecodable{}},
 			expectedObject: &testDecodable{},
 			//expectedGVK:    &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 		},
-
 		// accept runtime.Unknown as into and bypass creator
 		{
 			data: []byte(`{}`),
@@ -202,27 +154,6 @@ func TestDecode(t *testing.T) {
 				Value: 1,
 			},
 		},
-		// registered types get defaulted by the into object kind even without version, but return an error
-		{
-			data: []byte(`{"value":1,"Other":"test"}`),
-			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: ""}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: ""},
-			errFn: func(err error) bool { return strings.Contains(err.Error(), "Object 'apiVersion' is missing in") },
-			expectedObject: &testDecodable{
-				Other: "test",
-				Value: 1,
-			},
-		},
-		// Error on invalid number
-		{
-			data: []byte(`{"kind":"Test","apiVersion":"other/blah","interface":1e1000}`),
-			//creater:     &mockCreater{obj: &testDecodable{}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			errFn: func(err error) bool {
-				return strings.Contains(err.Error(), `json_test.testDecodable.Interface: DecodeNumber: strconv.ParseFloat: parsing "1e1000": value out of range`)
-			},
-		},
 		// Unmarshalling is case-sensitive
 		{
 			// "VaLue" should have been "value"
@@ -244,79 +175,6 @@ func TestDecode(t *testing.T) {
 			expectedObject: &testDecodable{
 				Spec: DecodableSpec{A: 1, H: 3},
 			},
-		},
-		// Unknown fields should return an error from the strict JSON deserializer.
-		{
-			data: []byte(`{"unknown": 1}`),
-			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			errFn: func(err error) bool {
-				return strings.Contains(err.Error(), "found unknown field")
-			},
-			strict: true,
-		},
-		// Unknown fields should return an error from the strict YAML deserializer.
-		{
-			data: []byte("unknown: 1\n"),
-			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			errFn: func(err error) bool {
-				return strings.Contains(err.Error(), "found unknown field")
-			},
-			yaml:   true,
-			strict: true,
-		},
-		// Duplicate fields should return an error from the strict JSON deserializer.
-		{
-			data: []byte(`{"value":1,"value":1}`),
-			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			errFn: func(err error) bool {
-				return strings.Contains(err.Error(), "already set in map")
-			},
-			strict: true,
-		},
-		// Duplicate fields should return an error from the strict YAML deserializer.
-		{
-			data: []byte("value: 1\n" +
-				"value: 1\n"),
-			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			errFn: func(err error) bool {
-				return strings.Contains(err.Error(), "already set in map")
-			},
-			yaml:   true,
-			strict: true,
-		},
-		// Strict JSON decode should fail for untagged fields.
-		{
-			data: []byte(`{"kind":"Test","apiVersion":"other/blah","value":1,"Other":"test"}`),
-			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			errFn: func(err error) bool {
-				return strings.Contains(err.Error(), "found unknown field")
-			},
-			strict: true,
-		},
-		// Strict YAML decode should fail for untagged fields.
-		{
-			data: []byte("kind: Test\n" +
-				"apiVersion: other/blah\n" +
-				"value: 1\n" +
-				"Other: test\n"),
-			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			errFn: func(err error) bool {
-				return strings.Contains(err.Error(), "found unknown field")
-			},
-			yaml:   true,
-			strict: true,
 		},
 		// Strict JSON decode into unregistered objects directly.
 		{

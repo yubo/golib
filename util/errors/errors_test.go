@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestEmptyAggregate(t *testing.T) {
@@ -276,9 +278,8 @@ func TestFilterOut(t *testing.T) {
 	}
 	for i, testCase := range testCases {
 		err := FilterOut(testCase.err, testCase.filter...)
-		if !reflect.DeepEqual(testCase.expected, err) {
-			t.Errorf("%d: expected %v, got %v", i, testCase.expected, err)
-		}
+
+		assert.Equalf(t, testCase.expected, err, "case %d", i)
 	}
 }
 

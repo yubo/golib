@@ -5,8 +5,24 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/spf13/cast"
+	"github.com/spf13/pflag"
 	"sigs.k8s.io/yaml"
 )
+
+// ErrNoTable indicates that a chart does not have a matching table.
+type ErrNoTable struct {
+	Key string
+}
+
+func (e ErrNoTable) Error() string { return fmt.Sprintf("%q is not a table", e.Key) }
+
+// ErrNoValue indicates that Values does not contain a key with a value
+type ErrNoValue struct {
+	Key string
+}
+
+func (e ErrNoValue) Error() string { return fmt.Sprintf("%q is not a value", e.Key) }
 
 // merge path.bytes -> into
 func mergePathYaml(into map[string]interface{}, path string, yaml []byte) (map[string]interface{}, error) {
@@ -224,4 +240,145 @@ func (o tagOptions) Contains(optionName string) bool {
 		s = next
 	}
 	return false
+}
+
+func ToFloat64Slice(i interface{}) []float64 {
+	v, _ := ToFloat64SliceE(i)
+	return v
+}
+
+// ToFloat64SliceE casts an interface to a []time.Duration type.
+func ToFloat64SliceE(i interface{}) ([]float64, error) {
+	if i == nil {
+		return []float64{}, fmt.Errorf("unable to cast %#v of type %T to []float64", i, i)
+	}
+
+	switch v := i.(type) {
+	case []float64:
+		return v, nil
+	}
+
+	kind := reflect.TypeOf(i).Kind()
+	switch kind {
+	case reflect.Slice, reflect.Array:
+		s := reflect.ValueOf(i)
+		a := make([]float64, s.Len())
+		for j := 0; j < s.Len(); j++ {
+			val, err := cast.ToFloat64E(s.Index(j).Interface())
+			if err != nil {
+				return []float64{}, fmt.Errorf("unable to cast %#v of type %T to []float64", i, i)
+			}
+			a[j] = val
+		}
+		return a, nil
+	default:
+		return []float64{}, fmt.Errorf("unable to cast %#v of type %T to []float64", i, i)
+	}
+}
+
+type configField struct {
+	envName      string      // env name
+	flag         string      // flag
+	shothand     string      // flag shothand
+	configPath   string      // config path
+	flagValue    interface{} // flag's value
+	defaultValue interface{} // field's default value
+}
+
+type defaultSetter interface {
+	SetDefault(string) error
+}
+
+func newConfigFieldByValue(fs *pflag.FlagSet, path string, tag *FieldTag, value pflag.Value, defValue string) *configField {
+	rt := reflect.Indirect(reflect.ValueOf(value)).Type()
+	def := reflect.New(rt).Interface().(pflag.Value)
+
+	// set value
+	if defValue != "" {
+		if d, ok := def.(defaultSetter); ok {
+			d.SetDefault(defValue)
+			value.(defaultSetter).SetDefault(defValue)
+		} else {
+			// the changed flag may be affected
+			def.Set(defValue)
+			value.Set(defValue)
+		}
+	}
+
+	field := &configField{
+		configPath: path,
+		envName:    tag.Env,
+		flagValue:  value,
+	}
+
+	if tag.Default != "" {
+		field.defaultValue = def
+	}
+
+	switch len(tag.Flag) {
+	case 0:
+		return field
+	// nothing
+	case 1:
+		field.flag = tag.Flag[0]
+		fs.Var(value, tag.Flag[0], tag.Description)
+	case 2:
+		field.flag = tag.Flag[0]
+		field.shothand = tag.Flag[1]
+		fs.VarP(value, tag.Flag[0], tag.Flag[1], tag.Description)
+	default:
+		panic("invalid flag value")
+	}
+
+	if len(field.flag) > 0 && len(tag.Deprecated) > 0 {
+		fs.MarkDeprecated(field.flag, tag.Deprecated)
+		fs.Lookup(field.flag).Hidden = false
+	}
+
+	return field
+}
+
+func newConfigField(fs *pflag.FlagSet, path string, tag *FieldTag, varFn, varPFn, def interface{}) *configField {
+	field := &configField{
+		configPath: path,
+		envName:    tag.Env,
+	}
+
+	if tag.Default != "" {
+		field.defaultValue = def
+	}
+
+	// add flag
+	switch len(tag.Flag) {
+	case 0:
+		// nothing
+		return field
+	case 1:
+		field.flag = tag.Flag[0]
+		ret := reflect.ValueOf(varFn).Call([]reflect.Value{
+			reflect.ValueOf(tag.Flag[0]),
+			reflect.ValueOf(def),
+			reflect.ValueOf(tag.Description),
+		})
+		field.flagValue = ret[0].Interface()
+	case 2:
+		field.flag = tag.Flag[0]
+		field.shothand = tag.Flag[1]
+		ret := reflect.ValueOf(varPFn).Call([]reflect.Value{
+			reflect.ValueOf(tag.Flag[0]),
+			reflect.ValueOf(tag.Flag[1]),
+			reflect.ValueOf(def),
+			reflect.ValueOf(tag.Description),
+		})
+		field.flagValue = ret[0].Interface()
+	default:
+		panic("invalid flag value")
+	}
+
+	if len(field.flag) > 0 && len(tag.Deprecated) > 0 {
+		fs.MarkDeprecated(field.flag, tag.Deprecated)
+		fs.Lookup(field.flag).Hidden = false
+	}
+
+	return field
 }

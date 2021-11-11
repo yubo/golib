@@ -10,9 +10,8 @@ type User struct {
 	Name string `flag:"name"`
 }
 
-func ExampleNewConfiger() {
-
-	c, err := configer.NewFactory().NewConfiger()
+func ExampleParse() {
+	c, err := configer.NewConfiger().Parse()
 	fmt.Printf("%s", c)
 	fmt.Printf("%v", err)
 	// Output:

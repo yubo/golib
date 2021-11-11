@@ -1,19 +1,23 @@
 package configer
 
 import (
-	"github.com/spf13/pflag"
+	"reflect"
+	"strings"
+
+	"github.com/spf13/cast"
+	"k8s.io/klog/v2"
 )
 
 type ConfigerOptions struct {
 	filesOverride  []string               //  will append to valueFiles
 	defaultValues  map[string]interface{} // WithDefault()
 	overrideValues map[string]interface{} // WithOverride()
-	enableFlag     bool
-	flagSet        *pflag.FlagSet
 	maxDepth       int
 	enableEnv      bool
 	allowEmptyEnv  bool
 	err            error
+	//enableFlag     bool
+	//flagSet       *pflag.FlagSet
 }
 
 func (p *ConfigerOptions) Validate() error {
@@ -26,7 +30,7 @@ func (p *ConfigerOptions) Validate() error {
 
 func newConfigerOptions() *ConfigerOptions {
 	return &ConfigerOptions{
-		enableFlag:     true,
+		//enableFlag:     true,
 		enableEnv:      true,
 		allowEmptyEnv:  false,
 		maxDepth:       5,
@@ -83,14 +87,86 @@ func WithMaxDepth(maxDepth int) ConfigerOption {
 	}
 }
 
-func WithFlagSet(fs *pflag.FlagSet) ConfigerOption {
-	return func(p *ConfigerOptions) {
-		if fs == nil {
-			p.enableFlag = false
-			return
-		}
+// ############# config fields
 
-		p.enableFlag = true
-		p.flagSet = fs
+func newConfigFieldsOptions(c *configer) *configFieldsOptions {
+	return &configFieldsOptions{configer: c}
+}
+
+// for addConfigs
+type configFieldsOptions struct {
+	*configer
+	tagsGetter    func() map[string]*FieldTag
+	prefixPath    string
+	defaultValues map[string]interface{}
+	tags          map[string]*FieldTag
+}
+
+func (p *configFieldsOptions) getTagOpts(sf reflect.StructField, paths []string) *FieldTag {
+	tag := GetFieldTag(sf)
+
+	if p == nil || p.tags == nil {
+		return tag
+	}
+
+	path := strings.TrimPrefix(joinPath(append(paths, tag.json)...), p.prefixPath+".")
+	if o := p.tags[path]; o != nil {
+		if len(o.Flag) > 0 {
+			tag.Flag = o.Flag
+		}
+		if len(o.Description) > 0 {
+			tag.Description = o.Description
+		}
+		if len(o.Default) > 0 {
+			tag.Default = o.Default
+		}
+		if len(o.Env) > 0 {
+			tag.Env = o.Env
+		}
+	}
+
+	return tag
+}
+
+// env > value from registered config > structField tag
+func (p *configFieldsOptions) getDefaultValue(path string, tag *FieldTag, opts *ConfigerOptions) string {
+	// overrideValues
+	if v, err := Values(opts.overrideValues).PathValue(path); err == nil {
+		if def := cast.ToString(v); len(def) > 0 {
+			tag.Default = def
+			tag.Description += " (override)"
+			return def
+		}
+	}
+
+	// env
+	if p.enableEnv && tag.Env != "" {
+		if def, ok := p.getEnv(tag.Env); ok {
+			if len(def) > 0 {
+				tag.Default = def
+				p.env = mergePathValue(p.env, path, def)
+				return def
+			}
+		}
+	}
+
+	klog.V(10).InfoS("default values", "values", Values(p.defaultValues).String())
+	// defaultValues
+	if v, err := Values(p.defaultValues).PathValue(path); err == nil {
+		if def := cast.ToString(v); len(def) > 0 {
+			tag.Default = def
+			return def
+		}
+	}
+
+	return tag.Default
+}
+
+type ConfigFieldsOption func(*configFieldsOptions)
+
+// WithTags just for AddConfigs
+func WithTags(getter func() map[string]*FieldTag) ConfigFieldsOption {
+	return func(o *configFieldsOptions) {
+		o.tagsGetter = getter
 	}
 }

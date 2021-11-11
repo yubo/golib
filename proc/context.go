@@ -44,43 +44,25 @@ func WgMustFrom(ctx context.Context) *sync.WaitGroup {
 	return wg
 }
 
-func WithConfiger(ctx context.Context, cf configer.Configer) {
+func WithConfiger(ctx context.Context, cf configer.ParsedConfiger) {
 	if _, ok := ConfigerFrom(ctx); ok {
 		panic("configer has been exist")
 	}
 	AttrMustFrom(ctx)[configerKey] = cf
 }
 
-func ConfigerFrom(ctx context.Context) (configer.Configer, bool) {
-	cf, ok := AttrMustFrom(ctx)[configerKey].(configer.Configer)
+func ConfigerFrom(ctx context.Context) (configer.ParsedConfiger, bool) {
+	cf, ok := AttrMustFrom(ctx)[configerKey].(configer.ParsedConfiger)
 	return cf, ok
 }
 
-func ConfigerMustFrom(ctx context.Context) configer.Configer {
-	cf, ok := AttrMustFrom(ctx)[configerKey].(configer.Configer)
+func ConfigerMustFrom(ctx context.Context) configer.ParsedConfiger {
+	cf, ok := AttrMustFrom(ctx)[configerKey].(configer.ParsedConfiger)
 	if !ok {
 		panic("unable to get configer from context")
 	}
 	return cf
 }
-
-//func WithConfigOptions(parent context.Context, optsInput ...configer.ConfigerOption) context.Context {
-//	opts, ok := parent.Value(configOptsKey).(*[]configer.ConfigerOption)
-//	if ok {
-//		*opts = append(*opts, optsInput...)
-//		return parent
-//	}
-//
-//	return WithValue(parent, configOptsKey, &optsInput)
-//}
-//
-//func ConfigOptionsFrom(ctx context.Context) ([]configer.ConfigerOption, bool) {
-//	opts, ok := ctx.Value(configOptsKey).(*[]configer.ConfigerOption)
-//	if ok {
-//		return *opts, true
-//	}
-//	return nil, false
-//}
 
 func WithHookOps(parent context.Context, ops *HookOps) context.Context {
 	return WithValue(parent, hookOptsKey, ops)
@@ -103,7 +85,7 @@ func AttrFrom(ctx context.Context) (map[interface{}]interface{}, bool) {
 func AttrMustFrom(ctx context.Context) map[interface{}]interface{} {
 	attr, ok := ctx.Value(attrKey).(map[interface{}]interface{})
 	if !ok {
-		panic("unable to get attribute from context")
+		panic("unable to get attr from context")
 	}
 	return attr
 }

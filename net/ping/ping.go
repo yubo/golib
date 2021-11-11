@@ -8,6 +8,7 @@
 package ping
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -43,83 +44,121 @@ type Task struct {
 	Error        error
 }
 
-type serv struct {
+type Server struct {
 	sync.RWMutex
-	run     bool
-	running chan struct{}
-	tx_fd   int
-	rx_fd   int
-	rx_fp   *os.File
-	rate    uint32
-	ticker  *time.Ticker
-	t_list  list.ListHead // task list
-	ips     map[[4]byte]*list.ListHead
+	run    bool
+	t_list list.ListHead // task list
+	ips    map[[4]byte]*list.ListHead
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+	errCh  chan error
+	done   chan struct{}
 }
 
 var (
-	ErrAcces = errors.New("Permission denied (you must be root)")
-	ErrNoRun = errors.New("ping server is not running")
-	ErrEmpty = errors.New("empty list")
-	server   serv
+	ErrAcces      = errors.New("Permission denied (you must be root)")
+	ErrNoRun      = errors.New("ping server is not running")
+	ErrEmpty      = errors.New("empty list")
+	DefaultServer = NewServer(context.Background())
 )
 
-func Run(rate uint32) (err error) {
-	server.Lock()
-	defer server.Unlock()
+func NewServer(ctx context.Context) *Server {
+	p := &Server{
+		errCh: make(chan error, 2),
+		done:  make(chan struct{}),
+		run:   false,
+		ips:   make(map[[4]byte]*list.ListHead),
+	}
+
+	p.ctx, p.cancel = context.WithCancel(ctx)
+	p.t_list.Init()
+	return p
+}
+
+func Run(rate uint32) error {
+	return DefaultServer.Run(rate)
+}
+
+func Kill() error {
+	return DefaultServer.Kill()
+}
+
+func Wait() {
+	DefaultServer.Wait()
+}
+
+func (p *Server) Wait() {
+	<-p.done
+}
+
+func (p *Server) Run(rate uint32) error {
+	p.Lock()
+	defer p.Unlock()
 
 	if os.Getuid() != 0 {
 		return ErrAcces
 	}
 
-	server.tx_fd, err = syscall.Socket(syscall.AF_INET,
-		syscall.SOCK_RAW, syscall.IPPROTO_RAW)
-	if err != nil {
-		return err
+	if p.run {
+		return errors.New("already running")
 	}
 
-	server.rx_fd, err = syscall.Socket(syscall.AF_INET,
-		syscall.SOCK_RAW, syscall.IPPROTO_ICMP)
-	if err != nil {
-		return err
+	select {
+	case <-p.done:
+		return errors.New("already done")
+	default:
 	}
-	server.rx_fp = os.NewFile(uintptr(server.rx_fd),
-		fmt.Sprintf("ping/server/rx_fp"))
 
-	server.rate = rate
-	server.run = true
-	server.running = make(chan struct{})
-	server.ticker = time.NewTicker(time.Second / time.Duration(rate))
-	server.ips = make(map[[4]byte]*list.ListHead)
-	server.t_list.Init()
+	p.run = true
 
-	go tx_loop(server.running, server.ticker.C)
-	go rx_loop(server.rx_fp, server.running)
+	go p.tx_loop(rate)
+	go p.rx_loop()
+
+	go func() {
+		select {
+		case err := <-p.errCh:
+			if err != nil {
+				fmt.Printf("err %s", err)
+			}
+			p.cancel()
+		case <-p.ctx.Done():
+		}
+
+		p.wg.Wait()
+
+		p.Lock()
+		p.run = false
+		close(p.done)
+		p.Unlock()
+	}()
 
 	return nil
 }
 
-func Kill() error {
-	server.Lock()
-	defer server.Unlock()
+func (p *Server) Kill() error {
+	p.Lock()
+	run := p.run
+	p.Unlock()
 
-	if !server.run {
+	if !run {
 		return ErrNoRun
 	}
 
-	close(server.running)
-	server.ticker.Stop()
-	syscall.Close(server.tx_fd)
-	server.rx_fp.Close()
-	server.run = false
+	p.cancel()
 
+	p.Wait()
 	return nil
 }
 
 func Go(ips [][4]byte, timeout, retry int, done chan *Task) *Task {
-	var (
-		s_list *list.ListHead
-		ok     bool
-	)
+	return DefaultServer.Go(ips, timeout, retry, done)
+}
+
+func (p *Server) Go(ips [][4]byte, timeout, retry int, done chan *Task) *Task {
+	var s_list *list.ListHead
+	var ok bool
+
 	t := &Task{
 		Ips:        ips[:],
 		Ret:        make([]bool, len(ips)),
@@ -137,20 +176,20 @@ func Go(ips [][4]byte, timeout, retry int, done chan *Task) *Task {
 	}
 	t.Done = done
 
-	if !server.run {
+	if !p.run {
 		t.Error = ErrNoRun
 		t.Done <- t
 		return t
 	}
 
-	server.Lock()
+	p.Lock()
 	t.Lock()
 
 	for i, ip := range t.Ips {
-		if s_list, ok = server.ips[ip]; !ok {
+		if s_list, ok = p.ips[ip]; !ok {
 			s_list = &list.ListHead{}
 			s_list.Init()
-			server.ips[ip] = s_list
+			p.ips[ip] = s_list
 		}
 
 		te := task_entry{}
@@ -159,11 +198,11 @@ func Go(ips [][4]byte, timeout, retry int, done chan *Task) *Task {
 		t.e_list.AddTail(&te.t_list)
 		s_list.AddTail(&te.s_list)
 	}
-	server.t_list.AddTail(&t.t_list)
+	p.t_list.AddTail(&t.t_list)
 	klog.V(4).Infof("task[%p] add to tail", t)
 
 	t.Unlock()
-	server.Unlock()
+	p.Unlock()
 
 	return t
 }
@@ -189,7 +228,7 @@ func list_to_entry_s(list *list.ListHead) *task_entry {
 		unsafe.Offsetof(((*task_entry)(nil)).s_list))))
 }
 
-func (p *Task) next() (*Task, error) {
+func (p *Task) next(server *Server) (*Task, error) {
 	now := time.Now().Unix()
 
 	if p != nil {
@@ -251,24 +290,34 @@ func (p *Task) next() (*Task, error) {
 	return nil, ErrEmpty
 }
 
-func tx_loop(running chan struct{}, C <-chan time.Time) {
-	var (
-		sa  syscall.SockaddrInet4
-		idx int
-		cur *Task
-		err error
-		ip  [4]byte
-	)
+func (p *Server) tx_loop(rate uint32) {
+	var sa syscall.SockaddrInet4
+	var fd, idx int
+	var cur *Task
+	var err error
+	var ip [4]byte
+
+	ticker := time.NewTicker(time.Second / time.Duration(rate))
+	defer ticker.Stop()
+
+	if fd, err = syscall.Socket(syscall.AF_INET, syscall.SOCK_RAW, syscall.IPPROTO_RAW); err != nil {
+		p.errCh <- err
+		return
+	}
+	defer syscall.Close(fd)
+
+	p.wg.Add(1)
+	defer p.wg.Add(-1)
 
 	for {
 		select {
-		case <-running:
+		case <-p.ctx.Done():
 			klog.V(3).Infof("tx routine exit")
 			return
-		case <-C:
+		case <-ticker.C:
 			if cur == nil {
-				if cur, err = cur.next(); err != nil {
-					//klog.V(5).Infof("tx loop: %s ", err)
+				if cur, err = cur.next(p); err != nil {
+					klog.V(5).Infof("tx loop: %s ", err)
 					continue
 				}
 				idx = 0
@@ -281,7 +330,7 @@ func tx_loop(running chan struct{}, C <-chan time.Time) {
 				idx++
 			}
 			if idx >= len(cur.Ips) {
-				if cur, err = cur.next(); err != nil {
+				if cur, err = cur.next(p); err != nil {
 					klog.V(4).Infof("tx loop: %s ", err)
 					continue
 				}
@@ -293,8 +342,12 @@ func tx_loop(running chan struct{}, C <-chan time.Time) {
 			klog.V(4).Infof("syscall.Sendto %d.%d.%d.%d",
 				uint8(ip[0]), uint8(ip[1]),
 				uint8(ip[2]), uint8(ip[3]))
-			if err = syscall.Sendto(server.tx_fd, pkt([4]byte(ip)),
-				0, &sa); err != nil {
+			if err = syscall.Sendto(
+				fd,
+				pkt([4]byte(ip)),
+				0,
+				&sa,
+			); err != nil {
 				klog.V(2).Infof("syscall.Sendto error: %s ", err)
 
 			}
@@ -303,16 +356,33 @@ func tx_loop(running chan struct{}, C <-chan time.Time) {
 	}
 }
 
-func rx_loop(fp *os.File, running chan struct{}) {
-	var (
-		buf     []byte = make([]byte, 1500)
-		numRead int
-		err     error
-		src     [4]byte
-	)
+func (p *Server) rx_loop() {
+	var buf []byte = make([]byte, 1500)
+	var numRead int
+	var err error
+	var src [4]byte
+	var fd int
+	var fp *os.File
+
+	if fd, err = syscall.Socket(syscall.AF_INET,
+		syscall.SOCK_RAW, syscall.IPPROTO_ICMP); err != nil {
+		p.errCh <- err
+	}
+
+	fp = os.NewFile(uintptr(fd), fmt.Sprintf("ping/server/rx_fp"))
+	defer fp.Close()
+
+	p.wg.Add(1)
+
+	// ugly hack, fp.Read unsupported SetDeadline
+	go func() {
+		<-p.ctx.Done()
+		p.wg.Add(-1)
+	}()
+
 	for {
 		select {
-		case <-running:
+		case <-p.ctx.Done():
 			klog.V(3).Infof("rx routine exit")
 			return
 		default:
@@ -327,7 +397,7 @@ func rx_loop(fp *os.File, running chan struct{}) {
 					numRead, buf[:numRead])
 				klog.V(3).Infof("%d.%d.%d.%d",
 					src[0], src[1], src[2], src[3])
-				if h, ok := server.ips[src]; ok {
+				if h, ok := p.ips[src]; ok {
 					for p := h.Next; p != h; p = p.Next {
 						*(list_to_entry_s(p).recv) = true
 					}

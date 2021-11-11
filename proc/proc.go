@@ -1,6 +1,7 @@
 package proc
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/yubo/golib/cli/flag"
+	"github.com/yubo/golib/cli/globalflag"
 	"github.com/yubo/golib/configer"
 	"k8s.io/klog/v2"
 )
@@ -32,7 +34,6 @@ type Process struct {
 	debugFlags  bool // print flags after proc.init()
 	dryrun      bool // will exit after proc.init()
 
-	initDone      bool
 	sigsCh        chan os.Signal
 	hookOps       [ACTION_SIZE][]*HookOps
 	namedFlagSets flag.NamedFlagSets
@@ -69,12 +70,17 @@ func Reset() {
 	DefaultProcess = NewProcess()
 }
 
-func Start(cmd *cobra.Command) error {
-	return DefaultProcess.Start(cmd)
+func Context() context.Context {
+	return DefaultProcess.Context()
 }
 
-func Init(cmd *cobra.Command) error {
-	return DefaultProcess.init(cmd)
+func Start() error {
+	return DefaultProcess.Start()
+}
+
+func Init(cmd *cobra.Command, opts ...ProcessOption) error {
+	DefaultProcess.Init(cmd, opts...)
+	return nil
 }
 
 func Shutdown() error {
@@ -118,21 +124,13 @@ func NamedFlagSets() *flag.NamedFlagSets {
 	return &DefaultProcess.namedFlagSets
 }
 
-func (p *Process) Start(cmd *cobra.Command) error {
-	if err := p.init(cmd); err != nil {
-		return err
-	}
+func (p *Process) Context() context.Context {
+	return p.ctx
+}
 
-	if p.debugConfig {
-		p.PrintConfig(os.Stdout)
-	}
-	if p.debugFlags {
-		p.PrintFlags(cmd.Flags(), os.Stdout)
-	}
-	if p.dryrun {
-		//return errors.New("dryrun")
-		//pflag.Parse()
-		return nil
+func (p *Process) Start() error {
+	if err := p.Parse(); err != nil {
+		return err
 	}
 
 	if err := p.start(); err != nil {
@@ -146,63 +144,63 @@ func (p *Process) Start(cmd *cobra.Command) error {
 	return p.loop()
 }
 
-// init
-// alloc configer
-// parse configfile
-// validate config each module
-// sort hook options
-func (p *Process) init(cmd *cobra.Command) error {
-	if p.initDone {
-		return nil
-	}
-
-	ctx := p.ctx
-	go func() {
-		c := ctx
-		<-c.Done()
-	}()
-
-	if _, ok := AttrFrom(ctx); !ok {
-		ctx = WithAttr(ctx, make(map[interface{}]interface{}))
-		go func() {
-			c := ctx
-			<-c.Done()
-		}()
-	}
-
-	// configer
-	if _, ok := ConfigerFrom(ctx); !ok {
-		configer, err := configer.NewConfiger(
-			append(p.configerOptions,
-				configer.WithFlagSet(cmd.Flags()),
-			)...)
+func (p *Process) Parse() error {
+	// parse config
+	cf, ok := ConfigerFrom(p.ctx)
+	if !ok {
+		var err error
+		cf, err = configer.Parse(p.configerOptions...)
 		if err != nil {
 			return err
 		}
-		WithConfiger(ctx, configer)
+		WithConfiger(p.ctx, cf)
 	}
 
-	if _, ok := WgFrom(ctx); !ok {
-		WithWg(ctx, p.wg)
+	if p.debugConfig {
+		p.PrintConfig(os.Stdout)
 	}
-
-	p.status = STATUS_PENDING
-
-	for i := ACTION_START; i < ACTION_SIZE; i++ {
-		x := p.hookOps[i]
-		sort.SliceStable(x, func(i, j int) bool { return x[i].priority < x[j].priority })
+	if p.debugFlags {
+		p.PrintFlags(cf.FlagSet(), os.Stdout)
 	}
-
-	p.ctx = ctx
-	p.initDone = true
+	if p.dryrun {
+		// ugly hack
+		os.Exit(0)
+	}
 
 	return nil
+}
+
+// Init
+// set configer options
+// alloc p.ctx
+// validate config each module
+// sort hook options
+func (p *Process) Init(cmd *cobra.Command, opts ...ProcessOption) {
+	for _, opt := range opts {
+		opt(p.ProcessOptions)
+	}
+
+	if _, ok := AttrFrom(p.ctx); !ok {
+		p.ctx = WithAttr(p.ctx, make(map[interface{}]interface{}))
+	}
+	if _, ok := WgFrom(p.ctx); !ok {
+		WithWg(p.ctx, p.wg)
+	}
+
+	// add global flags
+	p.AddGlobalFlags(cmd)
+
 }
 
 // only be called once
 func (p *Process) start() error {
 	p.wg.Add(1)
 	defer p.wg.Done()
+
+	for i := ACTION_START; i < ACTION_SIZE; i++ {
+		x := p.hookOps[i]
+		sort.SliceStable(x, func(i, j int) bool { return x[i].priority < x[j].priority })
+	}
 
 	for _, ops := range p.hookOps[ACTION_START] {
 		ops.dlog()
@@ -301,7 +299,7 @@ func (p *Process) stop() error {
 func (p *Process) reload() (err error) {
 	p.status.Set(STATUS_RELOADING)
 
-	configer, err := configer.NewConfiger()
+	configer, err := configer.Parse(p.configerOptions...)
 	if err != nil {
 		p.err = err
 		return err
@@ -336,6 +334,36 @@ func (p *Process) AddFlags(f *pflag.FlagSet) {
 	f.BoolVar(&p.debugConfig, "debug-config", p.debugConfig, "print config")
 	f.BoolVar(&p.debugFlags, "debug-flags", p.debugFlags, "print flags")
 	f.BoolVar(&p.dryrun, "dry-run", p.debugFlags, "exit before proc.Start()")
+}
+
+func (p *Process) AddGlobalFlags(cmd *cobra.Command) {
+	// add flags
+	fs := cmd.Flags()
+	fs.ParseErrorsWhitelist.UnknownFlags = true
+
+	nfs := NamedFlagSets()
+
+	// add klog, logs, help flags
+	globalflag.AddGlobalFlags(nfs.FlagSet("global"))
+
+	// add configer flags
+	configer.AddFlags(nfs.FlagSet("global"))
+
+	// add process flags
+	p.AddFlags(nfs.FlagSet("global"))
+
+	if p.group {
+		setGroupCommandFunc(cmd)
+	}
+}
+
+func (p *Process) AddRegisteredFlags(fs *pflag.FlagSet) {
+	configer.AddRegisteredFlags(fs)
+
+	for _, f := range p.namedFlagSets.FlagSets {
+		fs.AddFlagSet(f)
+	}
+
 }
 
 func (p *Process) Name() string {

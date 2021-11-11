@@ -31,11 +31,11 @@ func (p HookOps) Context() context.Context {
 	return p.process.ctx
 }
 
-func (p HookOps) Configer() configer.Configer {
+func (p HookOps) Configer() configer.ParsedConfiger {
 	return ConfigerMustFrom(p.process.ctx)
 }
 
-func (p HookOps) ContextAndConfiger() (context.Context, configer.Configer) {
+func (p HookOps) ContextAndConfiger() (context.Context, configer.ParsedConfiger) {
 	return p.Context(), p.Configer()
 }
 
