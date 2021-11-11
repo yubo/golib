@@ -569,12 +569,7 @@ func (p *configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type,
 
 		// env
 		ps := joinPath(curPath...)
-
 		def := opt.getDefaultValue(ps, tag, p.ConfigerOptions)
-		if strings.HasPrefix(ps, "authentication") {
-			klog.InfoS("config fields", "ps", ps, "def", def, "flag", tag.Flag)
-		}
-
 		var field *configField
 
 		switch sample := reflect.New(ft).Interface().(type) {
@@ -590,9 +585,6 @@ func (p *configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type,
 			field = newConfigField(fs, ps, tag, fs.Bool, fs.BoolP, cast.ToBool(def))
 		case *string:
 			field = newConfigField(fs, ps, tag, fs.String, fs.StringP, cast.ToString(def))
-			if strings.HasPrefix(ps, "authentication") {
-				klog.InfoS("config fields", "ps", ps, "def", def, "flag", tag.Flag)
-			}
 		case *int32, *int16, *int8, *int:
 			field = newConfigField(fs, ps, tag, fs.Int, fs.IntP, cast.ToInt(def))
 		case *int64:

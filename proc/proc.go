@@ -204,7 +204,6 @@ func (p *Process) start() error {
 
 	for _, ops := range p.hookOps[ACTION_START] {
 		ops.dlog()
-
 		if err := ops.Hook(WithHookOps(p.ctx, ops)); err != nil {
 			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
 		}
