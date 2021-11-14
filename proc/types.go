@@ -5,9 +5,18 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/spf13/pflag"
 	"github.com/yubo/golib/configer"
 	"k8s.io/klog/v2"
 )
+
+type ConfigOps struct {
+	fs     *pflag.FlagSet
+	group  string
+	path   string
+	sample interface{}
+	opts   []configer.ConfigFieldsOption
+}
 
 type HookFn func(context.Context) error
 
@@ -32,7 +41,7 @@ func (p HookOps) Context() context.Context {
 }
 
 func (p HookOps) Configer() configer.ParsedConfiger {
-	return ConfigerMustFrom(p.process.ctx)
+	return p.process.parsedConfiger
 }
 
 func (p HookOps) ContextAndConfiger() (context.Context, configer.ParsedConfiger) {

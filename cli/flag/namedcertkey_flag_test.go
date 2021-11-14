@@ -71,11 +71,9 @@ func TestNamedCertKeyArrayConfig(t *testing.T) {
 		fs := pflag.NewFlagSet("testNamedCertKeyArray", pflag.ContinueOnError)
 
 		{
-			err := cff.Register(fs, "",
+			err := cff.Var(fs, "",
 				&Foo{Certs: NamedCertKeyArray{value: test.def}})
 			assert.NoError(t, err, i)
-
-			cff.AddRegisteredFlags(fs)
 		}
 
 		args := []string{}

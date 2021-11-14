@@ -36,10 +36,10 @@ import (
 )
 
 type Configer interface {
-	Register(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error
+	Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error
+
 	Parse(opts ...ConfigerOption) (ParsedConfiger, error)
 	AddFlags(fs *pflag.FlagSet)
-	AddRegisteredFlags(fs *pflag.FlagSet)
 	ValueFiles() []string
 	Envs() []string
 	Flags() []string
@@ -50,7 +50,7 @@ type ParsedConfiger interface {
 	Envs() []string
 	Flags() []string
 
-	FlagSet() *pflag.FlagSet
+	//FlagSet() *pflag.FlagSet
 	Set(path string, v interface{}) error
 	GetConfiger(path string) ParsedConfiger
 	GetRaw(path string) interface{}
@@ -70,6 +70,7 @@ type ParsedConfiger interface {
 
 var (
 	DefaultConfiger = NewConfiger()
+	flagConfiger    = NewConfiger()
 )
 
 func NewConfiger() Configer {
@@ -78,12 +79,8 @@ func NewConfiger() Configer {
 func Parse(opts ...ConfigerOption) (ParsedConfiger, error) {
 	return DefaultConfiger.Parse(opts...)
 }
-
 func AddFlags(fs *pflag.FlagSet) {
 	DefaultConfiger.AddFlags(fs)
-}
-func AddRegisteredFlags(fs *pflag.FlagSet) {
-	DefaultConfiger.AddRegisteredFlags(fs)
 }
 func ValueFiles() []string {
 	return DefaultConfiger.ValueFiles()
@@ -95,13 +92,14 @@ func Flags() []string {
 	return DefaultConfiger.Flags()
 }
 
-func AddFlagsVar(fs *pflag.FlagSet, sample interface{}, opts ...ConfigFieldsOption) error {
-	return DefaultConfiger.Register(fs, "", sample, opts...)
+// just for cmdcli
+func FlagSet(fs *pflag.FlagSet, sample interface{}, opts ...ConfigFieldsOption) error {
+	return flagConfiger.Var(fs, "", sample, opts...)
 }
 
-// Register set config fields to yaml configfile reader and pflags.FlagSet from sample
-func Register(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
-	return DefaultConfiger.Register(fs, path, sample, opts...)
+// Var set config fields to yaml configfile reader and pflags.FlagSet from sample
+func Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
+	return DefaultConfiger.Var(fs, path, sample, opts...)
 }
 
 type configer struct {
@@ -113,14 +111,14 @@ type configer struct {
 	stringValues []string       // values, --set-string
 	fileValues   []string       // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
 	fields       []*configField // all of config fields
-	fs           *pflag.FlagSet
+	//fs           *pflag.FlagSet
 
 	// instance data
-	data    map[string]interface{}
-	env     map[string]interface{}
-	path    []string
-	parsed  bool
-	samples []*ConfigFields
+	data   map[string]interface{}
+	env    map[string]interface{}
+	path   []string
+	parsed bool
+	//samples []*ConfigFields
 }
 
 type ConfigFields struct {
@@ -155,9 +153,9 @@ func (p *configer) Parse(opts ...ConfigerOption) (ParsedConfiger, error) {
 	return p, nil
 }
 
-func (p *configer) FlagSet() *pflag.FlagSet {
-	return p.fs
-}
+//func (p *configer) FlagSet() *pflag.FlagSet {
+//	return p.fs
+//}
 
 func (p *configer) PrintFlags(out io.Writer) {
 	fmt.Fprintf(out, "configer FLAG:\n")
@@ -257,6 +255,7 @@ func (p *configer) mergeFlagValues(into map[string]interface{}) map[string]inter
 
 	return into
 }
+
 func (p *configer) Envs() (names []string) {
 	if !p.enableEnv {
 		return
@@ -270,9 +269,6 @@ func (p *configer) Envs() (names []string) {
 }
 
 func (p *configer) Flags() (names []string) {
-	//if !p.enableFlag {
-	//	return
-	//}
 	for _, f := range p.fields {
 		if f.flag != "" {
 			names = append(names, f.flag)
@@ -478,87 +474,74 @@ func (p *configer) ValueFiles() []string {
 	return append(p.valueFiles, p.filesOverride...)
 }
 
-// AddRegisteredFlags: add registered flags that from RegisterConfigFields to pflag.FlagSet
-func (p *configer) AddRegisteredFlags(fs *pflag.FlagSet) {
-	p.fs = fs
-	for _, v := range p.samples {
-		o := newConfigFieldsOptions(p)
-		for _, opt := range v.opts {
-			opt(o)
-		}
-		o.prefixPath = v.path
-		if o.tagsGetter != nil {
-			o.tags = o.tagsGetter()
-		}
-
-		if values, err := objToValues(v.sample); err != nil {
-			panic(err)
-		} else {
-			o.defaultValues = pathValueToValues(v.path, values)
-		}
-
-		rv := reflect.Indirect(reflect.ValueOf(v.sample))
-		rt := rv.Type()
-
-		if rv.Kind() != reflect.Struct {
-			panic(fmt.Errorf("Addflag: sample must be a struct, got %v/%v", rv.Kind(), rt))
-		}
-
-		if err := p.addConfigs(parsePath(v.path), v.fs, rt, o); err != nil {
-			panic(err)
-		}
-	}
-}
-
-// addConfigs: add flags and env from sample's tags
+// var: add flags and env from sample's tags
 // defualt priority sample > tagsGetter > tags
-func (p *configer) Register(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
+func (p *configer) Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
 	if p == nil {
 		return errors.New("configer pointer is nil")
 	}
 
-	p.samples = append(p.samples, &ConfigFields{
-		fs:     fs,
-		path:   path,
-		sample: sample,
-		opts:   opts,
-	})
+	o := newConfigFieldsOptions(p)
+	for _, opt := range opts {
+		opt(o)
+	}
+	o.prefixPath = path
+	if o.tagsGetter != nil {
+		o.tags = o.tagsGetter()
+	}
+
+	if values, err := objToValues(sample); err != nil {
+		return err
+	} else {
+		o.defaultValues = pathValueToValues(path, values)
+	}
+
+	rv := reflect.Indirect(reflect.ValueOf(sample))
+	rt := rv.Type()
+
+	if rv.Kind() != reflect.Struct {
+		return fmt.Errorf("Addflag: sample must be a struct, got %v/%v", rv.Kind(), rt)
+	}
+
+	if err := p._var(parsePath(path), fs, rv, rt, o); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-func (p *configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type, opt *configFieldsOptions) error {
+func indirectValue(rv reflect.Value, rt reflect.Type) (reflect.Value, reflect.Type) {
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			rv.Set(reflect.New(rt.Elem()))
+		}
+		rv = rv.Elem()
+		rt = rv.Type()
+	}
+	return rv, rt
+}
+
+func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt reflect.Type, opt *configFieldsOptions) error {
 	if len(path) > p.maxDepth {
 		return fmt.Errorf("path.depth is larger than the maximum allowed depth of %d", p.maxDepth)
 	}
 
-	for i := 0; i < rt.NumField(); i++ {
-		sf := rt.Field(i)
-		isUnexported := sf.PkgPath != ""
-		if sf.Anonymous {
-			t := sf.Type
-			if t.Kind() == reflect.Ptr {
-				t = t.Elem()
-			}
-			if isUnexported && t.Kind() != reflect.Struct {
-				// Ignore embedded fields of unexported non-struct types.
-				continue
-			}
-		} else if isUnexported {
-			// Ignore unexported non-embedded fields.
+	for i := 0; i < _rv.NumField(); i++ {
+		sf := _rt.Field(i)
+		rv := _rv.Field(i)
+		rt := rv.Type()
+
+		if !rv.CanSet() {
 			continue
 		}
+
+		rv, rt = indirectValue(rv, rt)
 
 		tag := opt.getTagOpts(sf, path)
 		if tag.skip {
 			continue
 		}
-
-		ft := sf.Type
-		if ft.Kind() == reflect.Ptr {
-			// Follow pointer.
-			ft = ft.Elem()
-		}
+		//klog.InfoS("getTagOpts", "flag", tag.Flag, "def", tag.Default)
 
 		curPath := make([]string, len(path))
 		copy(curPath, path)
@@ -572,60 +555,60 @@ func (p *configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type,
 		def := opt.getDefaultValue(ps, tag, p.ConfigerOptions)
 		var field *configField
 
-		switch sample := reflect.New(ft).Interface().(type) {
+		switch value := rv.Addr().Interface().(type) {
 		case pflag.Value:
-			field = newConfigFieldByValue(fs, ps, tag, sample, def)
+			field = newConfigFieldByValue(value, fs, ps, tag, def)
 		case *net.IP:
 			var df net.IP
 			if def != "" {
 				df = net.ParseIP(def)
 			}
-			field = newConfigField(fs, ps, tag, fs.IP, fs.IPP, df)
+			field = newConfigField(value, fs, ps, tag, fs.IPVar, fs.IPVarP, df)
 		case *bool:
-			field = newConfigField(fs, ps, tag, fs.Bool, fs.BoolP, cast.ToBool(def))
+			field = newConfigField(value, fs, ps, tag, fs.BoolVar, fs.BoolVarP, cast.ToBool(def))
 		case *string:
-			field = newConfigField(fs, ps, tag, fs.String, fs.StringP, cast.ToString(def))
+			field = newConfigField(value, fs, ps, tag, fs.StringVar, fs.StringVarP, cast.ToString(def))
 		case *int32, *int16, *int8, *int:
-			field = newConfigField(fs, ps, tag, fs.Int, fs.IntP, cast.ToInt(def))
+			field = newConfigField(value, fs, ps, tag, fs.IntVar, fs.IntVarP, cast.ToInt(def))
 		case *int64:
-			field = newConfigField(fs, ps, tag, fs.Int64, fs.Int64P, cast.ToInt64(def))
+			field = newConfigField(value, fs, ps, tag, fs.Int64Var, fs.Int64VarP, cast.ToInt64(def))
 		case *uint:
-			field = newConfigField(fs, ps, tag, fs.Uint, fs.UintP, cast.ToUint(def))
+			field = newConfigField(value, fs, ps, tag, fs.UintVar, fs.UintVarP, cast.ToUint(def))
 		case *uint8:
-			field = newConfigField(fs, ps, tag, fs.Uint8, fs.Uint8P, cast.ToUint8(def))
+			field = newConfigField(value, fs, ps, tag, fs.Uint8Var, fs.Uint8VarP, cast.ToUint8(def))
 		case *uint16:
-			field = newConfigField(fs, ps, tag, fs.Uint8, fs.Uint8P, cast.ToUint16(def))
+			field = newConfigField(value, fs, ps, tag, fs.Uint16Var, fs.Uint16VarP, cast.ToUint16(def))
 		case *uint32:
-			field = newConfigField(fs, ps, tag, fs.Uint32, fs.Uint32P, cast.ToUint32(def))
+			field = newConfigField(value, fs, ps, tag, fs.Uint32Var, fs.Uint32VarP, cast.ToUint32(def))
 		case *uint64:
-			field = newConfigField(fs, ps, tag, fs.Uint64, fs.Uint64P, cast.ToUint64(def))
+			field = newConfigField(value, fs, ps, tag, fs.Uint64Var, fs.Uint64VarP, cast.ToUint64(def))
 		case *float32, *float64:
-			field = newConfigField(fs, ps, tag, fs.Float64, fs.Float64P, cast.ToFloat64(def))
+			field = newConfigField(value, fs, ps, tag, fs.Float64Var, fs.Float64VarP, cast.ToFloat64(def))
 		case *time.Duration:
-			field = newConfigField(fs, ps, tag, fs.Duration, fs.DurationP, cast.ToDuration(def))
+			field = newConfigField(value, fs, ps, tag, fs.DurationVar, fs.DurationVarP, cast.ToDuration(def))
 		case *[]string:
-			field = newConfigField(fs, ps, tag, fs.StringArray, fs.StringArrayP, cast.ToStringSlice(def))
+			field = newConfigField(value, fs, ps, tag, fs.StringArrayVar, fs.StringArrayVarP, cast.ToStringSlice(def))
 		case *[]int:
-			field = newConfigField(fs, ps, tag, fs.IntSlice, fs.IntSliceP, cast.ToIntSlice(def))
+			field = newConfigField(value, fs, ps, tag, fs.IntSliceVar, fs.IntSliceVarP, cast.ToIntSlice(def))
 		case *[]float64:
-			field = newConfigField(fs, ps, tag, fs.Float64Slice, fs.Float64SliceP, ToFloat64Slice(def))
+			field = newConfigField(value, fs, ps, tag, fs.Float64SliceVar, fs.Float64SliceVarP, ToFloat64Slice(def))
 		case *map[string]string:
-			field = newConfigField(fs, ps, tag, fs.StringToString, fs.StringToStringP, cast.ToStringMapString(def))
+			field = newConfigField(value, fs, ps, tag, fs.StringToStringVar, fs.StringToStringVarP, cast.ToStringMapString(def))
 		default:
 			if len(tag.Flag) > 0 {
-				panic(fmt.Sprintf("add config unsupported type %s path %s kind %s", ft.String(), ps, ft.Kind()))
+				panic(fmt.Sprintf("add config unsupported type %s path %s kind %s", rt.String(), ps, rt.Kind()))
 			}
 
 			// iterate struct{}
-			if ft.Kind() == reflect.Struct {
-				if err := p.addConfigs(curPath, fs, ft, opt); err != nil {
+			if rt.Kind() == reflect.Struct {
+				if err := p._var(curPath, fs, rv, rt, opt); err != nil {
 					return err
 				}
 				continue
 			}
 
 			// set field.default
-			field = newConfigField(fs, ps, tag, nil, nil, cast.ToStringMapString(def))
+			field = newConfigField(value, fs, ps, tag, nil, nil, cast.ToStringMapString(def))
 		}
 		p.fields = append(p.fields, field)
 	}
@@ -633,7 +616,7 @@ func (p *configer) addConfigs(path []string, fs *pflag.FlagSet, rt reflect.Type,
 }
 
 func (p *configer) getFlagValue(f *configField) interface{} {
-	if f.flag != "" && p.fs.Changed(f.flag) {
+	if f.flag != "" && f.fs.Changed(f.flag) {
 		return reflect.ValueOf(f.flagValue).Elem().Interface()
 	}
 

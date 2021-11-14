@@ -1,6 +1,7 @@
 package configer
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -277,6 +278,7 @@ func ToFloat64SliceE(i interface{}) ([]float64, error) {
 }
 
 type configField struct {
+	fs           *pflag.FlagSet
 	envName      string      // env name
 	flag         string      // flag
 	shothand     string      // flag shothand
@@ -289,7 +291,7 @@ type defaultSetter interface {
 	SetDefault(string) error
 }
 
-func newConfigFieldByValue(fs *pflag.FlagSet, path string, tag *FieldTag, value pflag.Value, defValue string) *configField {
+func newConfigFieldByValue(value pflag.Value, fs *pflag.FlagSet, path string, tag *FieldTag, defValue string) *configField {
 	rt := reflect.Indirect(reflect.ValueOf(value)).Type()
 	def := reflect.New(rt).Interface().(pflag.Value)
 
@@ -306,6 +308,7 @@ func newConfigFieldByValue(fs *pflag.FlagSet, path string, tag *FieldTag, value 
 	}
 
 	field := &configField{
+		fs:         fs,
 		configPath: path,
 		envName:    tag.Env,
 		flagValue:  value,
@@ -338,8 +341,9 @@ func newConfigFieldByValue(fs *pflag.FlagSet, path string, tag *FieldTag, value 
 	return field
 }
 
-func newConfigField(fs *pflag.FlagSet, path string, tag *FieldTag, varFn, varPFn, def interface{}) *configField {
+func newConfigField(value interface{}, fs *pflag.FlagSet, path string, tag *FieldTag, varFn, varPFn, def interface{}) *configField {
 	field := &configField{
+		fs:         fs,
 		configPath: path,
 		envName:    tag.Env,
 	}
@@ -355,22 +359,24 @@ func newConfigField(fs *pflag.FlagSet, path string, tag *FieldTag, varFn, varPFn
 		return field
 	case 1:
 		field.flag = tag.Flag[0]
-		ret := reflect.ValueOf(varFn).Call([]reflect.Value{
+		reflect.ValueOf(varFn).Call([]reflect.Value{
+			reflect.ValueOf(value),
 			reflect.ValueOf(tag.Flag[0]),
 			reflect.ValueOf(def),
 			reflect.ValueOf(tag.Description),
 		})
-		field.flagValue = ret[0].Interface()
+		field.flagValue = value
 	case 2:
 		field.flag = tag.Flag[0]
 		field.shothand = tag.Flag[1]
-		ret := reflect.ValueOf(varPFn).Call([]reflect.Value{
+		reflect.ValueOf(varPFn).Call([]reflect.Value{
+			reflect.ValueOf(value),
 			reflect.ValueOf(tag.Flag[0]),
 			reflect.ValueOf(tag.Flag[1]),
 			reflect.ValueOf(def),
 			reflect.ValueOf(tag.Description),
 		})
-		field.flagValue = ret[0].Interface()
+		field.flagValue = value
 	default:
 		panic("invalid flag value")
 	}
@@ -381,4 +387,31 @@ func newConfigField(fs *pflag.FlagSet, path string, tag *FieldTag, varFn, varPFn
 	}
 
 	return field
+}
+
+// The key type is unexported to prevent collisions
+type key int
+
+const (
+	configerKey key = iota
+)
+
+func WithConfiger(parent context.Context, cf ParsedConfiger) context.Context {
+	if _, ok := ConfigerFrom(parent); ok {
+		panic("configer has been exist")
+	}
+	return context.WithValue(parent, configerKey, cf)
+}
+
+func ConfigerFrom(ctx context.Context) (ParsedConfiger, bool) {
+	cf, ok := ctx.Value(configerKey).(ParsedConfiger)
+	return cf, ok
+}
+
+func ConfigerMustFrom(ctx context.Context) ParsedConfiger {
+	cf, ok := ctx.Value(configerKey).(ParsedConfiger)
+	if !ok {
+		panic("unable to get configer from context")
+	}
+	return cf
 }

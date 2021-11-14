@@ -461,10 +461,8 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 	for _, c := range cases {
 		cff := NewConfiger()
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-		err := cff.Register(fs, "", &Foo{})
+		err := cff.Var(fs, "", &Foo{})
 		assert.NoError(t, err)
-
-		cff.AddRegisteredFlags(fs)
 
 		found := false
 		fs.VisitAll(func(flag *pflag.Flag) {
@@ -523,7 +521,7 @@ func TestPriority(t *testing.T) {
 		env          string
 		def          string // WithDefault
 		defYaml      string // WithDefaultYaml
-		sample       string // RegisterConfigFields
+		sample       string // Var
 		tag          string // withTags
 		want         interface{}
 	}{{
@@ -551,7 +549,7 @@ func TestPriority(t *testing.T) {
 		file: "file-a",
 		want: "file-a",
 	}, {
-		name: "RegisterConfigFields env",
+		name: "Var env",
 		env:  "env-a",
 		want: "env-a",
 	}, {
@@ -563,15 +561,15 @@ func TestPriority(t *testing.T) {
 		defYaml: "def-yaml-a",
 		want:    "def-yaml-a",
 	}, {
-		name:   "RegisterConfigFields sample",
+		name:   "Var sample",
 		sample: "sample-a",
 		want:   "sample-a",
 	}, {
-		name: "RegisterConfigFields tag",
+		name: "Var tag",
 		tag:  "tag-a",
 		want: "tag-a",
 	}, {
-		name: "RegisterConfigFields default",
+		name: "Var default",
 		want: "default-a",
 	}}
 
@@ -597,7 +595,7 @@ func TestPriority(t *testing.T) {
 					}))
 			}
 
-			err := cff.Register(fs, "", &Foo{A: c.sample}, fopts...)
+			err := cff.Var(fs, "", &Foo{A: c.sample}, fopts...)
 			assert.NoError(t, err)
 
 			args := []string{}
@@ -621,8 +619,6 @@ func TestPriority(t *testing.T) {
 				args = append(args, "--values="+filepath.Join(dir, "base.yml"))
 			}
 			cff.AddFlags(fs)
-
-			cff.AddRegisteredFlags(fs)
 
 			err = fs.Parse(args)
 			assert.NoError(t, err)
@@ -662,10 +658,8 @@ func TestConfigerDef(t *testing.T) {
 	cff := NewConfiger()
 
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	err := cff.Register(fs, "bar", &Bar{Foo: &Foo{B: "default-b"}})
+	err := cff.Var(fs, "bar", &Bar{Foo: &Foo{B: "default-b"}})
 	assert.NoError(t, err)
-
-	cff.AddRegisteredFlags(fs)
 
 	cfg, err := cff.Parse()
 	assert.NoError(t, err)
@@ -674,7 +668,7 @@ func TestConfigerDef(t *testing.T) {
 	assert.Equalf(t, "default-b", cfg.GetRaw("bar.foo.b"), "config [%s]", cfg)
 }
 
-func TestRegisterConfigFields(t *testing.T) {
+func TestVar(t *testing.T) {
 	var cases = []struct {
 		fn   func(string) interface{}
 		data [][4]string
@@ -728,10 +722,8 @@ func TestRegisterConfigFields(t *testing.T) {
 
 				fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
-				err := cff.Register(fs, "", got)
+				err := cff.Var(fs, "", got)
 				assert.NoError(t, err)
-
-				cff.AddRegisteredFlags(fs)
 
 				setFlags(fs, args)
 
@@ -745,4 +737,131 @@ func TestRegisterConfigFields(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestAddFlags(t *testing.T) {
+	type Bar struct {
+		A string  `json:"a" flag:"bar-a" env:"bar_a" default:"def-bar-a"`
+		B *string `json:"b" flag:"bar-b" env:"bar_b" default:"def-bar-b"`
+		C *string `json:"c" flag:"bar-c" env:"bar_c"`
+	}
+	type Foo struct {
+		A string  `json:"a" flag:"foo-a" env:"foo_a" default:"def-foo-a"`
+		B *string `json:"b" flag:"foo-b" env:"foo-b" default:"def-foo-b"`
+		C *Bar    `json:"c"`
+	}
+
+	cases := []struct {
+		args []string
+		want Foo
+	}{{
+		[]string{},
+		Foo{
+			A: "def-foo-a",
+			B: util.String("def-foo-b"),
+			C: &Bar{
+				A: "def-bar-a",
+				B: util.String("def-bar-b"),
+				C: util.String(""),
+			},
+		},
+	}, {
+		[]string{
+			"--bar-a=bar-a",
+			"--bar-b=bar-b",
+			"--bar-c=bar-c",
+			"--foo-a=foo-a",
+			"--foo-b=foo-b",
+		},
+		Foo{
+			A: "foo-a",
+			B: util.String("foo-b"),
+			C: &Bar{
+				A: "bar-a",
+				B: util.String("bar-b"),
+				C: util.String("bar-c"),
+			},
+		},
+	}}
+
+	for _, c := range cases {
+
+		cff := NewConfiger()
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+
+		var got Foo
+		err := cff.Var(fs, "foo", &got)
+		assert.NoError(t, err)
+
+		err = fs.Parse(c.args)
+		assert.NoError(t, err)
+
+		assert.Equalf(t, util.JsonStr(c.want), util.JsonStr(got), "args %v", c.args)
+	}
+}
+
+func TestConfigDefault(t *testing.T) {
+
+	t.Run("str", func(t *testing.T) {
+		type Foo struct {
+			A string  `json:"a" default:"def"`
+			B *string `json:"b" default:"def"`
+		}
+		cases := []struct {
+			sample *Foo
+			want   string
+		}{{
+			&Foo{A: "", B: nil},
+			"a: def\nb: def",
+		}, {
+			&Foo{A: "a", B: util.String("b")},
+			"a: a\nb: b",
+		}}
+		for _, c := range cases {
+			cff := NewConfiger()
+			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+
+			err := cff.Var(fs, "", c.sample)
+			assert.NoError(t, err)
+
+			cf, err := cff.Parse()
+			assert.NoError(t, err)
+
+			assert.Equalf(t, c.want, strings.TrimSpace(cf.String()), "sample %s", util.YamlStr(c.sample))
+		}
+	})
+
+	t.Run("int", func(t *testing.T) {
+		type Foo struct {
+			A int  `json:"a" default:"1"`
+			B *int `json:"b" default:"1"` // best for zero and unset
+			C int  `json:"c,omitempty" default:"1"`
+		}
+		cases := []struct {
+			sample *Foo
+			want   string
+		}{{
+			&Foo{},
+			"a: 0\nb: 1\nc: 1",
+		}, {
+			&Foo{A: 0, B: util.Int(0), C: 0},
+			"a: 0\nb: 0\nc: 1",
+		}, {
+			&Foo{A: 2, B: util.Int(2), C: 2},
+			"a: 2\nb: 2\nc: 2",
+		}}
+		for _, c := range cases {
+			cff := NewConfiger()
+			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+
+			err := cff.Var(fs, "", c.sample)
+			assert.NoError(t, err)
+
+			cf, err := cff.Parse()
+			assert.NoError(t, err)
+
+			assert.Equalf(t, c.want, strings.TrimSpace(cf.String()), "sample %s", util.YamlStr(c.sample))
+		}
+	})
+
 }

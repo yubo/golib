@@ -13,6 +13,15 @@ import (
 	"github.com/yubo/golib/util/term"
 )
 
+func PrintErrln(err error) int {
+	if err == nil || err == ErrDryrun {
+		return 0
+	}
+
+	fmt.Fprintf(os.Stderr, "Error: %s\n", err)
+	return 1
+}
+
 func envOr(name string, defs ...string) string {
 	if v, ok := os.LookupEnv(name); ok {
 		return v
@@ -50,18 +59,16 @@ func nameOfFunction(f interface{}) string {
 	return last
 }
 
-func setGroupCommandFunc(cmd *cobra.Command) {
-	nfs := NamedFlagSets()
+func setGroupCommandFunc(cmd *cobra.Command, nfs flag.NamedFlagSets) {
 	usageFmt := "Usage:\n  %s\n"
 	cols, _, _ := term.GetTerminalSize(cmd.OutOrStdout())
 	cmd.SetUsageFunc(func(cmd *cobra.Command) error {
 		fmt.Fprintf(cmd.OutOrStderr(), usageFmt, cmd.UseLine())
-		flag.PrintSections(cmd.OutOrStderr(), *nfs, cols)
+		flag.PrintSections(cmd.OutOrStderr(), nfs, cols)
 		return nil
 	})
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
-		flag.PrintSections(cmd.OutOrStdout(), *nfs, cols)
+		flag.PrintSections(cmd.OutOrStdout(), nfs, cols)
 	})
-
 }

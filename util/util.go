@@ -20,6 +20,7 @@ import (
 	"unicode"
 
 	"google.golang.org/grpc/peer"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -220,6 +221,11 @@ func JsonStr(in interface{}, pretty ...bool) string {
 	} else {
 		return string(b)
 	}
+}
+
+func YamlStr(in interface{}) string {
+	b, _ := yaml.Marshal(in)
+	return string(b)
 }
 
 func EnvDef(key, defaultValue string) string {

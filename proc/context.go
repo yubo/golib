@@ -3,8 +3,6 @@ package proc
 import (
 	"context"
 	"sync"
-
-	"github.com/yubo/golib/configer"
 )
 
 // The key type is unexported to prevent collisions
@@ -12,7 +10,6 @@ type key int
 
 const (
 	hookOptsKey key = iota
-	configerKey
 	wgKey
 	attrKey // attributes
 )
@@ -42,26 +39,6 @@ func WgMustFrom(ctx context.Context) *sync.WaitGroup {
 		panic("unable to get waitGroup from context")
 	}
 	return wg
-}
-
-func WithConfiger(ctx context.Context, cf configer.ParsedConfiger) {
-	if _, ok := ConfigerFrom(ctx); ok {
-		panic("configer has been exist")
-	}
-	AttrMustFrom(ctx)[configerKey] = cf
-}
-
-func ConfigerFrom(ctx context.Context) (configer.ParsedConfiger, bool) {
-	cf, ok := AttrMustFrom(ctx)[configerKey].(configer.ParsedConfiger)
-	return cf, ok
-}
-
-func ConfigerMustFrom(ctx context.Context) configer.ParsedConfiger {
-	cf, ok := AttrMustFrom(ctx)[configerKey].(configer.ParsedConfiger)
-	if !ok {
-		panic("unable to get configer from context")
-	}
-	return cf
 }
 
 func WithHookOps(parent context.Context, ops *HookOps) context.Context {

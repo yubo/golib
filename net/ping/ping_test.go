@@ -16,8 +16,10 @@ func TestPing(t *testing.T) {
 	p := NewServer(context.Background())
 
 	if err := p.Run(1000); err != nil {
+		if err == ErrAcces {
+			return
+		}
 		t.Error(err)
-		return
 	}
 
 	ips := [][4]byte{
