@@ -157,7 +157,7 @@ func (p *Process) RegisterFlags(configPath, groupName string, sample interface{}
 	return nil
 }
 
-func (p *Process) AddRegisteredFlags(fs *pflag.FlagSet) error {
+func (p *Process) BindRegisteredFlags(fs *pflag.FlagSet) error {
 	for _, v := range p.configOps {
 		//klog.InfoS("add Var", "path", v.path, "group", v.group, "type", reflect.TypeOf(v.sample).String())
 		if err := p.configer.Var(v.fs, v.path, v.sample, v.opts...); err != nil {
@@ -194,12 +194,15 @@ func (p *Process) NewRootCmd(opts ...ProcessOption) *cobra.Command {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	cmd := &cobra.Command{
-		Use:           p.name,
-		Short:         p.description,
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		Use:          p.name,
+		Short:        p.description,
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return p.Start(cmd.Flags())
+			err := p.Start(cmd.Flags())
+			if err == ErrDryrun {
+				return nil
+			}
+			return err
 		},
 	}
 
@@ -282,7 +285,7 @@ func (p *Process) Init(cmd *cobra.Command, opts ...ProcessOption) error {
 	fs := cmd.PersistentFlags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 
-	p.AddRegisteredFlags(fs)
+	p.BindRegisteredFlags(fs)
 
 	if p.group {
 		setGroupCommandFunc(cmd, p.namedFlagSets)

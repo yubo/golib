@@ -568,8 +568,14 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 			field = newConfigField(value, fs, ps, tag, fs.BoolVar, fs.BoolVarP, cast.ToBool(def))
 		case *string:
 			field = newConfigField(value, fs, ps, tag, fs.StringVar, fs.StringVarP, cast.ToString(def))
-		case *int32, *int16, *int8, *int:
+		case *int:
 			field = newConfigField(value, fs, ps, tag, fs.IntVar, fs.IntVarP, cast.ToInt(def))
+		case *int8:
+			field = newConfigField(value, fs, ps, tag, fs.Int8Var, fs.Int8VarP, cast.ToInt8(def))
+		case *int16:
+			field = newConfigField(value, fs, ps, tag, fs.Int16Var, fs.Int16VarP, cast.ToInt16(def))
+		case *int32:
+			field = newConfigField(value, fs, ps, tag, fs.Int32Var, fs.Int32VarP, cast.ToInt32(def))
 		case *int64:
 			field = newConfigField(value, fs, ps, tag, fs.Int64Var, fs.Int64VarP, cast.ToInt64(def))
 		case *uint:
@@ -582,7 +588,9 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 			field = newConfigField(value, fs, ps, tag, fs.Uint32Var, fs.Uint32VarP, cast.ToUint32(def))
 		case *uint64:
 			field = newConfigField(value, fs, ps, tag, fs.Uint64Var, fs.Uint64VarP, cast.ToUint64(def))
-		case *float32, *float64:
+		case *float32:
+			field = newConfigField(value, fs, ps, tag, fs.Float32Var, fs.Float32VarP, cast.ToFloat32(def))
+		case *float64:
 			field = newConfigField(value, fs, ps, tag, fs.Float64Var, fs.Float64VarP, cast.ToFloat64(def))
 		case *time.Duration:
 			field = newConfigField(value, fs, ps, tag, fs.DurationVar, fs.DurationVarP, cast.ToDuration(def))
