@@ -152,8 +152,8 @@ func (p *configFieldsOptions) getDefaultValue(path string, tag *FieldTag, opts *
 
 	klog.V(10).InfoS("default values", "values", Values(p.defaultValues).String())
 	// defaultValues
-	if v, err := Values(p.defaultValues).PathValue(path); err == nil {
-		if def := cast.ToString(v); len(def) > 0 {
+	if v, _ := Values(p.defaultValues).PathValue(path); v != nil {
+		if def := ToString(v); len(def) > 0 {
 			tag.Default = def
 			return def
 		}

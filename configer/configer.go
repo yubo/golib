@@ -595,13 +595,13 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 		case *time.Duration:
 			field = newConfigField(value, fs, ps, tag, fs.DurationVar, fs.DurationVarP, cast.ToDuration(def))
 		case *[]string:
-			field = newConfigField(value, fs, ps, tag, fs.StringArrayVar, fs.StringArrayVarP, cast.ToStringSlice(def))
+			field = newConfigField(value, fs, ps, tag, fs.StringArrayVar, fs.StringArrayVarP, ToStringArrayVar(def))
 		case *[]int:
-			field = newConfigField(value, fs, ps, tag, fs.IntSliceVar, fs.IntSliceVarP, cast.ToIntSlice(def))
+			field = newConfigField(value, fs, ps, tag, fs.IntSliceVar, fs.IntSliceVarP, ToIntSlice(def))
 		case *[]float64:
 			field = newConfigField(value, fs, ps, tag, fs.Float64SliceVar, fs.Float64SliceVarP, ToFloat64Slice(def))
 		case *map[string]string:
-			field = newConfigField(value, fs, ps, tag, fs.StringToStringVar, fs.StringToStringVarP, cast.ToStringMapString(def))
+			field = newConfigField(value, fs, ps, tag, fs.StringToStringVar, fs.StringToStringVarP, ToStringMapString(def))
 		default:
 			if len(tag.Flag) > 0 {
 				panic(fmt.Sprintf("add config unsupported type %s path %s kind %s", rt.String(), ps, rt.Kind()))

@@ -243,8 +243,49 @@ func (o tagOptions) Contains(optionName string) bool {
 	return false
 }
 
-func ToFloat64Slice(i interface{}) []float64 {
-	v, _ := ToFloat64SliceE(i)
+func ToString(v interface{}) string {
+	switch v.(type) {
+	case []interface{}, map[string]interface{}:
+		b, _ := yaml.Marshal(v)
+		return string(b)
+	default:
+		return cast.ToString(v)
+	}
+}
+
+func ToStringMapString(str string) map[string]string {
+	v := map[string]string{}
+	if err := yaml.Unmarshal([]byte(str), &v); err != nil {
+		v = cast.ToStringMapString(str)
+	}
+
+	return v
+}
+
+func ToStringArrayVar(str string) []string {
+	v := []string{}
+	if err := yaml.Unmarshal([]byte(str), &v); err != nil {
+		v = cast.ToStringSlice(str)
+	}
+
+	return v
+}
+
+func ToIntSlice(str string) []int {
+	v := []int{}
+	if err := yaml.Unmarshal([]byte(str), &v); err != nil {
+		v = cast.ToIntSlice(str)
+	}
+
+	return v
+}
+
+func ToFloat64Slice(str string) []float64 {
+	v := []float64{}
+	if err := yaml.Unmarshal([]byte(str), &v); err != nil {
+		v, _ = ToFloat64SliceE(str)
+	}
+
 	return v
 }
 

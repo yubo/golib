@@ -800,8 +800,85 @@ func TestAddFlags(t *testing.T) {
 	}
 }
 
-func TestConfigDefault(t *testing.T) {
+func TestConfigTypes(t *testing.T) {
+	type Foo struct {
+		Bool     *bool             `json:"bool" default:"true"`
+		Byte     *byte             `json:"byte" default:"1"`
+		Float32  *float32          `json:"float32" default:"1"`
+		Float64  *float64          `json:"float64" default:"1"`
+		Float64s []float64         `json:"float64s" default:"1,2"`
+		Int      *int              `json:"int" default:"1"`
+		Int8     *int8             `json:"int8" default:"1"`
+		Int16    *int16            `json:"int16" default:"1"`
+		Int32    *int32            `json:"int32" default:"1"`
+		Int64    *int64            `json:"int64" default:"1"`
+		Ints     []int             `json:"ints" default:"1,2"`
+		IP       net.IP            `json:"ip" default:"1.1.1.1"`
+		String   *string           `json:"string" default:"1"`
+		Stringm  map[string]string `json:"stringm" default:"{\"1\":\"1\", \"2\":\"2\"}"`
+		Strings  []string          `json:"strings" default:"[\"1\", \"2\"]"`
+		Uint     *uint             `json:"uint" default:"1"`
+		Uint8    *uint8            `json:"uint8" default:"1"`
+		Uint16   *uint16           `json:"uint16" default:"1"`
+		Uint32   *uint32           `json:"uint32" default:"1"`
+		Uint64   *uint64           `json:"uint64" default:"1"`
+	}
+	cases := []struct {
+		sample *Foo
+		want   string
+	}{{
+		&Foo{},
+		"bool: true\nbyte: 1\nfloat32: 1\nfloat64: 1\nfloat64s: []\nint: 1\nint8: 1\nint16: 1\nint32: 1\nint64: 1\nints: []\nip: 1.1.1.1\nstring: \"1\"\nstringm:\n  \"1\": \"1\"\n  \"2\": \"2\"\nstrings:\n- \"1\"\n- \"2\"\nuint: 1\nuint8: 1\nuint16: 1\nuint32: 1\nuint64: 1\n",
+	}, {
+		&Foo{
+			Bool:     util.Bool(true),
+			Byte:     util.Byte(3),
+			Float32:  util.Float32(3),
+			Float64:  util.Float64(3),
+			Float64s: []float64{3, 4},
+			Int:      util.Int(3),
+			Int8:     util.Int8(3),
+			Int16:    util.Int16(3),
+			Int32:    util.Int32(3),
+			Int64:    util.Int64(3),
+			Ints:     []int{3, 4},
+			IP:       net.IPv4(3, 3, 3, 3),
+			String:   util.String("3"),
+			Stringm:  map[string]string{"3": "3", "4": "4"},
+			Strings:  []string{"3", "4"},
+			Uint:     util.Uint(3),
+			Uint8:    util.Uint8(3),
+			Uint16:   util.Uint16(3),
+			Uint32:   util.Uint32(3),
+			Uint64:   util.Uint64(3),
+		},
+		"bool: true\nbyte: 3\nfloat32: 3\nfloat64: 3\nfloat64s:\n- 3\n- 4\nint: 3\nint8: 3\nint16: 3\nint32: 3\nint64: 3\nints:\n- 3\n- 4\nip: 3.3.3.3\nstring: \"3\"\nstringm:\n  \"3\": \"3\"\n  \"4\": \"4\"\nstrings:\n- \"3\"\n- \"4\"\nuint: 3\nuint8: 3\nuint16: 3\nuint32: 3\nuint64: 3\n",
+	}}
+	for _, c := range cases {
+		cff := NewConfiger()
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
+		err := cff.Var(fs, "", c.sample)
+		assert.NoError(t, err)
+
+		// obj ->  yaml
+		cf, err := cff.Parse()
+		assert.NoError(t, err)
+		assert.Equalf(t, c.want, cf.String(), "sample %s", util.YamlStr(c.sample))
+
+		// yaml -> obj
+		o := Foo{}
+		cf2, err := cff.Parse(WithOverrideYaml("", cf.String()))
+		assert.NoError(t, err)
+		err = cf2.Read("", &o)
+		assert.NoError(t, err)
+		assert.Equalf(t, c.want, util.YamlStr(o), "sample %s", util.YamlStr(c.sample))
+
+	}
+
+}
+
+func TestConfigDefault(t *testing.T) {
 	t.Run("str", func(t *testing.T) {
 		type Foo struct {
 			A string  `json:"a" default:"def"`
@@ -812,10 +889,10 @@ func TestConfigDefault(t *testing.T) {
 			want   string
 		}{{
 			&Foo{A: "", B: nil},
-			"a: def\nb: def",
+			"a: def\nb: def\n",
 		}, {
 			&Foo{A: "a", B: util.String("b")},
-			"a: a\nb: b",
+			"a: a\nb: b\n",
 		}}
 		for _, c := range cases {
 			cff := NewConfiger()
@@ -827,7 +904,7 @@ func TestConfigDefault(t *testing.T) {
 			cf, err := cff.Parse()
 			assert.NoError(t, err)
 
-			assert.Equalf(t, c.want, strings.TrimSpace(cf.String()), "sample %s", util.YamlStr(c.sample))
+			assert.Equalf(t, c.want, cf.String(), "sample %s", util.YamlStr(c.sample))
 		}
 	})
 
@@ -842,13 +919,13 @@ func TestConfigDefault(t *testing.T) {
 			want   string
 		}{{
 			&Foo{},
-			"a: 0\nb: 1\nc: 1",
+			"a: 0\nb: 1\nc: 1\n",
 		}, {
 			&Foo{A: 0, B: util.Int(0), C: 0},
-			"a: 0\nb: 0\nc: 1",
+			"a: 0\nb: 0\nc: 1\n",
 		}, {
 			&Foo{A: 2, B: util.Int(2), C: 2},
-			"a: 2\nb: 2\nc: 2",
+			"a: 2\nb: 2\nc: 2\n",
 		}}
 		for _, c := range cases {
 			cff := NewConfiger()
@@ -860,7 +937,7 @@ func TestConfigDefault(t *testing.T) {
 			cf, err := cff.Parse()
 			assert.NoError(t, err)
 
-			assert.Equalf(t, c.want, strings.TrimSpace(cf.String()), "sample %s", util.YamlStr(c.sample))
+			assert.Equalf(t, c.want, cf.String(), "sample %s", util.YamlStr(c.sample))
 		}
 	})
 
