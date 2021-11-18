@@ -496,7 +496,12 @@ func (p *configer) Var(fs *pflag.FlagSet, path string, sample interface{}, opts 
 		o.defaultValues = pathValueToValues(path, values)
 	}
 
-	rv := reflect.Indirect(reflect.ValueOf(sample))
+	rv := reflect.ValueOf(sample)
+	if rv.Kind() != reflect.Ptr {
+		return fmt.Errorf("configer.Var() except a ptr to %s", rv.Kind())
+	}
+
+	rv = rv.Elem()
 	rt := rv.Type()
 
 	if rv.Kind() != reflect.Struct {
