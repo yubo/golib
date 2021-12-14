@@ -668,3 +668,36 @@ PRIMARY KEY (id)
 	})
 
 }
+
+func TestList(t *testing.T) {
+	runTests(t, dsn, func(dbt *DBTest) {
+		var v []int
+		dbt.mustExec("CREATE TABLE test (value int)")
+
+		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+
+		dbt.mustQueryRows(&v, "SELECT value FROM test where value in (1, 2, 3)")
+
+		if len(v) != 3 {
+			t.Fatalf("query rows want 3 got %d", len(v))
+		}
+
+		dbt.mustExec("DROP TABLE IF EXISTS test")
+	})
+
+	runTests(t, dsn, func(dbt *DBTest) {
+		var v []int
+		dbt.mustExec("CREATE TABLE test (value int)")
+
+		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+
+		dbt.mustQueryRows(&v, "SELECT value FROM test where value in ('1', '2', '3')")
+
+		if len(v) != 3 {
+			t.Fatalf("query rows want 3 got %d", len(v))
+		}
+
+		dbt.mustExec("DROP TABLE IF EXISTS test")
+	})
+
+}
