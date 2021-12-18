@@ -11,7 +11,6 @@ import (
 	"github.com/yubo/golib/util/sets"
 	"github.com/yubo/golib/util/validation"
 	"github.com/yubo/golib/util/validation/field"
-	"k8s.io/klog/v2"
 )
 
 var (
@@ -29,7 +28,7 @@ type Requirements []Requirement
 // Selector represents a query selector.
 type Selector interface {
 	// Matches returns true if this selector matches the given set of queries.
-	Matches(Queries) bool
+	//Matches(Queries) bool
 
 	// Empty returns true if this selector does not restrict the selection space.
 	Empty() bool
@@ -62,9 +61,10 @@ func Everything() Selector {
 
 type nothingSelector struct{}
 
-func (n nothingSelector) Matches(_ Queries) bool             { return false }
+//func (n nothingSelector) Matches(_ Queries) bool             { return false }
 func (n nothingSelector) Empty() bool                        { return false }
 func (n nothingSelector) String() string                     { return "" }
+func (n nothingSelector) Sql() (string, []interface{})       { return "", nil }
 func (n nothingSelector) Add(_ ...Requirement) Selector      { return n }
 func (n nothingSelector) Requirements() (Requirements, bool) { return nil, false }
 func (n nothingSelector) DeepCopySelector() Selector         { return n }
@@ -151,10 +151,10 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 		if len(vals) != 1 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "exact-match compatibility requires one single value"))
 		}
-	case selection.Exists, selection.DoesNotExist:
-		if len(vals) != 0 {
-			allErrs = append(allErrs, field.Invalid(valuePath, vals, "values set must be empty for exists and does not exist"))
-		}
+	//case selection.Exists, selection.DoesNotExist:
+	//	if len(vals) != 0 {
+	//		allErrs = append(allErrs, field.Invalid(valuePath, vals, "values set must be empty for exists and does not exist"))
+	//	}
 	case selection.GreaterThan, selection.LessThan:
 		if len(vals) != 1 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "for 'Gt', 'Lt' operators, exactly one value is required"))
@@ -196,50 +196,91 @@ func (r *Requirement) hasValue(value string) bool {
 //     Requirement's key.
 // (5) The operator is GreaterThanOperator or LessThanOperator, and Queries has
 //     the Requirement's key and the corresponding value satisfies mathematical inequality.
-func (r *Requirement) Matches(ls Queries) bool {
+//func (r *Requirement) Matches(ls Queries) bool {
+//	switch r.operator {
+//	case selection.In, selection.Equals, selection.DoubleEquals:
+//		if !ls.Has(r.key) {
+//			return false
+//		}
+//		return r.hasValue(ls.Get(r.key))
+//	case selection.NotIn, selection.NotEquals:
+//		if !ls.Has(r.key) {
+//			return true
+//		}
+//		return !r.hasValue(ls.Get(r.key))
+//	case selection.Exists:
+//		return ls.Has(r.key)
+//	case selection.DoesNotExist:
+//		return !ls.Has(r.key)
+//	case selection.GreaterThan, selection.LessThan:
+//		if !ls.Has(r.key) {
+//			return false
+//		}
+//		lsValue, err := strconv.ParseInt(ls.Get(r.key), 10, 64)
+//		if err != nil {
+//			klog.V(10).Infof("ParseInt failed for value %+v in query %+v, %+v", ls.Get(r.key), ls, err)
+//			return false
+//		}
+//
+//		// There should be only one strValue in r.strValues, and can be converted to an integer.
+//		if len(r.strValues) != 1 {
+//			klog.V(10).Infof("Invalid values count %+v of requirement %#v, for 'Gt', 'Lt' operators, exactly one value is required", len(r.strValues), r)
+//			return false
+//		}
+//
+//		var rValue int64
+//		for i := range r.strValues {
+//			rValue, err = strconv.ParseInt(r.strValues[i], 10, 64)
+//			if err != nil {
+//				klog.V(10).Infof("ParseInt failed for value %+v in requirement %#v, for 'Gt', 'Lt' operators, the value must be an integer", r.strValues[i], r)
+//				return false
+//			}
+//		}
+//		return (r.operator == selection.GreaterThan && lsValue > rValue) || (r.operator == selection.LessThan && lsValue < rValue)
+//	default:
+//		return false
+//	}
+//}
+
+func sqlArray(key, op string, values []string) (query string, args []interface{}) {
+	if len(values) == 0 {
+		return "", nil
+	}
+
+	query = fmt.Sprintf("%s %s (?", key, op)
+	args = append(args, values[0])
+
+	for i := 1; i < len(values); i++ {
+		query += ",?"
+		args = append(args, values[i])
+	}
+	query += ")"
+
+	return
+}
+
+func (r *Requirement) Sql() (string, []interface{}) {
 	switch r.operator {
 	case selection.In, selection.Equals, selection.DoubleEquals:
-		if !ls.Has(r.key) {
-			return false
+		if len(r.strValues) == 1 {
+			return fmt.Sprintf("%s = ?", r.key), []interface{}{r.strValues[0]}
 		}
-		return r.hasValue(ls.Get(r.key))
+		return sqlArray(r.key, "in", r.strValues)
 	case selection.NotIn, selection.NotEquals:
-		if !ls.Has(r.key) {
-			return true
+		if len(r.strValues) == 1 {
+			return fmt.Sprintf("%s != ?", r.key), []interface{}{r.strValues[0]}
 		}
-		return !r.hasValue(ls.Get(r.key))
-	case selection.Exists:
-		return ls.Has(r.key)
-	case selection.DoesNotExist:
-		return !ls.Has(r.key)
-	case selection.GreaterThan, selection.LessThan:
-		if !ls.Has(r.key) {
-			return false
+		return sqlArray(r.key, "not in", r.strValues)
+	case selection.GreaterThan:
+		if len(r.strValues) == 1 {
+			return fmt.Sprintf("%s > ?", r.key), []interface{}{r.strValues[0]}
 		}
-		lsValue, err := strconv.ParseInt(ls.Get(r.key), 10, 64)
-		if err != nil {
-			klog.V(10).Infof("ParseInt failed for value %+v in query %+v, %+v", ls.Get(r.key), ls, err)
-			return false
+	case selection.LessThan:
+		if len(r.strValues) == 1 {
+			return fmt.Sprintf("%s < ?", r.key), []interface{}{r.strValues[0]}
 		}
-
-		// There should be only one strValue in r.strValues, and can be converted to an integer.
-		if len(r.strValues) != 1 {
-			klog.V(10).Infof("Invalid values count %+v of requirement %#v, for 'Gt', 'Lt' operators, exactly one value is required", len(r.strValues), r)
-			return false
-		}
-
-		var rValue int64
-		for i := range r.strValues {
-			rValue, err = strconv.ParseInt(r.strValues[i], 10, 64)
-			if err != nil {
-				klog.V(10).Infof("ParseInt failed for value %+v in requirement %#v, for 'Gt', 'Lt' operators, the value must be an integer", r.strValues[i], r)
-				return false
-			}
-		}
-		return (r.operator == selection.GreaterThan && lsValue > rValue) || (r.operator == selection.LessThan && lsValue < rValue)
-	default:
-		return false
 	}
+	return "", nil
 }
 
 // Key returns requirement key
@@ -362,13 +403,32 @@ func (s internalSelector) Add(reqs ...Requirement) Selector {
 // Matches for a internalSelector returns true if all
 // its Requirements match the input Queries. If any
 // Requirement does not match, false is returned.
-func (s internalSelector) Matches(l Queries) bool {
+//func (s internalSelector) Matches(l Queries) bool {
+//	for ix := range s {
+//		if matches := s[ix].Matches(l); !matches {
+//			return false
+//		}
+//	}
+//	return true
+//}
+
+func (s internalSelector) Sql() (string, []interface{}) {
+	queries := []string{}
+	args := []interface{}{}
 	for ix := range s {
-		if matches := s[ix].Matches(l); !matches {
-			return false
+		if q, a := s[ix].Sql(); len(q) > 0 {
+			queries = append(queries, q)
+			args = append(args, a)
+
 		}
 	}
-	return true
+	if l := len(queries); l == 0 {
+		return "", nil
+	} else if l == 1 {
+		return queries[0], args
+	} else {
+		return strings.Join(queries, " and "), args
+	}
 }
 
 func (s internalSelector) Requirements() (Requirements, bool) { return Requirements(s), true }
@@ -413,7 +473,7 @@ const (
 	// CommaToken represents the comma
 	CommaToken
 	// DoesNotExistToken represents logic not
-	DoesNotExistToken
+	//DoesNotExistToken
 	// DoubleEqualsToken represents double equals
 	DoubleEqualsToken
 	// EqualsToken represents equal
@@ -437,9 +497,9 @@ const (
 // string2token contains the mapping between lexer Token and token literal
 // (except IdentifierToken, EndOfStringToken and ErrorToken since it makes no sense)
 var string2token = map[string]Token{
-	")":     ClosedParToken,
-	",":     CommaToken,
-	"!":     DoesNotExistToken,
+	")": ClosedParToken,
+	",": CommaToken,
+	//"!":     DoesNotExistToken,
 	"==":    DoubleEqualsToken,
 	"=":     EqualsToken,
 	">":     GreaterThanToken,
@@ -639,7 +699,7 @@ func (p *Parser) parse() (internalSelector, error) {
 	for {
 		tok, lit := p.lookahead(Values)
 		switch tok {
-		case IdentifierToken, DoesNotExistToken:
+		case IdentifierToken /*, DoesNotExistToken*/ :
 			r, err := p.parseRequirement()
 			if err != nil {
 				return nil, fmt.Errorf("unable to parse requirement: %v", err)
@@ -651,7 +711,7 @@ func (p *Parser) parse() (internalSelector, error) {
 				return requirements, nil
 			case CommaToken:
 				t2, l2 := p.lookahead(Values)
-				if t2 != IdentifierToken && t2 != DoesNotExistToken {
+				if t2 != IdentifierToken /*&& t2 != DoesNotExistToken */ {
 					return nil, fmt.Errorf("found '%s', expected: identifier after ','", l2)
 				}
 			default:
@@ -670,9 +730,9 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 	if err != nil {
 		return nil, err
 	}
-	if operator == selection.Exists || operator == selection.DoesNotExist { // operator found lookahead set checked
-		return NewRequirement(key, operator, []string{}, field.WithPath(p.path))
-	}
+	//if operator == selection.Exists || operator == selection.DoesNotExist { // operator found lookahead set checked
+	//	return NewRequirement(key, operator, []string{}, field.WithPath(p.path))
+	//}
 	operator, err = p.parseOperator()
 	if err != nil {
 		return nil, err
@@ -697,10 +757,10 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 func (p *Parser) parseKeyAndInferOperator() (string, selection.Operator, error) {
 	var operator selection.Operator
 	tok, literal := p.consume(Values)
-	if tok == DoesNotExistToken {
-		operator = selection.DoesNotExist
-		tok, literal = p.consume(Values)
-	}
+	//if tok == DoesNotExistToken {
+	//	operator = selection.DoesNotExist
+	//	tok, literal = p.consume(Values)
+	//}
 	if tok != IdentifierToken {
 		err := fmt.Errorf("found '%s', expected: identifier", literal)
 		return "", "", err
@@ -708,11 +768,11 @@ func (p *Parser) parseKeyAndInferOperator() (string, selection.Operator, error) 
 	if err := validateQueryKey(literal, p.path); err != nil {
 		return "", "", err
 	}
-	if t, _ := p.lookahead(Values); t == EndOfStringToken || t == CommaToken {
-		if operator != selection.DoesNotExist {
-			operator = selection.Exists
-		}
-	}
+	//if t, _ := p.lookahead(Values); t == EndOfStringToken || t == CommaToken {
+	//	if operator != selection.DoesNotExist {
+	//		operator = selection.Exists
+	//	}
+	//}
 	return literal, operator, nil
 }
 
