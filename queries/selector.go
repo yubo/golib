@@ -249,7 +249,7 @@ func sqlArray(key, op string, values []string) (query string, args []interface{}
 		return "", nil
 	}
 
-	query = fmt.Sprintf("%s %s (?", key, op)
+	query = fmt.Sprintf("`%s` %s (?", key, op)
 	args = append(args, values[0])
 
 	for i := 1; i < len(values); i++ {
@@ -931,7 +931,7 @@ func parse(selector string, path *field.Path) (internalSelector, error) {
 	if err != nil {
 		return nil, err
 	}
-	sort.Sort(ByKey(items)) // sort to grant determistic parsing
+	//sort.Sort(ByKey(items)) // sort to grant determistic parsing
 	return internalSelector(items), err
 }
 
@@ -973,7 +973,7 @@ func ValidatedSelectorFromSet(ls Set) (Selector, error) {
 		requirements = append(requirements, *r)
 	}
 	// sort to have deterministic string representation
-	sort.Sort(ByKey(requirements))
+	//sort.Sort(ByKey(requirements))
 	return internalSelector(requirements), nil
 }
 
@@ -989,7 +989,7 @@ func SelectorFromValidatedSet(ls Set) Selector {
 		requirements = append(requirements, Requirement{key: query, operator: selection.Equals, strValues: []string{value}})
 	}
 	// sort to have deterministic string representation
-	sort.Sort(ByKey(requirements))
+	//sort.Sort(ByKey(requirements))
 	return internalSelector(requirements)
 }
 

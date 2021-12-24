@@ -1002,7 +1002,7 @@ func TestRequirementSql(t *testing.T) {
 			operator:  selection.Equals,
 			strValues: []string{"tom"},
 		},
-		query: "user_name = ?",
+		query: "`user_name` = ?",
 		args:  []interface{}{"tom"},
 	}, {
 		name: "requirement sql in",
@@ -1011,7 +1011,7 @@ func TestRequirementSql(t *testing.T) {
 			operator:  selection.In,
 			strValues: []string{"tom", "jerry"},
 		},
-		query: "user_name in (?,?)",
+		query: "`user_name` in (?,?)",
 		args:  []interface{}{"tom", "jerry"},
 	}, {
 		name: "requirement sql not equal",
@@ -1020,7 +1020,7 @@ func TestRequirementSql(t *testing.T) {
 			operator:  selection.NotEquals,
 			strValues: []string{"tom"},
 		},
-		query: "user_name != ?",
+		query: "`user_name` != ?",
 		args:  []interface{}{"tom"},
 	}, {
 		name: "requirement sql not in",
@@ -1029,7 +1029,7 @@ func TestRequirementSql(t *testing.T) {
 			operator:  selection.NotIn,
 			strValues: []string{"tom", "jerry"},
 		},
-		query: "user_name not in (?,?)",
+		query: "`user_name` not in (?,?)",
 		args:  []interface{}{"tom", "jerry"},
 	}, {
 
@@ -1039,7 +1039,7 @@ func TestRequirementSql(t *testing.T) {
 			operator:  selection.GreaterThan,
 			strValues: []string{"2"},
 		},
-		query: "id > ?",
+		query: "`id` > ?",
 		args:  []interface{}{"2"},
 	}, {
 		name: "requirement sql lt",
@@ -1048,12 +1048,69 @@ func TestRequirementSql(t *testing.T) {
 			operator:  selection.LessThan,
 			strValues: []string{"2"},
 		},
-		query: "id < ?",
+		query: "`id` < ?",
 		args:  []interface{}{"2"},
 	}}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if query, args := tt.r.Sql(); query != tt.query || !reflect.DeepEqual(args, tt.args) {
+				t.Errorf("r.Sql() = %v %v, want %v %v",
+					query, args, tt.query, tt.args)
+			}
+		})
+	}
+}
+
+func TestSelectorSql(t *testing.T) {
+	tests := []struct {
+		name     string
+		selector string
+		query    string
+		args     []interface{}
+	}{{
+		name:     "equal",
+		selector: "user_name = tom",
+		query:    "`user_name` = ?",
+		args:     []interface{}{"tom"},
+	}, {
+		name:     "in",
+		selector: "user_name in (tom, jerry)",
+		query:    "`user_name` in (?,?)",
+		args:     []interface{}{"jerry", "tom"},
+	}, {
+		name:     "not equal",
+		selector: "user_name != tom",
+		query:    "`user_name` != ?",
+		args:     []interface{}{"tom"},
+	}, {
+		name:     "not in",
+		selector: "user_name notin (tom, jerry)",
+		query:    "`user_name` not in (?,?)",
+		args:     []interface{}{"jerry", "tom"},
+	}, {
+
+		name:     "gt",
+		selector: "id > 2",
+		query:    "`id` > ?",
+		args:     []interface{}{"2"},
+	}, {
+		name:     "lt",
+		selector: "id < 2",
+		query:    "`id` < ?",
+		args:     []interface{}{"2"},
+	}, {
+		name:     "and",
+		selector: "user_name!=tom , id<10",
+		query:    "`user_name` != ? and `id` < ?",
+		args:     []interface{}{"tom", "10"},
+	}}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := Parse(tt.selector)
+			if err != nil {
+				t.Error(err)
+			}
+			if query, args := s.Sql(); query != tt.query || !reflect.DeepEqual(args, tt.args) {
 				t.Errorf("r.Sql() = %v %v, want %v %v",
 					query, args, tt.query, tt.args)
 			}
