@@ -42,9 +42,13 @@ type DBWrapper interface {
 	ExecNum(sql string, args ...interface{}) (int64, error)
 	ExecNumErr(s string, args ...interface{}) error
 	Query(query string, args ...interface{}) *Rows
-	Update(sample interface{}, opts ...SqlOption) error
+
 	Insert(sample interface{}, opts ...SqlOption) error
 	InsertLastId(sample interface{}, opts ...SqlOption) (int64, error)
+	List(into interface{}, opts ...SqlOption) error
+	Get(into interface{}, opts ...SqlOption) error
+	Update(sample interface{}, opts ...SqlOption) error
+	Delete(sample interface{}, opts ...SqlOption) error
 }
 
 type ormDB struct {
@@ -217,7 +221,6 @@ type Rows struct {
 	db    DBWrapper
 	query string
 	args  []interface{}
-	count *int64
 
 	maxRows int
 	rows    *sql.Rows
@@ -270,11 +273,6 @@ func (p *Rows) scanRow(dst interface{}) error {
 	return nil
 }
 
-func (p *Rows) Count(count *int64) *Rows {
-	p.count = count
-	return p
-}
-
 // Rows([]struct{})
 // Rows([]*struct{})
 // Rows(*[]struct{})
@@ -287,17 +285,6 @@ func (p *Rows) Rows(dst interface{}) error {
 		return p.err
 	}
 	defer p.rows.Close()
-
-	if p.count != nil {
-		countQuery, err := genCountQuery(p.query)
-		if err != nil {
-			return err
-		}
-		err = p.db.Query(countQuery, p.args...).Row(p.count)
-		if err != nil {
-			return err
-		}
-	}
 
 	limit := p.maxRows
 

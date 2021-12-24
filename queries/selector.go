@@ -52,6 +52,8 @@ type Selector interface {
 	// requires a single specific query to be set, and if so returns the value it
 	// requires.
 	RequiresExactMatch(query string) (value string, found bool)
+
+	Sql() (string, []interface{})
 }
 
 // Everything returns a selector that matches all queries.
@@ -263,21 +265,21 @@ func (r *Requirement) Sql() (string, []interface{}) {
 	switch r.operator {
 	case selection.In, selection.Equals, selection.DoubleEquals:
 		if len(r.strValues) == 1 {
-			return fmt.Sprintf("%s = ?", r.key), []interface{}{r.strValues[0]}
+			return fmt.Sprintf("`%s` = ?", r.key), []interface{}{r.strValues[0]}
 		}
 		return sqlArray(r.key, "in", r.strValues)
 	case selection.NotIn, selection.NotEquals:
 		if len(r.strValues) == 1 {
-			return fmt.Sprintf("%s != ?", r.key), []interface{}{r.strValues[0]}
+			return fmt.Sprintf("`%s` != ?", r.key), []interface{}{r.strValues[0]}
 		}
 		return sqlArray(r.key, "not in", r.strValues)
 	case selection.GreaterThan:
 		if len(r.strValues) == 1 {
-			return fmt.Sprintf("%s > ?", r.key), []interface{}{r.strValues[0]}
+			return fmt.Sprintf("`%s` > ?", r.key), []interface{}{r.strValues[0]}
 		}
 	case selection.LessThan:
 		if len(r.strValues) == 1 {
-			return fmt.Sprintf("%s < ?", r.key), []interface{}{r.strValues[0]}
+			return fmt.Sprintf("`%s` < ?", r.key), []interface{}{r.strValues[0]}
 		}
 	}
 	return "", nil
@@ -418,7 +420,7 @@ func (s internalSelector) Sql() (string, []interface{}) {
 	for ix := range s {
 		if q, a := s[ix].Sql(); len(q) > 0 {
 			queries = append(queries, q)
-			args = append(args, a)
+			args = append(args, a...)
 
 		}
 	}

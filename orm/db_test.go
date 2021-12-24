@@ -405,31 +405,6 @@ func TestQueryRowsStructPtr(t *testing.T) {
 	})
 }
 
-func TestQueryRowsWithCount(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
-		var v []*struct {
-			PointX int64
-			PointY int64 `sql:"point_y"`
-		}
-
-		dbt.mustExec("CREATE TABLE test (point_x int, point_y int)")
-
-		dbt.mustExec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
-
-		var total int64
-		dbt.db.Query("select * from test").Count(&total).Rows(&v)
-
-		if len(v) != 3 {
-			t.Fatalf("query rows want 3 got %d", len(v))
-		}
-		if total != 3 {
-			t.Fatalf("total want 3 got %d", total)
-		}
-
-		dbt.mustExec("DROP TABLE IF EXISTS test")
-	})
-}
-
 func TestPing(t *testing.T) {
 	runTests(t, dsn, func(dbt *DBTest) {
 		if err := dbt.db.RawDB().Ping(); err != nil {
@@ -466,35 +441,6 @@ func TestTime(t *testing.T) {
 		}
 		dbt.mustExec("DROP TABLE IF EXISTS test")
 	})
-}
-
-func TestUpdateSql(t *testing.T) {
-	type vt struct {
-		PointX  int
-		PointY  int `sql:"point_y"`
-		Private int `sql:",where"`
-		private int
-	}
-
-	cases := []struct {
-		tab    string
-		sample vt
-		sql    string
-		args   []interface{}
-	}{{
-		"vt",
-		vt{1, 2, 3, 4},
-		"update vt set point_x=?, point_y=? where private=?",
-		[]interface{}{1, 2, 3},
-	}}
-	for _, c := range cases {
-		if sql, args, err := GenUpdateSql("vt", c.sample); err != nil {
-			t.Fatal(err)
-		} else {
-			assert.Equal(t, c.sql, sql)
-			assert.Equal(t, c.args, args)
-		}
-	}
 }
 
 func TestSqlArg(t *testing.T) {
@@ -551,6 +497,11 @@ func TestSqlArg(t *testing.T) {
 
 }
 
+//type Foo struct {
+//	Id    *int
+//	Value *int
+//}
+
 func TestTx(t *testing.T) {
 	if driver != "mysql" {
 		return
@@ -600,11 +551,10 @@ func TestTx(t *testing.T) {
 	})
 
 	runTests(t, dsn, func(dbt *DBTest) {
-		type test struct {
+		type Test struct {
 			Id    *int
 			Value *int
 		}
-
 		dbt.mustExec(`CREATE TABLE test (
 id int not null auto_increment,
 value int,
@@ -617,7 +567,7 @@ PRIMARY KEY (id)
 				t.Fatal(err)
 			}
 			for i := 0; i < 10; i++ {
-				if id, err := tx.InsertLastId(&test{Value: &i}); err != nil {
+				if id, err := tx.InsertLastId(&Test{Value: &i}); err != nil {
 					t.Fatal(err)
 				} else {
 					t.Logf("id %d", id)
@@ -652,7 +602,7 @@ PRIMARY KEY (id)
 				t.Fatal(err)
 			}
 			for i := 0; i < 10; i++ {
-				if id, err := tx.InsertLastId(&test{Value: &i}); err != nil {
+				if id, err := tx.InsertLastId(&Test{Value: &i}); err != nil {
 					t.Fatal(err)
 				} else {
 					t.Logf("id %d", id)

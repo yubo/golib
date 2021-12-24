@@ -4,6 +4,8 @@ import (
 	"context"
 	"reflect"
 	"time"
+
+	"github.com/yubo/golib/queries"
 )
 
 const (
@@ -81,16 +83,19 @@ func WithMaxIdleCount(n int) Option {
 		o.maxIdleCount = &n
 	}
 }
+
 func WithMaxOpenConns(n int) Option {
 	return func(o *Options) {
 		o.maxOpenConns = &n
 	}
 }
+
 func WithConnMaxLifetime(d time.Duration) Option {
 	return func(o *Options) {
 		o.connMaxLifetime = &d
 	}
 }
+
 func WithConnMaxIdletime(d time.Duration) Option {
 	return func(o *Options) {
 		o.connMaxIdletime = &d
@@ -98,11 +103,14 @@ func WithConnMaxIdletime(d time.Duration) Option {
 }
 
 type SqlOptions struct {
-	table  string
-	offset *int64
-	limit  *int64
-	cols   []string
-	sample interface{}
+	sample   interface{}
+	total    *int64
+	table    string
+	selector queries.Selector
+	cols     []string
+	orderby  []string
+	offset   *int64
+	limit    *int64
 }
 
 type SqlOption func(*SqlOptions)
@@ -113,15 +121,34 @@ func WithTable(table string) SqlOption {
 	}
 }
 
+func WithTotal(total *int64) SqlOption {
+	return func(o *SqlOptions) {
+		o.total = total
+	}
+}
+
+func WithSelector(selector queries.Selector) SqlOption {
+	return func(o *SqlOptions) {
+		o.selector = selector
+	}
+}
+
 func WithLimit(offset, limit int64) SqlOption {
 	return func(o *SqlOptions) {
 		o.offset = &offset
 		o.limit = &limit
 	}
 }
+
 func WithCols(cols ...string) SqlOption {
 	return func(o *SqlOptions) {
 		o.cols = cols
+	}
+}
+
+func WithOrderby(orderby ...string) SqlOption {
+	return func(o *SqlOptions) {
+		o.orderby = orderby
 	}
 }
 
@@ -130,20 +157,34 @@ func WithSample(sample interface{}) SqlOption {
 		o.sample = sample
 	}
 }
-func (p *SqlOptions) GenUpdateSql() (string, []interface{}, error) {
-	table := p.table
-	if table == "" {
-		table = snakeCasedName(reflect.TypeOf(p.sample).Name())
+
+func (p *SqlOptions) Table() string {
+	if p.table != "" {
+		return p.table
 	}
 
-	return GenUpdateSql(table, p.sample)
+	rt := reflect.TypeOf(p.sample)
+	if rt.Kind() == reflect.Ptr {
+		rt = rt.Elem()
+	}
+
+	return snakeCasedName(rt.Name())
+}
+
+func (p *SqlOptions) GenListSql() (query, countQuery string, args []interface{}, err error) {
+	return GenListSql(p.Table(), p.cols, p.selector, p.orderby, p.offset, p.limit)
+}
+func (p *SqlOptions) GenGetSql() (string, []interface{}, error) {
+	return GenGetSql(p.Table(), p.cols, p.selector)
+}
+func (p *SqlOptions) GenUpdateSql() (string, []interface{}, error) {
+	return GenUpdateSql(p.Table(), p.sample)
+}
+
+func (p *SqlOptions) GenDeleteSql() (string, []interface{}, error) {
+	return GenDeleteSql(p.Table(), p.selector)
 }
 
 func (p *SqlOptions) GenInsertSql() (string, []interface{}, error) {
-	table := p.table
-	if table == "" {
-		table = snakeCasedName(reflect.TypeOf(p.sample).Name())
-	}
-
-	return GenInsertSql(table, p.sample)
+	return GenInsertSql(p.Table(), p.sample)
 }
