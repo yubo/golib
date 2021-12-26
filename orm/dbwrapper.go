@@ -8,7 +8,7 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var _ DBWrapper = &dbWrapper{}
+var _ Interface = &dbWrapper{}
 
 type dbWrapper struct {
 	*Options
@@ -171,7 +171,7 @@ func (p *dbWrapper) Get(into interface{}, opts ...SqlOption) error {
 
 	dlogSql(2, query, args...)
 
-	return p.query(query, args...).Row(into)
+	return o.Error(p.query(query, args...).Row(into))
 }
 
 func (p *dbWrapper) Update(sample interface{}, opts ...SqlOption) error {
@@ -188,7 +188,7 @@ func (p *dbWrapper) Update(sample interface{}, opts ...SqlOption) error {
 
 	dlogSql(2, query, args...)
 
-	return p.execNumErr(query, args...)
+	return o.Error(p.execNumErr(query, args...))
 }
 
 func (p *dbWrapper) Delete(sample interface{}, opts ...SqlOption) error {
@@ -205,5 +205,5 @@ func (p *dbWrapper) Delete(sample interface{}, opts ...SqlOption) error {
 
 	dlogSql(2, query, args...)
 
-	return p.execNumErr(query, args...)
+	return o.Error(p.execNumErr(query, args...))
 }

@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/yubo/golib/api/errors"
 	"github.com/yubo/golib/queries"
 )
 
@@ -103,14 +104,23 @@ func WithConnMaxIdletime(d time.Duration) Option {
 }
 
 type SqlOptions struct {
-	sample   interface{}
-	total    *int64
-	table    string
-	selector queries.Selector
-	cols     []string
-	orderby  []string
-	offset   *int64
-	limit    *int64
+	sample         interface{}
+	total          *int64
+	table          string
+	selector       queries.Selector
+	cols           []string
+	orderby        []string
+	offset         *int64
+	limit          *int64
+	ignoreNotFound bool
+}
+
+func (o *SqlOptions) Error(err error) error {
+	if err != nil && o.ignoreNotFound && errors.IsNotFound(err) {
+		return nil
+	}
+
+	return err
 }
 
 type SqlOption func(*SqlOptions)
@@ -118,6 +128,12 @@ type SqlOption func(*SqlOptions)
 func WithTable(table string) SqlOption {
 	return func(o *SqlOptions) {
 		o.table = table
+	}
+}
+
+func WithIgnoreNotFoundErr() SqlOption {
+	return func(o *SqlOptions) {
+		o.ignoreNotFound = true
 	}
 }
 
@@ -174,13 +190,16 @@ func (p *SqlOptions) Table() string {
 func (p *SqlOptions) GenListSql() (query, countQuery string, args []interface{}, err error) {
 	return GenListSql(p.Table(), p.cols, p.selector, p.orderby, p.offset, p.limit)
 }
+
 func (p *SqlOptions) GenGetSql() (string, []interface{}, error) {
 	return GenGetSql(p.Table(), p.cols, p.selector)
 }
+
 func (p *SqlOptions) GenUpdateSql() (string, []interface{}, error) {
 	return GenUpdateSql(p.Table(), p.sample)
 }
 
+// TODO: generate selector from sample.fields, like GenUpdateSql
 func (p *SqlOptions) GenDeleteSql() (string, []interface{}, error) {
 	return GenDeleteSql(p.Table(), p.selector)
 }

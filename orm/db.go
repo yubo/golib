@@ -20,7 +20,7 @@ type DB interface {
 	BeginTx(ctx context.Context, ops *sql.TxOptions) (Tx, error)
 	ExecRows(bytes []byte) error // like mysql < a.sql
 
-	DBWrapper
+	Interface
 }
 
 type Tx interface {
@@ -28,7 +28,7 @@ type Tx interface {
 	Rollback() error
 	Commit() error
 
-	DBWrapper
+	Interface
 }
 
 type rawDB interface {
@@ -36,7 +36,7 @@ type rawDB interface {
 	Query(query string, args ...interface{}) (*sql.Rows, error)
 }
 
-type DBWrapper interface {
+type Interface interface {
 	Exec(query string, args ...interface{}) (sql.Result, error)
 	ExecLastId(sql string, args ...interface{}) (int64, error)
 	ExecNum(sql string, args ...interface{}) (int64, error)
@@ -218,7 +218,7 @@ func (p *ormTx) Commit() error {
 
 type Rows struct {
 	*Options
-	db    DBWrapper
+	db    Interface
 	query string
 	args  []interface{}
 
@@ -246,7 +246,7 @@ func (p *Rows) Row(dst ...interface{}) error {
 	}
 
 	if !p.ignoreNotFound {
-		return errors.NewNotFound("rows")
+		return errors.NewNotFound("object")
 	}
 
 	return nil
