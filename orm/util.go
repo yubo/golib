@@ -427,9 +427,13 @@ func scanInterface(rv reflect.Value, tran *[]*transfer) (interface{}, error) {
 	switch iface.(type) {
 	case *time.Time:
 		return iface, nil
+	case **time.Time:
+		return iface, nil
 	case sql.Scanner:
 		return iface, nil
 	case *[]byte:
+		return iface, nil
+	case **[]byte:
 		return iface, nil
 	}
 
@@ -438,11 +442,12 @@ func scanInterface(rv reflect.Value, tran *[]*transfer) (interface{}, error) {
 		rt.Kind() == reflect.Slice {
 		// json decode support *struct{}, but not **struct{}, so should adapt it
 		node := &transfer{dst: iface, ptr: ptr}
+		dlog(1, "add %s into tran", rt.Name())
 		*tran = append(*tran, node)
 		return &node.dstProxy, nil
 	}
 
-	return rv.Addr().Interface(), nil
+	return iface, nil
 }
 
 // sqlInterface: rv should not be ptr, return interface for use in sql's args

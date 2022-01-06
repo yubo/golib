@@ -426,8 +426,7 @@ func TestTime(t *testing.T) {
 		v, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
 		cases := []test{
 			{v, &v, 0},
-			{time.Time{}, &time.Time{}, 1},
-			//{time.Time{}, nil, 2}, // FIXME: can't work
+			{v, nil, 1}, // FIXME: can't work
 		}
 
 		for _, c := range cases {
@@ -436,8 +435,14 @@ func TestTime(t *testing.T) {
 			}
 			got := test{}
 			dbt.mustQueryRow(&got, "SELECT * FROM test where n = ?", c.N)
-			assert.Equal(t, c.Time.Unix(), got.Time.Unix())
-			assert.Equal(t, c.TimeP.Unix(), got.TimeP.Unix())
+			assert.Equal(t, c.Time.Unix(), got.Time.Unix(), "time")
+
+			if c.TimeP != nil {
+				assert.Equal(t, c.TimeP.Unix(), got.TimeP.Unix(), "time_p")
+			} else {
+				assert.Equal(t, c.TimeP, got.TimeP, "time_p")
+
+			}
 		}
 		dbt.mustExec("DROP TABLE IF EXISTS test")
 	})

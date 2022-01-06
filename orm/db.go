@@ -116,10 +116,12 @@ func (p *ormDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ormTx{tx: tx,
+	return &ormTx{
+		tx: tx,
 		dbBase: dbBase{
 			Options: p.Options,
 			rawDB:   tx,
+			Driver:  p.Driver,
 		},
 	}, nil
 }
