@@ -113,3 +113,80 @@ func testUpdateTable(t *testing.T) {
 	}
 	assert.Equalf(t, util.JsonStr(u1), util.JsonStr(u2), "user get")
 }
+
+func TestTime(t *testing.T) {
+	runTests(t, dsn, func(dbt *DBTest) {
+		c := &clock.FakeClock{}
+		SetClock(c)
+		c.SetTime(testCreatedTime)
+
+		type test struct {
+			Name      string
+			TimeSec   int64      `sql:",auto_createtime"`
+			TimeMilli int64      `sql:",auto_createtime=milli"`
+			TimeNano  int64      `sql:",auto_createtime=nano"`
+			Time      time.Time  `sql:",auto_createtime"`
+			TimeP     *time.Time `sql:",auto_createtime"`
+		}
+
+		v := test{Name: "test"}
+
+		if err := dbt.db.AutoMigrate(&v, WithTable(testTable)); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := dbt.db.Insert(&v, WithTable(testTable)); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := dbt.db.Get(&v, WithSelector("name=test"), WithTable(testTable)); err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, testCreatedTime.Unix(), v.TimeSec, "time sec")
+		assert.Equal(t, testCreatedTime.UnixNano()/1e6, v.TimeMilli, "time milli")
+		assert.Equal(t, testCreatedTime.UnixNano(), v.TimeNano, "time nano")
+		assert.WithinDuration(t, testCreatedTime, v.Time, time.Second, "time")
+		assert.WithinDuration(t, testCreatedTime, *v.TimeP, time.Second, "time")
+
+		dbt.db.DropTable(&SqlOptions{table: testTable})
+	})
+}
+
+func TestStruct(t *testing.T) {
+	runTests(t, dsn, func(dbt *DBTest) {
+		DEBUG = true
+
+		type User struct {
+			UserName string
+		}
+
+		type Role struct {
+			RoleName string
+		}
+
+		type Test struct {
+			Name string
+			User
+			Role Role `sql:"role,size=1024"`
+		}
+
+		v := Test{Name: "test", User: User{"user-name"}, Role: Role{"role-name"}}
+
+		if err := dbt.db.AutoMigrate(&v, WithTable(testTable)); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := dbt.db.Insert(&v, WithTable(testTable)); err != nil {
+			t.Fatal(err)
+		}
+
+		var got Test
+		if err := dbt.db.Get(&got, WithSelector("name=test"), WithTable(testTable)); err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, v, got, "test struct")
+
+		dbt.db.DropTable(&SqlOptions{table: testTable})
+	})
+}

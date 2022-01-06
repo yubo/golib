@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
-	"github.com/yubo/golib/util/clock"
 
 	_ "github.com/yubo/golib/orm/mysql"
 	_ "github.com/yubo/golib/orm/sqlite"
@@ -416,45 +415,6 @@ func TestPing(t *testing.T) {
 		if err := dbt.db.RawDB().Ping(); err != nil {
 			dbt.fail("Ping", "Ping", err)
 		}
-	})
-}
-
-func TestTime(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
-		c := &clock.FakeClock{}
-		SetClock(c)
-		c.SetTime(testCreatedTime)
-
-		type test struct {
-			Name      string
-			TimeSec   int64      `sql:",auto_createtime"`
-			TimeMilli int64      `sql:",auto_createtime=milli"`
-			TimeNano  int64      `sql:",auto_createtime=nano"`
-			Time      time.Time  `sql:",auto_createtime"`
-			TimeP     *time.Time `sql:",auto_createtime"`
-		}
-
-		v := test{Name: "test"}
-
-		if err := dbt.db.AutoMigrate(&v, WithTable(testTable)); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := dbt.db.Insert(&v, WithTable(testTable)); err != nil {
-			t.Fatal(err)
-		}
-
-		if err := dbt.db.Get(&v, WithSelector("name=test"), WithTable(testTable)); err != nil {
-			t.Fatal(err)
-		}
-
-		assert.Equal(t, testCreatedTime.Unix(), v.TimeSec, "time sec")
-		assert.Equal(t, testCreatedTime.UnixNano()/1e6, v.TimeMilli, "time milli")
-		assert.Equal(t, testCreatedTime.UnixNano(), v.TimeNano, "time nano")
-		assert.WithinDuration(t, testCreatedTime, v.Time, time.Second, "time")
-		assert.WithinDuration(t, testCreatedTime, *v.TimeP, time.Second, "time")
-
-		dbt.db.DropTable(&SqlOptions{table: testTable})
 	})
 }
 

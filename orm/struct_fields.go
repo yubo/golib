@@ -132,19 +132,18 @@ func typeFields(t reflect.Type, driver Driver) structFields {
 			// Scan f.typ for fields to include.
 			for i := 0; i < f.typ.NumField(); i++ {
 				sf := f.typ.Field(i)
-				isUnexported := sf.PkgPath != ""
 				if sf.Anonymous {
 					t := sf.Type
 					if t.Kind() == reflect.Ptr {
 						t = t.Elem()
 					}
-					if isUnexported && t.Kind() != reflect.Struct {
+					if !sf.IsExported() && t.Kind() != reflect.Struct {
 						// Ignore embedded fields of unexported non-struct types.
 						continue
 					}
 					// Do not ignore embedded fields of unexported struct types
 					// since they may have exported fields.
-				} else if isUnexported {
+				} else if !sf.IsExported() {
 					// Ignore unexported non-embedded fields.
 					continue
 				}
@@ -272,7 +271,7 @@ func (o tagOptions) Contains(optionName string) bool {
 // func getTags(ff reflect.StructField) (name, paramType, format string, skip, bool) {
 func parseStructField(sf reflect.StructField) (*FieldOptions, error) {
 	if sf.Anonymous {
-		return nil, nil
+		return &FieldOptions{}, nil
 	}
 
 	opt := &FieldOptions{}
@@ -389,6 +388,8 @@ func parseStructField(sf reflect.StructField) (*FieldOptions, error) {
 	case reflect.Struct:
 		if t.ConvertibleTo(reflect.TypeOf(time.Time{})) {
 			opt.dataType = Time
+		} else {
+			opt.dataType = Bytes
 		}
 	case reflect.Array, reflect.Slice:
 		if t.Elem().Kind() == reflect.Uint8 {
