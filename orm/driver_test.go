@@ -14,7 +14,7 @@ var (
 )
 
 func TestMysqlMigrate(t *testing.T) {
-	DEBUG = true
+	//DEBUG = true
 	driver = envDef("TEST_DB_DRIVER", "mysql")
 	dsn = envDef("TEST_DB_DSN", "root:1234@tcp(127.0.0.1:3306)/test?parseTime=true")
 	var err error
@@ -32,7 +32,7 @@ func TestMysqlMigrate(t *testing.T) {
 }
 
 func TestSqliteMigrate(t *testing.T) {
-	DEBUG = true
+	//DEBUG = true
 	driver = "sqlite3"
 	dsn = "file:test.db?cache=shared&mode=memory"
 
@@ -155,23 +155,30 @@ func TestTime(t *testing.T) {
 
 func TestStruct(t *testing.T) {
 	runTests(t, dsn, func(dbt *DBTest) {
-		DEBUG = true
+		//DEBUG = true
 
 		type User struct {
+			UserID   int
 			UserName string
+		}
+		type Group struct {
+			GroupID   int
+			GroupName string
 		}
 
 		type Role struct {
+			RouteID  int
 			RoleName string
 		}
 
 		type Test struct {
-			Name string
-			User
-			Role Role `sql:"role,size=1024"`
+			Name  string
+			User        // inline
+			Group Group `sql:",inline"`        // inline
+			Role  Role  `sql:"role,size=1024"` // use json.Marshal as []byte
 		}
 
-		v := Test{Name: "test", User: User{"user-name"}, Role: Role{"role-name"}}
+		v := Test{Name: "test", User: User{1, "user-name"}, Group: Group{2, "group-name"}, Role: Role{3, "role-name"}}
 
 		if err := dbt.db.AutoMigrate(&v, WithTable(testTable)); err != nil {
 			t.Fatal(err)

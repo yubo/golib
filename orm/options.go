@@ -179,7 +179,7 @@ func (p *SqlOptions) Table() string {
 		rt = rt.Elem()
 	}
 
-	p.table = snakeCasedName(rt.Name())
+	p.table = dbName(rt.Name())
 	return p.table
 }
 

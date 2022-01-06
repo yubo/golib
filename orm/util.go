@@ -26,7 +26,19 @@ var (
 	errSelectorNil             = errors.New("selector is nil")
 	errQueryEmpty              = errors.New("query is empty")
 	defaultClock   clock.Clock = clock.RealClock{}
+
+	// https://github.com/golang/lint/blob/master/lint.go#L770
+	commonInitialisms         = []string{"API", "ASCII", "CPU", "CSS", "DNS", "EOF", "GUID", "HTML", "HTTP", "HTTPS", "ID", "IP", "JSON", "LHS", "QPS", "RAM", "RHS", "RPC", "SLA", "SMTP", "SSH", "TLS", "TTL", "UID", "UI", "UUID", "URI", "URL", "UTF8", "VM", "XML", "XSRF", "XSS"}
+	commonInitialismsReplacer *strings.Replacer
 )
+
+func init() {
+	commonInitialismsForReplacer := make([]string, 0, len(commonInitialisms))
+	for _, initialism := range commonInitialisms {
+		commonInitialismsForReplacer = append(commonInitialismsForReplacer, initialism, strings.Title(strings.ToLower(initialism)))
+	}
+	commonInitialismsReplacer = strings.NewReplacer(commonInitialismsForReplacer...)
+}
 
 func printString(b []byte) string {
 	s := make([]byte, len(b))
@@ -70,6 +82,10 @@ func dlogSql(depth int, query string, args ...interface{}) {
 }
 
 // utils
+func dbName(name string) string {
+	return snakeCasedName(commonInitialismsReplacer.Replace(name))
+}
+
 func snakeCasedName(name string) string {
 	newstr := make([]rune, 0)
 	firstTime := true

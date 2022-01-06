@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 	"unicode"
 
 	"github.com/yubo/golib/util"
@@ -35,6 +34,7 @@ type FieldOptions struct {
 	name      string
 	where     bool
 	skip      bool
+	inline    bool
 	//key       string // use name instead of key
 
 	// from tag
@@ -167,7 +167,7 @@ func typeFields(t reflect.Type, driver Driver) structFields {
 
 				// Record found field and index sequence.
 				// if opt.name != "" || !sf.Anonymous || ft.Kind() != reflect.Struct {
-				if opt.name != "" || !sf.Anonymous {
+				if opt.name != "" && !sf.Anonymous {
 					field := &field{
 						FieldOptions: opt,
 						index:        index,
@@ -286,13 +286,16 @@ func parseStructField(sf reflect.StructField) (*FieldOptions, error) {
 	if set.Has("where") {
 		opt.where = true
 	}
+	if set.Has("inline") {
+		opt.inline = true
+	}
 	opt.Set = set
 
 	//opt.key = snakeCasedName(sf.Name)
 	opt.fieldName = sf.Name
 	opt.name = set.Get("name")
 	if opt.name == "" {
-		opt.name = snakeCasedName(opt.fieldName)
+		opt.name = dbName(opt.fieldName)
 	}
 	opt.name = strings.ToLower(opt.name)
 
@@ -386,10 +389,15 @@ func parseStructField(sf reflect.StructField) (*FieldOptions, error) {
 			opt.defaultValueInterface = opt.defaultValue
 		}
 	case reflect.Struct:
-		if t.ConvertibleTo(reflect.TypeOf(time.Time{})) {
+		if t.String() == "time.Time" {
 			opt.dataType = Time
 		} else {
-			opt.dataType = Bytes
+			if opt.inline {
+				// unset name if has inline tag
+				opt.name = ""
+			} else {
+				opt.dataType = Bytes
+			}
 		}
 	case reflect.Array, reflect.Slice:
 		if t.Elem().Kind() == reflect.Uint8 {

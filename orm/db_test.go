@@ -542,10 +542,8 @@ PRIMARY KEY (id)
 				t.Fatal(err)
 			}
 			for i := 0; i < 10; i++ {
-				if id, err := tx.InsertLastId(&Test{Value: &i}); err != nil {
+				if _, err := tx.InsertLastId(&Test{Value: &i}); err != nil {
 					t.Fatal(err)
-				} else {
-					t.Logf("id %d", id)
 				}
 			}
 
@@ -554,7 +552,6 @@ PRIMARY KEY (id)
 				if err := tx.Query("SELECT value FROM test").Rows(&v); err != nil {
 					t.Fatal(err)
 				}
-				t.Logf("before rollback %#v", v)
 			}
 
 			if err := tx.Rollback(); err != nil {
@@ -566,7 +563,6 @@ PRIMARY KEY (id)
 				if err := dbt.db.Query("SELECT value FROM test").Rows(&v); err != nil {
 					t.Log(err)
 				}
-				t.Logf("after rollback %#v", v)
 			}
 
 		}
@@ -577,10 +573,8 @@ PRIMARY KEY (id)
 				t.Fatal(err)
 			}
 			for i := 0; i < 10; i++ {
-				if id, err := tx.InsertLastId(&Test{Value: &i}); err != nil {
+				if _, err := tx.InsertLastId(&Test{Value: &i}); err != nil {
 					t.Fatal(err)
-				} else {
-					t.Logf("id %d", id)
 				}
 			}
 
