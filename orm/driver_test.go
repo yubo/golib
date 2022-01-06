@@ -10,16 +10,8 @@ import (
 )
 
 var (
-	testdb          DB
-	testCreatedTime time.Time
-	testUpdatedTime time.Time
+	testdb DB
 )
-
-func init() {
-	testCreatedTime = time.Unix(1000, 0)
-	testUpdatedTime = time.Unix(2000, 0)
-
-}
 
 func TestMysqlMigrate(t *testing.T) {
 	DEBUG = true
@@ -34,8 +26,9 @@ func TestMysqlMigrate(t *testing.T) {
 	defer testdb.Close()
 
 	t.Run("create table", testCreateTable)
-
 	t.Run("update table", testUpdateTable)
+
+	testdb.DropTable(&SqlOptions{table: testTable})
 }
 
 func TestSqliteMigrate(t *testing.T) {
@@ -53,6 +46,8 @@ func TestSqliteMigrate(t *testing.T) {
 
 	t.Run("create table", testCreateTable)
 	t.Run("update table", testUpdateTable)
+
+	testdb.DropTable(&SqlOptions{table: testTable})
 }
 
 func testCreateTable(t *testing.T) {
@@ -68,20 +63,20 @@ func testCreateTable(t *testing.T) {
 		UpdatedAt time.Time
 	}
 
-	testdb.DropTable(&SqlOptions{table: "user"})
-	if err := testdb.AutoMigrate(&User1{}, WithTable("user")); err != nil {
+	testdb.DropTable(&SqlOptions{table: testTable})
+	if err := testdb.AutoMigrate(&User1{}, WithTable(testTable)); err != nil {
 		t.Fatal(err)
 	}
 
 	u1 := User1{ID: 1, Name: "tom", Age: 14}
-	if err := testdb.Insert(&u1, WithTable("user")); err != nil {
+	if err := testdb.Insert(&u1, WithTable(testTable)); err != nil {
 		t.Fatal(err)
 	}
 	u1.CreatedAt = testCreatedTime
 	u1.UpdatedAt = testCreatedTime
 
 	var u2 User1
-	if err := testdb.Get(&u2, WithSelector("name=tom"), WithTable("user")); err != nil {
+	if err := testdb.Get(&u2, WithSelector("name=tom"), WithTable(testTable)); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equalf(t, util.JsonStr(u1), util.JsonStr(u2), "user get")
@@ -101,19 +96,19 @@ func testUpdateTable(t *testing.T) {
 		UpdatedAt time.Time
 	}
 
-	if err := testdb.AutoMigrate(&User2{}, WithTable("user")); err != nil {
+	if err := testdb.AutoMigrate(&User2{}, WithTable(testTable)); err != nil {
 		t.Fatal(err)
 	}
 
 	u1 := User2{Name: "tom", Age: 14, Address: "beijing", NickName: util.String("t")}
-	if err := testdb.Update(&u1, WithTable("user")); err != nil {
+	if err := testdb.Update(&u1, WithTable(testTable)); err != nil {
 		t.Fatal(err)
 	}
 	u1.CreatedAt = testCreatedTime
 	u1.UpdatedAt = testUpdatedTime
 
 	var u2 User2
-	if err := testdb.Get(&u2, WithSelector("name=tom"), WithTable("user")); err != nil {
+	if err := testdb.Get(&u2, WithSelector("name=tom"), WithTable(testTable)); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equalf(t, util.JsonStr(u1), util.JsonStr(u2), "user get")

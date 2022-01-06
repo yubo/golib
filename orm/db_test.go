@@ -10,15 +10,19 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/clock"
 
 	_ "github.com/yubo/golib/orm/mysql"
 	_ "github.com/yubo/golib/orm/sqlite"
 )
 
 var (
-	dsn       string
-	driver    string
-	available bool
+	dsn             string
+	driver          string
+	available       bool
+	testCreatedTime time.Time
+	testUpdatedTime time.Time
+	testTable       = "test"
 )
 
 func envDef(key, defaultValue string) string {
@@ -38,6 +42,8 @@ func init() {
 		}
 		db.Close()
 	}
+	testCreatedTime = time.Unix(1000, 0)
+	testUpdatedTime = time.Unix(2000, 0)
 }
 
 type DBTest struct {
@@ -415,36 +421,40 @@ func TestPing(t *testing.T) {
 
 func TestTime(t *testing.T) {
 	runTests(t, dsn, func(dbt *DBTest) {
+		c := &clock.FakeClock{}
+		SetClock(c)
+		c.SetTime(testCreatedTime)
+
 		type test struct {
-			Time  time.Time
-			TimeP *time.Time
-			N     int
+			Name      string
+			TimeSec   int64      `sql:",auto_createtime"`
+			TimeMilli int64      `sql:",auto_createtime=milli"`
+			TimeNano  int64      `sql:",auto_createtime=nano"`
+			Time      time.Time  `sql:",auto_createtime"`
+			TimeP     *time.Time `sql:",auto_createtime"`
 		}
 
-		dbt.mustExec("CREATE TABLE test (time datetime, time_p datetime, n int)")
+		v := test{Name: "test"}
 
-		v, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
-		cases := []test{
-			{v, &v, 0},
-			{v, nil, 1}, // FIXME: can't work
+		if err := dbt.db.AutoMigrate(&v, WithTable(testTable)); err != nil {
+			t.Fatal(err)
 		}
 
-		for _, c := range cases {
-			if err := dbt.db.Insert(c); err != nil {
-				t.Fatal(err)
-			}
-			got := test{}
-			dbt.mustQueryRow(&got, "SELECT * FROM test where n = ?", c.N)
-			assert.Equal(t, c.Time.Unix(), got.Time.Unix(), "time")
-
-			if c.TimeP != nil {
-				assert.Equal(t, c.TimeP.Unix(), got.TimeP.Unix(), "time_p")
-			} else {
-				assert.Equal(t, c.TimeP, got.TimeP, "time_p")
-
-			}
+		if err := dbt.db.Insert(&v, WithTable(testTable)); err != nil {
+			t.Fatal(err)
 		}
-		dbt.mustExec("DROP TABLE IF EXISTS test")
+
+		if err := dbt.db.Get(&v, WithSelector("name=test"), WithTable(testTable)); err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, testCreatedTime.Unix(), v.TimeSec, "time sec")
+		assert.Equal(t, testCreatedTime.UnixNano()/1e6, v.TimeMilli, "time milli")
+		assert.Equal(t, testCreatedTime.UnixNano(), v.TimeNano, "time nano")
+		assert.WithinDuration(t, testCreatedTime, v.Time, time.Second, "time")
+		assert.WithinDuration(t, testCreatedTime, *v.TimeP, time.Second, "time")
+
+		dbt.db.DropTable(&SqlOptions{table: testTable})
 	})
 }
 
