@@ -12,7 +12,9 @@ import (
 	"github.com/yubo/golib/util"
 )
 
-var fieldCache sync.Map // map[reflect.Type]structFields
+var (
+	fieldCache sync.Map // map[reflect.Type]structFields
+)
 
 // A field represents a single field found in a struct.
 // `param:"query,required" format:"password" description:"aaa"`
@@ -72,7 +74,7 @@ func (p FieldOptions) String() string {
 }
 
 type structFields struct {
-	list      []field
+	list      []*field
 	nameIndex map[string]int
 }
 
@@ -112,7 +114,7 @@ func typeFields(t reflect.Type, driver Driver) structFields {
 	visited := map[reflect.Type]bool{}
 
 	// Fields found.
-	var fields []field
+	var fields []*field
 
 	// Buffer to run HTMLEscape on field names.
 	// var nameEscBuf bytes.Buffer
@@ -167,14 +169,14 @@ func typeFields(t reflect.Type, driver Driver) structFields {
 				// Record found field and index sequence.
 				// if opt.name != "" || !sf.Anonymous || ft.Kind() != reflect.Struct {
 				if opt.name != "" || !sf.Anonymous {
-					field := field{
+					field := &field{
 						FieldOptions: opt,
 						index:        index,
 						typ:          ft,
 					}
 
 					// parsed by driver
-					driver.ParseField(&field)
+					driver.ParseField(field)
 
 					fields = append(fields, field)
 					if count[f.typ] > 1 {

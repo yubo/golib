@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/yubo/golib/queries"
+	"github.com/yubo/golib/util/clock"
 	"k8s.io/klog/v2"
 )
 
@@ -20,10 +21,11 @@ var (
 	regRealDataType = regexp.MustCompile(`[^\d](\d+)[^\d]?`)
 	regFullDataType = regexp.MustCompile(`[^\d]*(\d+)[^\d]?`)
 
-	errSampleNil   = errors.New("input sample is nil")
-	errTableEmpty  = errors.New("table name is not set")
-	errSelectorNil = errors.New("selector is nil")
-	errQueryEmpty  = errors.New("query is empty")
+	errSampleNil               = errors.New("input sample is nil")
+	errTableEmpty              = errors.New("table name is not set")
+	errSelectorNil             = errors.New("selector is nil")
+	errQueryEmpty              = errors.New("query is empty")
+	defaultClock   clock.Clock = clock.RealClock{}
 )
 
 func printString(b []byte) string {
@@ -154,7 +156,6 @@ func GenInsertSql(table string, sample interface{}, db Driver) (string, []interf
 		return "", nil, errTableEmpty
 	}
 
-	table = "`" + table + "`"
 	values := []kv{}
 
 	rv := reflect.Indirect(reflect.ValueOf(sample))
@@ -164,14 +165,14 @@ func GenInsertSql(table string, sample interface{}, db Driver) (string, []interf
 	}
 
 	if len(values) == 0 {
-		return "", nil, fmt.Errorf("insert into %s `values` is empty", table)
+		return "", nil, fmt.Errorf("insert into `%s` `values` is empty", table)
 	}
 
 	buf := &bytes.Buffer{}
 	buf2 := &bytes.Buffer{}
 	args := []interface{}{}
 
-	buf.WriteString("insert into " + table + " (")
+	buf.WriteString("insert into `" + table + "` (")
 
 	for i, v := range values {
 		if i != 0 {
@@ -189,6 +190,21 @@ func GenInsertSql(table string, sample interface{}, db Driver) (string, []interf
 func genInsertSql(rv reflect.Value, values *[]kv, db Driver) error {
 	fields := cachedTypeFields(rv.Type(), db)
 	for _, f := range fields.list {
+
+		if f.autoCreateTime > 0 {
+			*values = append(*values, kv{
+				f.name,
+				NewCurTime(f.autoCreateTime),
+			})
+			continue
+		} else if f.autoUpdateTime > 0 {
+			*values = append(*values, kv{
+				f.name,
+				NewCurTime(f.autoUpdateTime),
+			})
+			continue
+		}
+
 		fv, err := getSubv(rv, f.index, false)
 		if err != nil || isNil(fv) {
 			continue
@@ -203,17 +219,32 @@ func genInsertSql(rv reflect.Value, values *[]kv, db Driver) error {
 	return nil
 }
 
+func NewCurTime(t TimeType) interface{} {
+	cur := defaultClock.Now()
+	switch t {
+	case UnixTime:
+		return cur
+	case UnixSecond:
+		return cur.Unix()
+	case UnixMillisecond:
+		return cur.UnixNano() / 1e6
+	case UnixNanosecond:
+		return cur.UnixNano()
+	default:
+		klog.Errorf("unsupported timetype %d", t)
+		return nil
+	}
+}
+
 func GenListSql(table string, cols []string, selector queries.Selector, orderby []string, offset, limit *int64) (string, string, []interface{}, error) {
 	if table == "" {
 		return "", "", nil, errTableEmpty
 	}
 
-	table = "`" + table + "`"
-
 	// select *
 	buf := bytes.NewBufferString("select")
 	// select count(*)
-	buf2 := bytes.NewBufferString("select count(*) from " + table)
+	buf2 := bytes.NewBufferString("select count(*) from `" + table + "`")
 	args := []interface{}{}
 
 	// cols
@@ -229,7 +260,7 @@ func GenListSql(table string, cols []string, selector queries.Selector, orderby 
 	}
 
 	// table
-	buf.WriteString(" from " + table)
+	buf.WriteString(" from `" + table + "`")
 
 	// selector
 	if selector != nil {
@@ -295,7 +326,6 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 		return "", nil, errSampleNil
 	}
 
-	table = "`" + table + "`"
 	set := []kv{}
 	where := []kv{}
 
@@ -306,13 +336,13 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 	}
 
 	if len(set) == 0 {
-		return "", nil, fmt.Errorf("Update %s `set` is empty", table)
+		return "", nil, fmt.Errorf("Update `%s` `set` is empty", table)
 	}
 	if len(where) == 0 {
-		return "", nil, fmt.Errorf("update %s `where` is empty", table)
+		return "", nil, fmt.Errorf("update `%s` `where` is empty", table)
 	}
 
-	buf := bytes.NewBufferString("update " + table + " set")
+	buf := bytes.NewBufferString("update `" + table + "` set")
 	args := []interface{}{}
 	for i, v := range set {
 		if i != 0 {
@@ -337,6 +367,16 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 func genUpdateSql(rv reflect.Value, set, where *[]kv, db Driver) error {
 	fields := cachedTypeFields(rv.Type(), db)
 	for _, f := range fields.list {
+		if f.autoCreateTime > 0 {
+			continue
+		} else if f.autoUpdateTime > 0 {
+			*set = append(*set, kv{
+				f.name,
+				NewCurTime(f.autoUpdateTime),
+			})
+			continue
+		}
+
 		fv, err := getSubv(rv, f.index, false)
 		if err != nil || isNil(fv) {
 			continue
@@ -487,4 +527,8 @@ func AddSqlArgs(sql string, args []interface{},
 
 	*intoSql += sql
 	*intoArgs = append(*intoArgs, nil)
+}
+
+func SetClock(clock clock.Clock) {
+	defaultClock = clock
 }

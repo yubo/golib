@@ -171,7 +171,7 @@ func (p *Sqlite) CreateTable(o *SqlOptions) (err error) {
 			continue
 		}
 
-		defer func(f field) {
+		defer func(f *field) {
 			if err == nil {
 				err = p.CreateIndex(f.name, o)
 			}

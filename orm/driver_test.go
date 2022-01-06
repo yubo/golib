@@ -2,12 +2,24 @@ package orm
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/clock"
 )
 
-var testdb DB
+var (
+	testdb          DB
+	testCreatedTime time.Time
+	testUpdatedTime time.Time
+)
+
+func init() {
+	testCreatedTime = time.Unix(1000, 0)
+	testUpdatedTime = time.Unix(2000, 0)
+
+}
 
 func TestMysqlMigrate(t *testing.T) {
 	DEBUG = true
@@ -44,10 +56,16 @@ func TestSqliteMigrate(t *testing.T) {
 }
 
 func testCreateTable(t *testing.T) {
+	c := &clock.FakeClock{}
+	SetClock(c)
+	c.SetTime(testCreatedTime)
+
 	type User1 struct {
-		ID   int64  `sql:"id,auto_increment,primary_key"`
-		Name string `sql:",index"`
-		Age  int    `sql:",index"`
+		ID        int64  `sql:"id,auto_increment,primary_key"`
+		Name      string `sql:",index"`
+		Age       int    `sql:",index"`
+		CreatedAt time.Time
+		UpdatedAt time.Time
 	}
 
 	testdb.DropTable(&SqlOptions{table: "user"})
@@ -59,20 +77,28 @@ func testCreateTable(t *testing.T) {
 	if err := testdb.Insert(&u1, WithTable("user")); err != nil {
 		t.Fatal(err)
 	}
+	u1.CreatedAt = testCreatedTime
+	u1.UpdatedAt = testCreatedTime
 
 	var u2 User1
 	if err := testdb.Get(&u2, WithSelector("name=tom"), WithTable("user")); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equalf(t, &u1, &u2, "user get")
+	assert.Equalf(t, util.JsonStr(u1), util.JsonStr(u2), "user get")
 }
 
 func testUpdateTable(t *testing.T) {
+	c := &clock.FakeClock{}
+	SetClock(c)
+	c.SetTime(testUpdatedTime)
+
 	type User2 struct {
-		Name     string `sql:",where"`
-		Age      int
-		Address  string
-		NickName *string `sql:",size=1024"`
+		Name      string `sql:",where"`
+		Age       int
+		Address   string
+		NickName  *string `sql:",size=1024"`
+		CreatedAt time.Time
+		UpdatedAt time.Time
 	}
 
 	if err := testdb.AutoMigrate(&User2{}, WithTable("user")); err != nil {
@@ -83,10 +109,12 @@ func testUpdateTable(t *testing.T) {
 	if err := testdb.Update(&u1, WithTable("user")); err != nil {
 		t.Fatal(err)
 	}
+	u1.CreatedAt = testCreatedTime
+	u1.UpdatedAt = testUpdatedTime
 
 	var u2 User2
 	if err := testdb.Get(&u2, WithSelector("name=tom"), WithTable("user")); err != nil {
 		t.Fatal(err)
 	}
-	assert.Equalf(t, &u1, &u2, "user get")
+	assert.Equalf(t, util.JsonStr(u1), util.JsonStr(u2), "user get")
 }
