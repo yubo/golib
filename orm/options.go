@@ -14,8 +14,8 @@ const (
 )
 
 type Options struct {
-	ctx             context.Context
-	greatest        string
+	ctx context.Context
+	//greatest        string
 	driver          string
 	dsn             string
 	ignoreNotFound  bool
@@ -58,12 +58,6 @@ func WithoutPing() Option {
 func WithDirver(driver string) Option {
 	return func(o *Options) {
 		o.driver = driver
-		switch driver {
-		case "sqlite3":
-			o.greatest = "max"
-		default: // mysql
-			o.greatest = "greatest"
-		}
 	}
 }
 
@@ -104,6 +98,7 @@ func WithConnMaxIdletime(d time.Duration) Option {
 }
 
 type SqlOptions struct {
+	err            error
 	sample         interface{}
 	total          *int64
 	table          string
@@ -143,9 +138,9 @@ func WithTotal(total *int64) SqlOption {
 	}
 }
 
-func WithSelector(selector queries.Selector) SqlOption {
+func WithSelector(selector string) SqlOption {
 	return func(o *SqlOptions) {
-		o.selector = selector
+		o.selector, o.err = queries.Parse(selector)
 	}
 }
 
@@ -184,7 +179,8 @@ func (p *SqlOptions) Table() string {
 		rt = rt.Elem()
 	}
 
-	return snakeCasedName(rt.Name())
+	p.table = snakeCasedName(rt.Name())
+	return p.table
 }
 
 func (p *SqlOptions) GenListSql() (query, countQuery string, args []interface{}, err error) {
@@ -195,8 +191,8 @@ func (p *SqlOptions) GenGetSql() (string, []interface{}, error) {
 	return GenGetSql(p.Table(), p.cols, p.selector)
 }
 
-func (p *SqlOptions) GenUpdateSql() (string, []interface{}, error) {
-	return GenUpdateSql(p.Table(), p.sample)
+func (p *SqlOptions) GenUpdateSql(db Driver) (string, []interface{}, error) {
+	return GenUpdateSql(p.Table(), p.sample, db)
 }
 
 // TODO: generate selector from sample.fields, like GenUpdateSql
@@ -204,6 +200,6 @@ func (p *SqlOptions) GenDeleteSql() (string, []interface{}, error) {
 	return GenDeleteSql(p.Table(), p.selector)
 }
 
-func (p *SqlOptions) GenInsertSql() (string, []interface{}, error) {
-	return GenInsertSql(p.Table(), p.sample)
+func (p *SqlOptions) GenInsertSql(db Driver) (string, []interface{}, error) {
+	return GenInsertSql(p.Table(), p.sample, db)
 }

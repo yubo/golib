@@ -33,7 +33,7 @@ func TestGenInsertSql(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		query, args, err := GenInsertSql(c.table, c.sample)
+		query, args, err := GenInsertSql(c.table, c.sample, &nonDriver{})
 		assert.Equal(t, c.query, query, "case-%d", i)
 		assert.Equal(t, c.args, args, "case-%d", i)
 		assert.Equal(t, c.isErr, err != nil, "case-%d", i)
@@ -141,7 +141,7 @@ func TestGenUpdateSql(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		query, args, err := GenUpdateSql(c.table, c.sample)
+		query, args, err := GenUpdateSql(c.table, c.sample, &nonDriver{})
 		assert.Equal(t, c.query, query, "case-%d", i)
 		assert.Equal(t, c.args, args, "case-%d", i)
 		assert.Equal(t, c.isErr, err != nil, "case-%d", i)

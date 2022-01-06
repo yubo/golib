@@ -8,14 +8,15 @@ import (
 	"k8s.io/klog/v2"
 )
 
-var _ Interface = &dbWrapper{}
+var _ Interface = &dbBase{}
 
-type dbWrapper struct {
+type dbBase struct {
 	*Options
+	Driver
 	rawDB
 }
 
-func (p *dbWrapper) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (p *dbBase) Exec(query string, args ...interface{}) (sql.Result, error) {
 	dlogSql(2, query, args...)
 
 	ret, err := p.rawDB.Exec(query, args...)
@@ -27,12 +28,12 @@ func (p *dbWrapper) Exec(query string, args ...interface{}) (sql.Result, error) 
 	return ret, nil
 }
 
-func (p *dbWrapper) ExecLastId(query string, args ...interface{}) (int64, error) {
+func (p *dbBase) ExecLastId(query string, args ...interface{}) (int64, error) {
 	dlogSql(2, query, args...)
 	return p.execLastId(query, args...)
 }
 
-func (p *dbWrapper) execLastId(query string, args ...interface{}) (int64, error) {
+func (p *dbBase) execLastId(query string, args ...interface{}) (int64, error) {
 	res, err := p.rawDB.Exec(query, args...)
 	if err != nil {
 		klog.InfoDepth(1, err)
@@ -46,12 +47,12 @@ func (p *dbWrapper) execLastId(query string, args ...interface{}) (int64, error)
 	}
 }
 
-func (p *dbWrapper) ExecNum(query string, args ...interface{}) (int64, error) {
+func (p *dbBase) ExecNum(query string, args ...interface{}) (int64, error) {
 	dlogSql(2, query, args...)
 	return p.execNum(query, args...)
 }
 
-func (p *dbWrapper) execNum(query string, args ...interface{}) (int64, error) {
+func (p *dbBase) execNum(query string, args ...interface{}) (int64, error) {
 	res, err := p.rawDB.Exec(query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("Exec() err: %s", err)
@@ -64,13 +65,12 @@ func (p *dbWrapper) execNum(query string, args ...interface{}) (int64, error) {
 	}
 }
 
-func (p *dbWrapper) ExecNumErr(query string, args ...interface{}) error {
+func (p *dbBase) ExecNumErr(query string, args ...interface{}) error {
 	dlogSql(2, query, args...)
 	return p.execNumErr(query, args...)
 }
 
-func (p *dbWrapper) execNumErr(query string, args ...interface{}) error {
-	dlogSql(2, query, args...)
+func (p *dbBase) execNumErr(query string, args ...interface{}) error {
 	if n, err := p.execNum(query, args...); err != nil {
 		return err
 	} else if n == 0 {
@@ -80,12 +80,12 @@ func (p *dbWrapper) execNumErr(query string, args ...interface{}) error {
 	}
 }
 
-func (p *dbWrapper) Query(query string, args ...interface{}) *Rows {
+func (p *dbBase) Query(query string, args ...interface{}) *Rows {
 	dlogSql(2, query, args...)
 	return p.query(query, args...)
 }
 
-func (p *dbWrapper) query(query string, args ...interface{}) *Rows {
+func (p *dbBase) query(query string, args ...interface{}) *Rows {
 	ret := &Rows{
 		db:      p,
 		Options: p.Options,
@@ -97,13 +97,13 @@ func (p *dbWrapper) query(query string, args ...interface{}) *Rows {
 	return ret
 }
 
-func (p *dbWrapper) Insert(sample interface{}, opts ...SqlOption) error {
-	o := &SqlOptions{}
-	for _, opt := range append(opts, WithSample(sample)) {
-		opt(o)
+func (p *dbBase) Insert(sample interface{}, opts ...SqlOption) error {
+	o, err := sqlOptions(sample, opts)
+	if err != nil {
+		return err
 	}
 
-	query, args, err := o.GenInsertSql()
+	query, args, err := o.GenInsertSql(p)
 	if err != nil {
 		dlog(2, "%v", err)
 		return err
@@ -114,13 +114,13 @@ func (p *dbWrapper) Insert(sample interface{}, opts ...SqlOption) error {
 	return p.execNumErr(query, args...)
 }
 
-func (p *dbWrapper) InsertLastId(sample interface{}, opts ...SqlOption) (int64, error) {
-	o := &SqlOptions{}
-	for _, opt := range append(opts, WithSample(sample)) {
-		opt(o)
+func (p *dbBase) InsertLastId(sample interface{}, opts ...SqlOption) (int64, error) {
+	o, err := sqlOptions(sample, opts)
+	if err != nil {
+		return 0, err
 	}
 
-	query, args, err := o.GenInsertSql()
+	query, args, err := o.GenInsertSql(p)
 	if err != nil {
 		dlog(2, "%v", err)
 		return 0, err
@@ -131,10 +131,10 @@ func (p *dbWrapper) InsertLastId(sample interface{}, opts ...SqlOption) (int64, 
 	return p.execLastId(query, args...)
 }
 
-func (p *dbWrapper) List(into interface{}, opts ...SqlOption) error {
-	o := &SqlOptions{}
-	for _, opt := range append(opts, WithSample(into)) {
-		opt(o)
+func (p *dbBase) List(into interface{}, opts ...SqlOption) error {
+	o, err := sqlOptions(into, opts)
+	if err != nil {
+		return err
 	}
 
 	query, count, args, err := o.GenListSql()
@@ -157,10 +157,10 @@ func (p *dbWrapper) List(into interface{}, opts ...SqlOption) error {
 	return nil
 }
 
-func (p *dbWrapper) Get(into interface{}, opts ...SqlOption) error {
-	o := &SqlOptions{}
-	for _, opt := range append(opts, WithSample(into)) {
-		opt(o)
+func (p *dbBase) Get(into interface{}, opts ...SqlOption) error {
+	o, err := sqlOptions(into, opts)
+	if err != nil {
+		return err
 	}
 
 	query, args, err := o.GenGetSql()
@@ -174,13 +174,13 @@ func (p *dbWrapper) Get(into interface{}, opts ...SqlOption) error {
 	return o.Error(p.query(query, args...).Row(into))
 }
 
-func (p *dbWrapper) Update(sample interface{}, opts ...SqlOption) error {
-	o := &SqlOptions{}
-	for _, opt := range append(opts, WithSample(sample)) {
-		opt(o)
+func (p *dbBase) Update(sample interface{}, opts ...SqlOption) error {
+	o, err := sqlOptions(sample, opts)
+	if err != nil {
+		return err
 	}
 
-	query, args, err := o.GenUpdateSql()
+	query, args, err := o.GenUpdateSql(p)
 	if err != nil {
 		dlog(2, "%v", err)
 		return err
@@ -191,10 +191,10 @@ func (p *dbWrapper) Update(sample interface{}, opts ...SqlOption) error {
 	return o.Error(p.execNumErr(query, args...))
 }
 
-func (p *dbWrapper) Delete(sample interface{}, opts ...SqlOption) error {
-	o := &SqlOptions{}
-	for _, opt := range append(opts, WithSample(sample)) {
-		opt(o)
+func (p *dbBase) Delete(sample interface{}, opts ...SqlOption) error {
+	o, err := sqlOptions(sample, opts)
+	if err != nil {
+		return err
 	}
 
 	query, args, err := o.GenDeleteSql()

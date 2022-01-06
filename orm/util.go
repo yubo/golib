@@ -2,17 +2,24 @@ package orm
 
 import (
 	"bytes"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yubo/golib/queries"
 	"k8s.io/klog/v2"
 )
 
 var (
+	regRealDataType = regexp.MustCompile(`[^\d](\d+)[^\d]?`)
+	regFullDataType = regexp.MustCompile(`[^\d]*(\d+)[^\d]?`)
+
 	errSampleNil   = errors.New("input sample is nil")
 	errTableEmpty  = errors.New("table name is not set")
 	errSelectorNil = errors.New("selector is nil")
@@ -33,7 +40,7 @@ func printString(b []byte) string {
 }
 
 func dlog(depth int, format string, args ...interface{}) {
-	if klog.V(6).Enabled() {
+	if klog.V(6).Enabled() || DEBUG {
 		klog.InfoDepth(depth, fmt.Sprintf(format, args...))
 	}
 }
@@ -43,7 +50,7 @@ func elog(depth int, format string, args ...interface{}) {
 }
 
 func dlogSql(depth int, query string, args ...interface{}) {
-	if klog.V(10).Enabled() {
+	if klog.V(10).Enabled() || DEBUG {
 		args2 := make([]interface{}, len(args))
 
 		for i := 0; i < len(args2); i++ {
@@ -56,7 +63,7 @@ func dlogSql(depth int, query string, args ...interface{}) {
 				}
 			}
 		}
-		klog.InfoDepth(depth, "\n\t"+fmt.Sprintf(strings.Replace(query, "?", "`%v`", -1), args2...))
+		klog.InfoDepth(depth, fmt.Sprintf(strings.Replace(query, "?", "`%v`", -1), args2...))
 	}
 }
 
@@ -120,7 +127,18 @@ func isStructMode(in interface{}) bool {
 		rt = rt.Elem()
 	}
 
-	return rt.Kind() == reflect.Struct && rt.String() != "time.Time"
+	if rt.Kind() != reflect.Struct {
+		return false
+	}
+
+	if rt.String() == "time.Time" {
+		return false
+	}
+
+	if _, ok := in.(sql.Scanner); ok {
+		return false
+	}
+	return true
 }
 
 type kv struct {
@@ -128,7 +146,7 @@ type kv struct {
 	v interface{}
 }
 
-func GenInsertSql(table string, sample interface{}) (string, []interface{}, error) {
+func GenInsertSql(table string, sample interface{}, db Driver) (string, []interface{}, error) {
 	if sample == nil {
 		return "", nil, errSampleNil
 	}
@@ -141,7 +159,7 @@ func GenInsertSql(table string, sample interface{}) (string, []interface{}, erro
 
 	rv := reflect.Indirect(reflect.ValueOf(sample))
 
-	if err := genInsertSql(rv, &values); err != nil {
+	if err := genInsertSql(rv, &values, db); err != nil {
 		return "", nil, err
 	}
 
@@ -168,23 +186,19 @@ func GenInsertSql(table string, sample interface{}) (string, []interface{}, erro
 	return buf.String() + ") values (" + buf2.String() + ")", args, nil
 }
 
-func genInsertSql(rv reflect.Value, values *[]kv) error {
-	fields := cachedTypeFields(rv.Type())
+func genInsertSql(rv reflect.Value, values *[]kv, db Driver) error {
+	fields := cachedTypeFields(rv.Type(), db)
 	for _, f := range fields.list {
 		fv, err := getSubv(rv, f.index, false)
 		if err != nil || isNil(fv) {
 			continue
 		}
 
-		if fv.Kind() == reflect.Ptr {
-			fv = fv.Elem()
-		}
-
 		v, err := sqlInterface(fv)
 		if err != nil {
 			return err
 		}
-		*values = append(*values, kv{f.key, v})
+		*values = append(*values, kv{f.name, v})
 	}
 	return nil
 }
@@ -273,7 +287,7 @@ func GenGetSql(table string, cols []string, selector queries.Selector) (string, 
 	return buf.String(), args, nil
 }
 
-func GenUpdateSql(table string, sample interface{}) (string, []interface{}, error) {
+func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interface{}, error) {
 	if table == "" {
 		return "", nil, errTableEmpty
 	}
@@ -287,7 +301,7 @@ func GenUpdateSql(table string, sample interface{}) (string, []interface{}, erro
 
 	rv := reflect.Indirect(reflect.ValueOf(sample))
 
-	if err := genUpdateSql(rv, &set, &where); err != nil {
+	if err := genUpdateSql(rv, &set, &where, db); err != nil {
 		return "", nil, err
 	}
 
@@ -320,8 +334,8 @@ func GenUpdateSql(table string, sample interface{}) (string, []interface{}, erro
 	return buf.String(), args, nil
 }
 
-func genUpdateSql(rv reflect.Value, set, where *[]kv) error {
-	fields := cachedTypeFields(rv.Type())
+func genUpdateSql(rv reflect.Value, set, where *[]kv, db Driver) error {
+	fields := cachedTypeFields(rv.Type(), db)
 	for _, f := range fields.list {
 		fv, err := getSubv(rv, f.index, false)
 		if err != nil || isNil(fv) {
@@ -332,16 +346,16 @@ func genUpdateSql(rv reflect.Value, set, where *[]kv) error {
 			fv = fv.Elem()
 		}
 
-		if f.where {
-			*where = append(*where, kv{f.key, fv.Interface()})
-			continue
-		}
-
 		v, err := sqlInterface(fv)
 		if err != nil {
 			return err
 		}
-		*set = append(*set, kv{f.key, v})
+
+		if f.where {
+			*where = append(*where, kv{f.name, v})
+		} else {
+			*set = append(*set, kv{f.name, v})
+		}
 	}
 	return nil
 }
@@ -360,4 +374,112 @@ func GenDeleteSql(table string, selector queries.Selector) (string, []interface{
 	}
 
 	return fmt.Sprintf("delete from `%s` where %s", table, query), args, nil
+}
+
+func sqlOptions(value interface{}, opts []SqlOption) (*SqlOptions, error) {
+	o := &SqlOptions{}
+	for _, opt := range append(opts, WithSample(value)) {
+		opt(o)
+	}
+
+	if o.err != nil {
+		return nil, o.err
+	}
+
+	return o, nil
+}
+
+func tableFields(sample interface{}, driver Driver) structFields {
+	return cachedTypeFields(reflect.Indirect(reflect.ValueOf(sample)).Type(), driver)
+}
+
+func tableFieldLookup(sample interface{}, field string, driver Driver) *FieldOptions {
+	fields := tableFields(sample, driver)
+
+	if n, ok := fields.nameIndex[field]; ok {
+		return fields.list[n].FieldOptions
+	}
+
+	return nil
+}
+
+func isNil(rv reflect.Value) bool {
+	switch rv.Kind() {
+	case reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return rv.IsNil()
+	default:
+		return false
+	}
+}
+
+// scanInterface input is struct's field
+func scanInterface(rv reflect.Value, tran *[]*transfer) (interface{}, error) {
+	rt := rv.Type()
+	ptr := false
+
+	if rt.Kind() == reflect.Ptr {
+		rt = rt.Elem()
+		ptr = true
+	}
+
+	iface := rv.Addr().Interface()
+
+	switch iface.(type) {
+	case *time.Time:
+		return iface, nil
+	case sql.Scanner:
+		return iface, nil
+	case *[]byte:
+		return iface, nil
+	}
+
+	if rt.Kind() == reflect.Map ||
+		rt.Kind() == reflect.Struct ||
+		rt.Kind() == reflect.Slice {
+		// json decode support *struct{}, but not **struct{}, so should adapt it
+		node := &transfer{dst: iface, ptr: ptr}
+		*tran = append(*tran, node)
+		return &node.dstProxy, nil
+	}
+
+	return rv.Addr().Interface(), nil
+}
+
+// sqlInterface: rv should not be ptr, return interface for use in sql's args
+func sqlInterface(rv reflect.Value) (interface{}, error) {
+	if rv.Kind() == reflect.Ptr {
+		rv = rv.Elem()
+	}
+
+	iface := rv.Interface()
+
+	switch iface.(type) {
+	case time.Time:
+		return iface, nil
+	case sql.Scanner:
+		return iface, nil
+	case []byte:
+		return iface, nil
+	}
+
+	if rv.Kind() == reflect.Map ||
+		rv.Kind() == reflect.Struct ||
+		rv.Kind() == reflect.Slice {
+		return json.Marshal(iface)
+	}
+
+	return iface, nil
+}
+
+func AddSqlArgs(sql string, args []interface{},
+	intoSql *string, intoArgs *[]interface{}) {
+	if n := len(args); n > 0 {
+		s := strings.Repeat("?,", n)
+		*intoSql += fmt.Sprintf(strings.Replace(sql, "?", "%s", 1), s[:len(s)-1])
+		*intoArgs = append(*intoArgs, args...)
+		return
+	}
+
+	*intoSql += sql
+	*intoArgs = append(*intoArgs, nil)
 }

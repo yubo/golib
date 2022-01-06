@@ -13,49 +13,27 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type DB interface {
-	RawDB() *sql.DB
-	Close() error
-	Begin() (Tx, error)
-	BeginTx(ctx context.Context, ops *sql.TxOptions) (Tx, error)
-	ExecRows(bytes []byte) error // like mysql < a.sql
+var (
+	dbFactories       = map[string]DBFactory{}
+	DefaultStringSize = 255
+	DEBUG             = false
+)
 
-	Interface
-}
+type DBFactory func(db DB) Driver
 
-type Tx interface {
-	Tx() *sql.Tx
-	Rollback() error
-	Commit() error
-
-	Interface
-}
-
-type rawDB interface {
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	Query(query string, args ...interface{}) (*sql.Rows, error)
-}
-
-type Interface interface {
-	Exec(query string, args ...interface{}) (sql.Result, error)
-	ExecLastId(sql string, args ...interface{}) (int64, error)
-	ExecNum(sql string, args ...interface{}) (int64, error)
-	ExecNumErr(s string, args ...interface{}) error
-	Query(query string, args ...interface{}) *Rows
-
-	Insert(sample interface{}, opts ...SqlOption) error
-	InsertLastId(sample interface{}, opts ...SqlOption) (int64, error)
-	List(into interface{}, opts ...SqlOption) error
-	Get(into interface{}, opts ...SqlOption) error
-	Update(sample interface{}, opts ...SqlOption) error
-	Delete(sample interface{}, opts ...SqlOption) error
+func Register(name string, d DBFactory) {
+	if _, ok := dbFactories[name]; ok {
+		panic(fmt.Sprintf("db factory %s has been set", name))
+	}
+	dbFactories[name] = d
+	klog.V(3).InfoS("db factory register", "name", name)
 }
 
 type ormDB struct {
 	*Options
 	db *sql.DB // DB
 
-	dbWrapper
+	dbBase
 }
 
 func Open(driverName, dataSourceName string, opts ...Option) (DB, error) {
@@ -69,18 +47,17 @@ func Open(driverName, dataSourceName string, opts ...Option) (DB, error) {
 	}
 
 	return open(o)
-
 }
 
 func open(opts *Options) (DB, error) {
-	db, err := sql.Open(opts.driver, opts.dsn)
+	rawDB, err := sql.Open(opts.driver, opts.dsn)
 	if err != nil {
 		return nil, err
 	}
 
 	if !opts.withoutPing {
-		if err := db.Ping(); err != nil {
-			db.Close()
+		if err := rawDB.Ping(); err != nil {
+			rawDB.Close()
 			return nil, err
 		}
 	}
@@ -88,31 +65,38 @@ func open(opts *Options) (DB, error) {
 	if opts.ctx != nil {
 		go func() {
 			<-opts.ctx.Done()
-			db.Close()
+			rawDB.Close()
 		}()
 	}
 
 	if opts.maxIdleCount != nil {
-		db.SetMaxIdleConns(*opts.maxIdleCount)
+		rawDB.SetMaxIdleConns(*opts.maxIdleCount)
 	}
 	if opts.maxOpenConns != nil {
-		db.SetMaxOpenConns(*opts.maxOpenConns)
+		rawDB.SetMaxOpenConns(*opts.maxOpenConns)
 	}
 	if opts.connMaxLifetime != nil {
-		db.SetConnMaxLifetime(*opts.connMaxLifetime)
+		rawDB.SetConnMaxLifetime(*opts.connMaxLifetime)
 	}
 	if opts.connMaxIdletime != nil {
-		db.SetConnMaxIdleTime(*opts.connMaxIdletime)
+		rawDB.SetConnMaxIdleTime(*opts.connMaxIdletime)
 	}
 
-	return &ormDB{
+	db := &ormDB{
 		Options: opts,
-		db:      db,
-		dbWrapper: dbWrapper{
+		db:      rawDB,
+		dbBase: dbBase{
 			Options: opts,
-			rawDB:   db,
+			rawDB:   rawDB,
+			Driver:  &nonDriver{},
 		},
-	}, nil
+	}
+
+	if f, ok := dbFactories[opts.driver]; ok {
+		db.Driver = f(db)
+	}
+
+	return db, nil
 }
 
 func (p *ormDB) RawDB() *sql.DB {
@@ -133,7 +117,7 @@ func (p *ormDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
 		return nil, err
 	}
 	return &ormTx{tx: tx,
-		dbWrapper: dbWrapper{
+		dbBase: dbBase{
 			Options: p.Options,
 			rawDB:   tx,
 		},
@@ -201,7 +185,7 @@ type ormTx struct {
 	*Options
 	tx *sql.Tx
 
-	dbWrapper
+	dbBase
 }
 
 func (p *ormTx) Tx() *sql.Tx {
@@ -367,7 +351,7 @@ func (p *Rows) genBinder(rt reflect.Type) (*binder, error) {
 
 	fieldMap := map[string]int{}
 	for i, name := range fields {
-		fieldMap[name] = i
+		fieldMap[strings.ToLower(name)] = i
 	}
 
 	var empty interface{}
@@ -376,9 +360,9 @@ func (p *Rows) genBinder(rt reflect.Type) (*binder, error) {
 		dest[i] = &empty
 	}
 
-	// klog.V(5).Infof("dest len %d", len(dest))
+	// klog.Infof("dest len %d", len(dest))
 	return &binder{
-		fields:   cachedTypeFields(rt),
+		fields:   cachedTypeFields(rt, p.db),
 		dest:     dest,
 		fieldMap: fieldMap,
 		rows:     p.rows,
@@ -432,7 +416,7 @@ func (p *transfer) unmarshal() error {
 		rv = rv.Elem()
 	}
 
-	// time.Time
+	// TODO: time.Time
 	if i, ok := p.dstProxy.(int64); ok {
 		t := time.Unix(i, 0)
 		if dst, ok := rv.Addr().Interface().(*time.Time); ok {
@@ -453,7 +437,7 @@ func (p *transfer) unmarshal() error {
 func (p *binder) bind(rv reflect.Value) ([]*transfer, error) {
 	tran := []*transfer{}
 	for _, f := range p.fields.list {
-		if i, ok := p.fieldMap[f.key]; ok {
+		if i, ok := p.fieldMap[f.name]; ok {
 			fv, err := getSubv(rv, f.index, true)
 			if err != nil {
 				return nil, err
@@ -465,58 +449,6 @@ func (p *binder) bind(rv reflect.Value) ([]*transfer, error) {
 	}
 
 	return tran, nil
-}
-
-// sqlInterface: rv should not be ptr, return interface for use in sql's args
-func sqlInterface(rv reflect.Value) (interface{}, error) {
-	if rv.Type().String() == "time.Time" {
-		return rv.Interface().(time.Time).Unix(), nil
-	} else if rv.Kind() == reflect.Struct || rv.Kind() == reflect.Map ||
-		(rv.Kind() == reflect.Slice && rv.Type().Elem().Kind() != reflect.Uint8) {
-		if b, err := json.Marshal(rv.Interface()); err != nil {
-			return nil, err
-		} else {
-			return b, nil
-		}
-	}
-
-	// if rv.Kind() == reflect.Ptr {
-	// 	panicType(rv.Type(), "rv is ptr")
-	// }
-
-	return rv.Interface(), nil
-}
-
-// scanInterface input is struct's field
-func scanInterface(rv reflect.Value, tran *[]*transfer) (interface{}, error) {
-	rt := rv.Type()
-	ptr := false
-
-	if rt.Kind() == reflect.Ptr {
-		rt = rt.Elem()
-		ptr = true
-	}
-
-	if rt.Kind() == reflect.Struct || rt.Kind() == reflect.Map ||
-		(rt.Kind() == reflect.Slice && rt.Elem().Kind() != reflect.Uint8) {
-		//if rt.Kind() == reflect.Slice || rt.Kind() == reflect.Map || rt.Kind() == reflect.Struct {
-		dst := rv.Addr().Interface()
-		// json decode support *struct{}, but not **struct{}, so should adapt it
-		node := &transfer{dst: dst, ptr: ptr}
-		*tran = append(*tran, node)
-		return &node.dstProxy, nil
-	}
-
-	return rv.Addr().Interface(), nil
-}
-
-func isNil(rv reflect.Value) bool {
-	switch rv.Kind() {
-	case reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
-		return rv.IsNil()
-	default:
-		return false
-	}
 }
 
 type RowsIter interface {

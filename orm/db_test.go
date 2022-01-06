@@ -31,7 +31,7 @@ func envDef(key, defaultValue string) string {
 // See https://github.com/go-sql-driver/mysql/wiki/Testing
 func init() {
 	driver = envDef("TEST_DB_DRIVER", "sqlite3")
-	dsn = envDef("TEST_DB_DSN", "file:test2.db?cache=shared&mode=memory")
+	dsn = envDef("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory")
 	if db, err := Open(driver, dsn); err == nil {
 		if err = db.RawDB().Ping(); err == nil {
 			available = true
@@ -421,7 +421,7 @@ func TestTime(t *testing.T) {
 			N     int
 		}
 
-		dbt.mustExec("CREATE TABLE test (time bigint, time_p bigint, n int)")
+		dbt.mustExec("CREATE TABLE test (time datetime, time_p datetime, n int)")
 
 		v, _ := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
 		cases := []test{
