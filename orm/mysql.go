@@ -233,7 +233,7 @@ func (p *Mysql) CreateTable(o *SqlOptions) (err error) {
 	fields := tableFields(o.sample, p)
 	for _, f := range fields.list {
 		hasPrimaryKeyInDataType = hasPrimaryKeyInDataType || strings.Contains(strings.ToUpper(f.driverDataType), "PRIMARY KEY")
-		SQL += fmt.Sprintf("%s %s,", f.name, p.FullDataTypeOf(f.FieldOptions))
+		SQL += fmt.Sprintf("`%s` %s,", f.name, p.FullDataTypeOf(f.FieldOptions))
 	}
 
 	{
@@ -256,7 +256,12 @@ func (p *Mysql) CreateTable(o *SqlOptions) (err error) {
 		if f.idxClass != "" {
 			SQL += f.idxClass + " "
 		}
-		SQL += "INDEX `" + f.name + "`,"
+
+		SQL += "INDEX "
+		if f.indexName != "" {
+			SQL += "`" + f.indexName + "` "
+		}
+		SQL += "(`" + f.name + "`) "
 
 		if f.idxComment != "" {
 			SQL += fmt.Sprintf(" COMMENT '%s'", f.idxComment)
@@ -279,9 +284,9 @@ func (p *Mysql) CreateTable(o *SqlOptions) (err error) {
 }
 
 func (p *Mysql) DropTable(o *SqlOptions) error {
-	p.Exec("SET FOREIGN_KEY_CHECKS = 0;")
+	//p.Exec("SET FOREIGN_KEY_CHECKS = 0;")
 	_, err := p.Exec("DROP TABLE IF EXISTS `" + o.Table() + "`")
-	p.Exec("SET FOREIGN_KEY_CHECKS = 1;")
+	//p.Exec("SET FOREIGN_KEY_CHECKS = 1;")
 	return err
 }
 

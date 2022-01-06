@@ -150,7 +150,7 @@ func (p *Sqlite) CreateTable(o *SqlOptions) (err error) {
 	fields := tableFields(o.sample, p)
 	for _, f := range fields.list {
 		hasPrimaryKeyInDataType = hasPrimaryKeyInDataType || strings.Contains(strings.ToUpper(f.driverDataType), "PRIMARY KEY")
-		SQL += fmt.Sprintf("%s %s,", f.name, p.FullDataTypeOf(f.FieldOptions))
+		SQL += fmt.Sprintf("`%s` %s,", f.name, p.FullDataTypeOf(f.FieldOptions))
 	}
 
 	{
@@ -170,20 +170,12 @@ func (p *Sqlite) CreateTable(o *SqlOptions) (err error) {
 		if !f.indexKey {
 			continue
 		}
-		if f.idxClass != "" {
-			SQL += f.idxClass + " "
-		}
-		SQL += "INDEX `" + f.name + "`,"
 
-		if f.idxComment != "" {
-			SQL += fmt.Sprintf(" COMMENT '%s'", f.idxComment)
-		}
-
-		if f.idxOption != "" {
-			SQL += " " + f.idxOption
-		}
-
-		SQL += ","
+		defer func(f field) {
+			if err == nil {
+				err = p.CreateIndex(f.name, o)
+			}
+		}(f)
 	}
 
 	SQL = strings.TrimSuffix(SQL, ",")
@@ -202,7 +194,8 @@ func (p *Sqlite) DropTable(o *SqlOptions) error {
 
 func (p *Sqlite) HasTable(tableName string) bool {
 	var count int64
-	p.Query("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Row(&count)
+	err := p.Query("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Row(&count)
+	dlog(1, "count %d err %v", count, err)
 	return count > 0
 }
 

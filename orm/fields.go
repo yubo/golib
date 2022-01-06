@@ -40,7 +40,7 @@ func ParseFields(s string) Set {
 		if len(v) >= 2 {
 			set[k] = strings.Join(v[1:], "=")
 		} else if k != "" {
-			set[k] = k
+			set[k] = ""
 		}
 	}
 

@@ -61,8 +61,9 @@ type FieldOptions struct {
 
 	// from driver
 
-	indexKey bool
-	class    string
+	indexKey  bool
+	indexName string
+	class     string
 }
 
 func (p FieldOptions) String() string {
@@ -294,15 +295,18 @@ func parseStructField(sf reflect.StructField) (*FieldOptions, error) {
 	}
 	opt.name = strings.ToLower(opt.name)
 
+	if set.Has("index") {
+		opt.indexKey = true
+		opt.indexName = set.Get("index")
+	}
 	if set.Has("primary_key") {
 		opt.primaryKey = true
 	}
+
 	if set.Has("auto_increment") {
 		opt.autoIncrement = true
 		opt.hasDefaultValue = true
-	}
-	if set.Has("auto_increment_num") {
-		opt.autoIncrementNum, _ = strconv.ParseInt(set.Get("auto_increment_num"), 10, 64)
+		opt.autoIncrementNum, _ = strconv.ParseInt(set.Get("auto_increment"), 10, 64)
 	}
 	if set.Has("default") {
 		opt.hasDefaultValue = true
