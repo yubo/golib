@@ -219,7 +219,7 @@ type ObjectMeta struct {
 	// Null for lists.
 	// More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata
 	// +optional
-	CreationTimestamp time.Time `json:"creationTimestamp,omitempty" protobuf:"bytes,8,opt,name=creationTimestamp"`
+	CreationTimestamp time.Time `json:"creationTimestamp,omitempty" protobuf:"bytes,8,opt,name=creationTimestamp" sql:",auto_createtime"`
 
 	// DeletionTimestamp is RFC 3339 date and time at which this resource will be deleted. This
 	// field is set by the server when a graceful deletion is requested by the user, and is not

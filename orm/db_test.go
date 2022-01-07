@@ -36,7 +36,7 @@ func init() {
 	driver = envDef("TEST_DB_DRIVER", "sqlite3")
 	dsn = envDef("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory")
 	if db, err := Open(driver, dsn); err == nil {
-		if err = db.RawDB().Ping(); err == nil {
+		if err = db.DB().Ping(); err == nil {
 			available = true
 		}
 		db.Close()
@@ -50,7 +50,7 @@ type DBTest struct {
 	db DB
 }
 
-func runTests(t *testing.T, dsn string, tests ...func(dbt *DBTest)) {
+func RunTests(t *testing.T, dsn string, tests ...func(dbt *DBTest)) {
 	var (
 		err error
 		db  DB
@@ -118,7 +118,7 @@ func (dbt *DBTest) mustExec(query string, args ...interface{}) (res sql.Result) 
 }
 
 func TestInsert(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		var v int
 		dbt.mustExec("CREATE TABLE test (value int);")
 
@@ -131,7 +131,7 @@ func TestInsert(t *testing.T) {
 }
 
 func TestQueryRows(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		var v []int
 		dbt.mustExec("CREATE TABLE test (value int)")
 
@@ -145,7 +145,7 @@ func TestQueryRows(t *testing.T) {
 
 		dbt.mustExec("DROP TABLE IF EXISTS test")
 	})
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		var v []*int
 		dbt.mustExec("CREATE TABLE test (value int)")
 
@@ -160,7 +160,7 @@ func TestQueryRows(t *testing.T) {
 		dbt.mustExec("DROP TABLE IF EXISTS test")
 	})
 
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		var v []*int
 		dbt.mustExec("CREATE TABLE test (value int)")
 
@@ -188,7 +188,7 @@ func TestQueryRows(t *testing.T) {
 }
 
 func TestDelRows(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		dbt.mustExec("CREATE TABLE test (value int)")
 
 		dbt.mustExec("INSERT INTO test VALUES (?)", 1)
@@ -209,7 +209,7 @@ func TestDelRows(t *testing.T) {
 }
 
 func TestExecNum(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		dbt.mustExec("CREATE TABLE test (value int)")
 
 		dbt.mustExecNum("INSERT INTO test VALUES (?)", 1)
@@ -221,7 +221,7 @@ func TestExecNum(t *testing.T) {
 }
 
 func TestQueryRowStruct(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		type vt struct {
 			PointX  int64
 			PointY  int64 `sql:"point_y"`
@@ -303,7 +303,7 @@ func TestQueryRowStruct(t *testing.T) {
 }
 
 func TestQueryRowStruct2(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		type Point struct {
 			X int
 			Y int
@@ -355,7 +355,7 @@ func TestQueryRowStruct2(t *testing.T) {
 }
 
 func TestQueryRowsStruct(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		var v []struct {
 			PointX  int64
 			PointY  int64 `sql:"point_y"`
@@ -384,7 +384,7 @@ func TestQueryRowsStruct(t *testing.T) {
 }
 
 func TestQueryRowsStructPtr(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		var v []*struct {
 			PointX int64
 			PointY int64 `sql:"point_y"`
@@ -411,8 +411,8 @@ func TestQueryRowsStructPtr(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
-		if err := dbt.db.RawDB().Ping(); err != nil {
+	RunTests(t, dsn, func(dbt *DBTest) {
+		if err := dbt.db.DB().Ping(); err != nil {
 			dbt.fail("Ping", "Ping", err)
 		}
 	})
@@ -420,7 +420,7 @@ func TestPing(t *testing.T) {
 
 func TestSqlArg(t *testing.T) {
 
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		a := 1
 		var v int
 		dbt.mustExec("CREATE TABLE test (value int);")
@@ -433,7 +433,7 @@ func TestSqlArg(t *testing.T) {
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
 
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		a := 1
 		var v int
 		dbt.mustExec("CREATE TABLE test (value int);")
@@ -446,7 +446,7 @@ func TestSqlArg(t *testing.T) {
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
 
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 
 		type vt struct {
 			PointX  *int
@@ -481,7 +481,7 @@ func TestTx(t *testing.T) {
 	if driver != "mysql" {
 		return
 	}
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		a := 1
 		var v int
 		dbt.mustExec("CREATE TABLE test (value int) ENGINE=InnoDB;")
@@ -503,7 +503,7 @@ func TestTx(t *testing.T) {
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
 
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		a := 1
 		var v int
 		dbt.mustExec("CREATE TABLE test (value int) ENGINE=InnoDB;")
@@ -525,7 +525,7 @@ func TestTx(t *testing.T) {
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
 
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		type Test struct {
 			Id    *int
 			Value *int
@@ -589,7 +589,7 @@ PRIMARY KEY (id)
 }
 
 func TestList(t *testing.T) {
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		var v []int
 		dbt.mustExec("CREATE TABLE test (value int)")
 
@@ -604,7 +604,7 @@ func TestList(t *testing.T) {
 		dbt.mustExec("DROP TABLE IF EXISTS test")
 	})
 
-	runTests(t, dsn, func(dbt *DBTest) {
+	RunTests(t, dsn, func(dbt *DBTest) {
 		var v []int
 		dbt.mustExec("CREATE TABLE test (value int)")
 

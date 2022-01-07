@@ -156,6 +156,7 @@ func isStructMode(in interface{}) bool {
 	if _, ok := in.(sql.Scanner); ok {
 		return false
 	}
+
 	return true
 }
 
@@ -205,24 +206,24 @@ func GenInsertSql(table string, sample interface{}, db Driver) (string, []interf
 
 func genInsertSql(rv reflect.Value, values *[]kv, db Driver) error {
 	fields := cachedTypeFields(rv.Type(), db)
-	for _, f := range fields.list {
+	for _, f := range fields.Fields {
 
-		if f.autoCreateTime > 0 {
+		if f.AutoCreatetime > 0 {
 			*values = append(*values, kv{
-				f.name,
-				NewCurTime(f.autoCreateTime),
+				f.Name,
+				NewCurTime(f.AutoCreatetime),
 			})
 			continue
-		} else if f.autoUpdateTime > 0 {
+		} else if f.AutoUpdatetime > 0 {
 			*values = append(*values, kv{
-				f.name,
-				NewCurTime(f.autoUpdateTime),
+				f.Name,
+				NewCurTime(f.AutoUpdatetime),
 			})
 			continue
 		}
 
-		fv, err := getSubv(rv, f.index, false)
-		if err != nil || isNil(fv) {
+		fv, err := getSubv(rv, f.Index, false)
+		if err != nil || IsNil(fv) {
 			continue
 		}
 
@@ -230,7 +231,7 @@ func genInsertSql(rv reflect.Value, values *[]kv, db Driver) error {
 		if err != nil {
 			return err
 		}
-		*values = append(*values, kv{f.name, v})
+		*values = append(*values, kv{f.Name, v})
 	}
 	return nil
 }
@@ -382,19 +383,19 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 
 func genUpdateSql(rv reflect.Value, set, where *[]kv, db Driver) error {
 	fields := cachedTypeFields(rv.Type(), db)
-	for _, f := range fields.list {
-		if f.autoCreateTime > 0 {
+	for _, f := range fields.Fields {
+		if f.AutoCreatetime > 0 {
 			continue
-		} else if f.autoUpdateTime > 0 {
+		} else if f.AutoUpdatetime > 0 {
 			*set = append(*set, kv{
-				f.name,
-				NewCurTime(f.autoUpdateTime),
+				f.Name,
+				NewCurTime(f.AutoUpdatetime),
 			})
 			continue
 		}
 
-		fv, err := getSubv(rv, f.index, false)
-		if err != nil || isNil(fv) {
+		fv, err := getSubv(rv, f.Index, false)
+		if err != nil || IsNil(fv) {
 			continue
 		}
 
@@ -407,10 +408,10 @@ func genUpdateSql(rv reflect.Value, set, where *[]kv, db Driver) error {
 			return err
 		}
 
-		if f.where {
-			*where = append(*where, kv{f.name, v})
+		if f.Where {
+			*where = append(*where, kv{f.Name, v})
 		} else {
-			*set = append(*set, kv{f.name, v})
+			*set = append(*set, kv{f.Name, v})
 		}
 	}
 	return nil
@@ -432,9 +433,18 @@ func GenDeleteSql(table string, selector queries.Selector) (string, []interface{
 	return fmt.Sprintf("delete from `%s` where %s", table, query), args, nil
 }
 
-func sqlOptions(value interface{}, opts []SqlOption) (*SqlOptions, error) {
+func NewOptions(opts ...SqlOption) *SqlOptions {
 	o := &SqlOptions{}
-	for _, opt := range append(opts, WithSample(value)) {
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	return o
+}
+
+func NewSqlOptions(sample interface{}, opts []SqlOption) (*SqlOptions, error) {
+	o := &SqlOptions{}
+	for _, opt := range append(opts, WithSample(sample)) {
 		opt(o)
 	}
 
@@ -445,21 +455,21 @@ func sqlOptions(value interface{}, opts []SqlOption) (*SqlOptions, error) {
 	return o, nil
 }
 
-func tableFields(sample interface{}, driver Driver) structFields {
+func GetFields(sample interface{}, driver Driver) StructFields {
 	return cachedTypeFields(reflect.Indirect(reflect.ValueOf(sample)).Type(), driver)
 }
 
-func tableFieldLookup(sample interface{}, field string, driver Driver) *FieldOptions {
-	fields := tableFields(sample, driver)
+func GetField(sample interface{}, field string, driver Driver) *StructField {
+	fields := GetFields(sample, driver)
 
 	if n, ok := fields.nameIndex[field]; ok {
-		return fields.list[n].FieldOptions
+		return fields.Fields[n]
 	}
 
 	return nil
 }
 
-func isNil(rv reflect.Value) bool {
+func IsNil(rv reflect.Value) bool {
 	switch rv.Kind() {
 	case reflect.Map, reflect.Ptr, reflect.UnsafePointer, reflect.Interface, reflect.Slice:
 		return rv.IsNil()
@@ -498,7 +508,6 @@ func scanInterface(rv reflect.Value, tran *[]*transfer) (interface{}, error) {
 		rt.Kind() == reflect.Slice {
 		// json decode support *struct{}, but not **struct{}, so should adapt it
 		node := &transfer{dst: iface, ptr: ptr}
-		dlog(1, "add %s into tran", rt.Name())
 		*tran = append(*tran, node)
 		return &node.dstProxy, nil
 	}

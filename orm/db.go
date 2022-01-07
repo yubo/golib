@@ -19,7 +19,7 @@ var (
 	DEBUG             = false
 )
 
-type DBFactory func(db DB) Driver
+type DBFactory func(db Execer) Driver
 
 func Register(name string, d DBFactory) {
 	if _, ok := dbFactories[name]; ok {
@@ -33,7 +33,7 @@ type ormDB struct {
 	*Options
 	db *sql.DB // DB
 
-	dbBase
+	Interface
 }
 
 func Open(driverName, dataSourceName string, opts ...Option) (DB, error) {
@@ -82,24 +82,21 @@ func open(opts *Options) (DB, error) {
 		rawDB.SetConnMaxIdleTime(*opts.connMaxIdletime)
 	}
 
+	driver := Driver(&nonDriver{})
 	db := &ormDB{
-		Options: opts,
-		db:      rawDB,
-		dbBase: dbBase{
-			Options: opts,
-			rawDB:   rawDB,
-			Driver:  &nonDriver{},
-		},
+		Options:   opts,
+		db:        rawDB,
+		Interface: NewBaseInterface(driver, rawDB, opts),
 	}
 
 	if f, ok := dbFactories[opts.driver]; ok {
-		db.Driver = f(db)
+		db.Interface = NewBaseInterface(f(db), rawDB, opts)
 	}
 
 	return db, nil
 }
 
-func (p *ormDB) RawDB() *sql.DB {
+func (p *ormDB) DB() *sql.DB {
 	return p.db
 }
 
@@ -116,13 +113,10 @@ func (p *ormDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &ormTx{
-		tx: tx,
-		dbBase: dbBase{
-			Options: p.Options,
-			rawDB:   tx,
-			Driver:  p.Driver,
-		},
+		tx:        tx,
+		Interface: p.WithRawDB(tx),
 	}, nil
 }
 
@@ -184,10 +178,9 @@ func (p *ormDB) ExecRows(bytes []byte) (err error) {
 }
 
 type ormTx struct {
-	*Options
 	tx *sql.Tx
 
-	dbBase
+	Interface
 }
 
 func (p *ormTx) Tx() *sql.Tx {
@@ -373,7 +366,7 @@ func (p *Rows) genBinder(rt reflect.Type) (*binder, error) {
 }
 
 type binder struct {
-	fields   structFields
+	fields   StructFields
 	dest     []interface{}
 	fieldMap map[string]int
 	rows     *sql.Rows
@@ -438,9 +431,9 @@ func (p *transfer) unmarshal() error {
 
 func (p *binder) bind(rv reflect.Value) ([]*transfer, error) {
 	tran := []*transfer{}
-	for _, f := range p.fields.list {
-		if i, ok := p.fieldMap[f.name]; ok {
-			fv, err := getSubv(rv, f.index, true)
+	for _, f := range p.fields.Fields {
+		if i, ok := p.fieldMap[f.Name]; ok {
+			fv, err := getSubv(rv, f.Index, true)
 			if err != nil {
 				return nil, err
 			}

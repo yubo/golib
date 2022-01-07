@@ -1,4 +1,4 @@
-package orm
+package driver
 
 import (
 	"database/sql"
@@ -6,8 +6,17 @@ import (
 	"math"
 	"strings"
 
+	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/util"
 )
+
+var _ orm.Driver = &Mysql{}
+
+func RegisterMysql() {
+	orm.Register("mysql", func(db orm.Execer) orm.Driver {
+		return &Mysql{db}
+	})
+}
 
 type mysqlColumn struct {
 	ColumnName             string
@@ -18,57 +27,55 @@ type mysqlColumn struct {
 	NumericScale           sql.NullInt64
 }
 
-func (p *mysqlColumn) FiledOptions() FieldOptions {
-	ret := FieldOptions{
-		name:           p.ColumnName,
-		driverDataType: p.Datatype,
+func (p *mysqlColumn) FiledOptions() orm.StructField {
+	ret := orm.StructField{
+		Name:           p.ColumnName,
+		DriverDataType: p.Datatype,
 	}
 
 	if p.CharacterMaximumLength.Valid {
-		ret.size = util.Int64(p.CharacterMaximumLength.Int64)
+		ret.Size = util.Int64(p.CharacterMaximumLength.Int64)
 	}
 
 	if p.IsNullable.Valid {
-		ret.notNull = util.Bool(p.IsNullable.String != "YES")
+		ret.NotNull = util.Bool(p.IsNullable.String != "YES")
 	}
 
 	return ret
 }
 
-var _ Driver = &Mysql{}
-
 // Mysql m struct
 type Mysql struct {
-	DB
+	orm.Execer
 }
 
-func (p *Mysql) ParseField(f *field) {
-	f.driverDataType = p.driverDataTypeOf(f)
+func (p *Mysql) ParseField(f *orm.StructField) {
+	f.DriverDataType = p.driverDataTypeOf(f)
 }
 
-func (p *Mysql) driverDataTypeOf(f *field) string {
-	switch f.dataType {
-	case Bool:
+func (p *Mysql) driverDataTypeOf(f *orm.StructField) string {
+	switch f.DataType {
+	case orm.Bool:
 		return "boolean"
-	case Int, Uint:
+	case orm.Int, orm.Uint:
 		return p.getSchemaIntAndUnitType(f)
-	case Float:
+	case orm.Float:
 		return p.getSchemaFloatType(f)
-	case String:
+	case orm.String:
 		return p.getSchemaStringType(f)
-	case Time:
+	case orm.Time:
 		return p.getSchemaTimeType(f)
-	case Bytes:
+	case orm.Bytes:
 		return p.getSchemaBytesType(f)
 	}
 
-	return string(f.dataType)
+	return string(f.DataType)
 }
 
-func (p *Mysql) getSchemaIntAndUnitType(f *field) string {
+func (p *Mysql) getSchemaIntAndUnitType(f *orm.StructField) string {
 	sqlType := "bigint"
 
-	switch size := util.Int64Value(f.size); {
+	switch size := util.Int64Value(f.Size); {
 	case size <= 8:
 		sqlType = "tinyint"
 	case size <= 16:
@@ -79,18 +86,19 @@ func (p *Mysql) getSchemaIntAndUnitType(f *field) string {
 		sqlType = "int"
 	}
 
-	if f.dataType == Uint {
+	if f.DataType == orm.Uint {
 		sqlType += " unsigned"
 	}
 
-	if f.autoIncrement {
+	if f.AutoIncrement {
 		sqlType += " AUTO_INCREMENT"
 	}
 
 	return sqlType
 }
-func (p *Mysql) getSchemaFloatType(f *field) string {
-	size := util.Int64Value(f.size)
+
+func (p *Mysql) getSchemaFloatType(f *orm.StructField) string {
+	size := util.Int64Value(f.Size)
 
 	if size <= 32 {
 		return "float"
@@ -99,16 +107,16 @@ func (p *Mysql) getSchemaFloatType(f *field) string {
 	return "double"
 }
 
-func (p *Mysql) getSchemaStringType(f *field) string {
-	size := util.Int64Value(f.size)
+func (p *Mysql) getSchemaStringType(f *orm.StructField) string {
+	size := util.Int64Value(f.Size)
 
 	if size == 0 {
-		if DefaultStringSize > 0 {
-			size = int64(DefaultStringSize)
+		if orm.DefaultStringSize > 0 {
+			size = int64(orm.DefaultStringSize)
 		} else {
 			hasIndex := f.Has("index") || f.Has("unique")
 			// TEXT, GEOMETRY or JSON column can't have a default value
-			if f.primaryKey || f.hasDefaultValue || hasIndex {
+			if f.PrimaryKey || f.HasDefaultValue || hasIndex {
 				size = 191 // utf8mb4
 			}
 		}
@@ -122,26 +130,26 @@ func (p *Mysql) getSchemaStringType(f *field) string {
 		return "longtext"
 	}
 
-	f.size = util.Int64(size)
+	f.Size = util.Int64(size)
 
 	return fmt.Sprintf("varchar(%d)", size)
 }
 
-func (p Mysql) getSchemaTimeType(field *field) string {
+func (p Mysql) getSchemaTimeType(field *orm.StructField) string {
 	precision := ""
 
-	if field.precision != nil && *field.precision > 0 {
-		precision = fmt.Sprintf("(%d)", *field.precision)
+	if field.Precision != nil && *field.Precision > 0 {
+		precision = fmt.Sprintf("(%d)", *field.Precision)
 	}
 
-	if util.BoolValue(field.notNull) || field.primaryKey {
+	if util.BoolValue(field.NotNull) || field.PrimaryKey {
 		return "datetime" + precision
 	}
 	return "datetime" + precision + " NULL"
 }
 
-func (p Mysql) getSchemaBytesType(f *field) string {
-	size := util.Int64Value(f.size)
+func (p Mysql) getSchemaBytesType(f *orm.StructField) string {
+	size := util.Int64Value(f.Size)
 
 	if size > 0 && size < 65536 {
 		return fmt.Sprintf("varbinary(%d)", size)
@@ -154,26 +162,26 @@ func (p Mysql) getSchemaBytesType(f *field) string {
 	return "longblob"
 }
 
-func (p Mysql) FullDataTypeOf(field *FieldOptions) string {
-	SQL := field.driverDataType
+func (p Mysql) FullDataTypeOf(field *orm.StructField) string {
+	SQL := field.DriverDataType
 
-	if field.notNull != nil && *field.notNull {
+	if field.NotNull != nil && *field.NotNull {
 		SQL += " NOT NULL"
 	}
 
-	if field.unique != nil && *field.unique {
+	if field.Unique != nil && *field.Unique {
 		SQL += " UNIQUE"
 	}
 
-	if field.defaultValue != "" {
-		SQL += " DEFAULT " + field.defaultValue
+	if field.DefaultValue != "" {
+		SQL += " DEFAULT " + field.DefaultValue
 	}
 	return SQL
 }
 
 // AutoMigrate
-func (p *Mysql) AutoMigrate(sample interface{}, opts ...SqlOption) error {
-	o, err := sqlOptions(sample, opts)
+func (p *Mysql) AutoMigrate(sample interface{}, opts ...orm.SqlOption) error {
+	o, err := orm.NewSqlOptions(sample, opts)
 	if err != nil {
 		return err
 	}
@@ -184,13 +192,13 @@ func (p *Mysql) AutoMigrate(sample interface{}, opts ...SqlOption) error {
 
 	actualFields, _ := p.ColumnTypes(o)
 
-	expectFields := tableFields(o.sample, p)
+	expectFields := orm.GetFields(o.Sample(), p)
 
-	for _, expectField := range expectFields.list {
-		var foundField *FieldOptions
+	for _, expectField := range expectFields.Fields {
+		var foundField *orm.StructField
 
 		for _, v := range actualFields {
-			if v.name == expectField.name {
+			if v.Name == expectField.Name {
 				foundField = &v
 				break
 			}
@@ -198,19 +206,19 @@ func (p *Mysql) AutoMigrate(sample interface{}, opts ...SqlOption) error {
 
 		if foundField == nil {
 			// not found, add column
-			if err := p.AddColumn(expectField.name, o); err != nil {
+			if err := p.AddColumn(expectField.Name, o); err != nil {
 				return err
 			}
-		} else if err := p.MigrateColumn(expectField.FieldOptions, foundField, o); err != nil {
+		} else if err := p.MigrateColumn(expectField, foundField, o); err != nil {
 			// found, smart migrate
 			return err
 		}
 	}
 
 	// index
-	for _, f := range expectFields.list {
-		if f.indexKey && !p.HasIndex(f.name, o) {
-			if err := p.CreateIndex(f.name, o); err != nil {
+	for _, f := range expectFields.Fields {
+		if f.IndexKey && !p.HasIndex(f.Name, o) {
+			if err := p.CreateIndex(f.Name, o); err != nil {
 				return err
 			}
 		}
@@ -220,27 +228,27 @@ func (p *Mysql) AutoMigrate(sample interface{}, opts ...SqlOption) error {
 }
 
 func (p *Mysql) GetTables() (tableList []string, err error) {
-	err = p.DB.Query("SELECT TABLE_NAME FROM information_schema.tables where TABLE_SCHEMA=?", p.CurrentDatabase()).Rows(&tableList)
+	err = p.Query("SELECT TABLE_NAME FROM information_schema.tables where TABLE_SCHEMA=?", p.CurrentDatabase()).Rows(&tableList)
 	return
 }
 
-func (p *Mysql) CreateTable(o *SqlOptions) (err error) {
+func (p *Mysql) CreateTable(o *orm.SqlOptions) (err error) {
 	var (
 		SQL                     = "CREATE TABLE `" + o.Table() + "` ("
 		hasPrimaryKeyInDataType bool
 	)
 
-	fields := tableFields(o.sample, p)
-	for _, f := range fields.list {
-		hasPrimaryKeyInDataType = hasPrimaryKeyInDataType || strings.Contains(strings.ToUpper(f.driverDataType), "PRIMARY KEY")
-		SQL += fmt.Sprintf("`%s` %s,", f.name, p.FullDataTypeOf(f.FieldOptions))
+	fields := orm.GetFields(o.Sample(), p)
+	for _, f := range fields.Fields {
+		hasPrimaryKeyInDataType = hasPrimaryKeyInDataType || strings.Contains(strings.ToUpper(f.DriverDataType), "PRIMARY KEY")
+		SQL += fmt.Sprintf("`%s` %s,", f.Name, p.FullDataTypeOf(f))
 	}
 
 	{
 		primaryKeys := []string{}
-		for _, f := range fields.list {
-			if f.primaryKey {
-				primaryKeys = append(primaryKeys, "`"+f.name+"`")
+		for _, f := range fields.Fields {
+			if f.PrimaryKey {
+				primaryKeys = append(primaryKeys, "`"+f.Name+"`")
 			}
 		}
 
@@ -249,26 +257,26 @@ func (p *Mysql) CreateTable(o *SqlOptions) (err error) {
 		}
 	}
 
-	for _, f := range fields.list {
-		if !f.indexKey {
+	for _, f := range fields.Fields {
+		if !f.IndexKey {
 			continue
 		}
-		if f.idxClass != "" {
-			SQL += f.idxClass + " "
+		if f.IndexClass != "" {
+			SQL += f.IndexClass + " "
 		}
 
 		SQL += "INDEX "
-		if f.indexName != "" {
-			SQL += "`" + f.indexName + "` "
+		if f.IndexName != "" {
+			SQL += "`" + f.IndexName + "` "
 		}
-		SQL += "(`" + f.name + "`) "
+		SQL += "(`" + f.Name + "`) "
 
-		if f.idxComment != "" {
-			SQL += fmt.Sprintf(" COMMENT '%s'", f.idxComment)
+		if f.IndexComment != "" {
+			SQL += fmt.Sprintf(" COMMENT '%s'", f.IndexComment)
 		}
 
-		if f.idxOption != "" {
-			SQL += " " + f.idxOption
+		if f.IndexOption != "" {
+			SQL += " " + f.IndexOption
 		}
 
 		SQL += ","
@@ -283,7 +291,7 @@ func (p *Mysql) CreateTable(o *SqlOptions) (err error) {
 	return err
 }
 
-func (p *Mysql) DropTable(o *SqlOptions) error {
+func (p *Mysql) DropTable(o *orm.SqlOptions) error {
 	//p.Exec("SET FOREIGN_KEY_CHECKS = 0;")
 	_, err := p.Exec("DROP TABLE IF EXISTS `" + o.Table() + "`")
 	//p.Exec("SET FOREIGN_KEY_CHECKS = 1;")
@@ -297,34 +305,34 @@ func (p *Mysql) HasTable(tableName string) bool {
 	return count > 0
 }
 
-func (p *Mysql) AddColumn(field string, o *SqlOptions) error {
+func (p *Mysql) AddColumn(field string, o *orm.SqlOptions) error {
 	// avoid using the same name field
-	f := tableFieldLookup(o.sample, field, p)
+	f := orm.GetField(o.Sample(), field, p)
 	if f == nil {
 		return fmt.Errorf("failed to look up field with name: %s", field)
 	}
 
-	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` ADD `" + f.name + "` " + p.FullDataTypeOf(f))
+	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` ADD `" + f.Name + "` " + p.FullDataTypeOf(f))
 
 	return err
 }
 
-func (p *Mysql) DropColumn(field string, o *SqlOptions) error {
+func (p *Mysql) DropColumn(field string, o *orm.SqlOptions) error {
 	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` DROP COLUMN `" + field + "`")
 	return err
 }
 
-func (p *Mysql) AlterColumn(field string, o *SqlOptions) error {
-	f := tableFieldLookup(o.sample, field, p)
+func (p *Mysql) AlterColumn(field string, o *orm.SqlOptions) error {
+	f := orm.GetField(o.Sample(), field, p)
 	if f == nil {
 		return fmt.Errorf("failed to look up field with name: %s", field)
 	}
 
-	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` MODIFY COLUMN `" + f.name + "` " + p.FullDataTypeOf(f))
+	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` MODIFY COLUMN `" + f.Name + "` " + p.FullDataTypeOf(f))
 	return err
 }
 
-func (p *Mysql) HasColumn(field string, o *SqlOptions) bool {
+func (p *Mysql) HasColumn(field string, o *orm.SqlOptions) bool {
 	var count int64
 	p.Query("SELECT count(*) FROM INFORMATION_SCHEMA.columns WHERE table_schema=? AND table_name=? AND column_name=?",
 		p.CurrentDatabase(), o.Table(), field,
@@ -335,34 +343,34 @@ func (p *Mysql) HasColumn(field string, o *SqlOptions) bool {
 
 // field: 1 - expect
 // columntype: 2 - actual
-func (p *Mysql) MigrateColumn(expect, actual *FieldOptions, o *SqlOptions) error {
+func (p *Mysql) MigrateColumn(expect, actual *orm.StructField, o *orm.SqlOptions) error {
 	alterColumn := false
 
 	// check size
-	if actual.size != nil && util.Int64Value(expect.size) != util.Int64Value(actual.size) {
+	if actual.Size != nil && util.Int64Value(expect.Size) != util.Int64Value(actual.Size) {
 		fmt.Printf("%s.size %v != %v\n",
-			expect.name,
-			util.Int64Value(expect.size),
-			util.Int64Value(actual.size),
+			expect.Name,
+			util.Int64Value(expect.Size),
+			util.Int64Value(actual.Size),
 		)
 		alterColumn = true
 	}
 
 	// check nullable
-	if expect.notNull != nil && util.BoolValue(expect.notNull) != util.BoolValue(actual.notNull) {
-		fmt.Printf("%s.notnull %v != %v\n", expect.name, expect.notNull, actual.notNull)
+	if expect.NotNull != nil && util.BoolValue(expect.NotNull) != util.BoolValue(actual.NotNull) {
+		fmt.Printf("%s.notnull %v != %v\n", expect.Name, expect.NotNull, actual.NotNull)
 		alterColumn = true
 	}
 
 	if alterColumn {
-		return p.AlterColumn(expect.name, o)
+		return p.AlterColumn(expect.Name, o)
 	}
 
 	return nil
 }
 
 // ColumnTypes return columnTypes []gorm.ColumnType and execErr error
-func (p *Mysql) ColumnTypes(o *SqlOptions) ([]FieldOptions, error) {
+func (p *Mysql) ColumnTypes(o *orm.SqlOptions) ([]orm.StructField, error) {
 	query := "SELECT column_name, is_nullable, data_type, character_maximum_length, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema=? AND table_name=?"
 
 	columns := []mysqlColumn{}
@@ -371,7 +379,7 @@ func (p *Mysql) ColumnTypes(o *SqlOptions) ([]FieldOptions, error) {
 		return nil, err
 	}
 
-	columnTypes := []FieldOptions{}
+	columnTypes := []orm.StructField{}
 	for _, c := range columns {
 		columnTypes = append(columnTypes, c.FiledOptions())
 	}
@@ -380,29 +388,29 @@ func (p *Mysql) ColumnTypes(o *SqlOptions) ([]FieldOptions, error) {
 
 }
 
-func (p *Mysql) CreateIndex(name string, o *SqlOptions) error {
-	f := tableFieldLookup(o.sample, name, p)
+func (p *Mysql) CreateIndex(name string, o *orm.SqlOptions) error {
+	f := orm.GetField(o.Sample(), name, p)
 	if f == nil {
 		return fmt.Errorf("failed to create index with name %s", name)
 	}
 
 	createIndexSQL := "CREATE "
-	if f.class != "" {
-		createIndexSQL += f.class + " "
+	if f.Class != "" {
+		createIndexSQL += f.Class + " "
 	}
-	createIndexSQL += fmt.Sprintf("INDEX `%s` ON %s(%s)", f.name, o.Table(), f.name)
+	createIndexSQL += fmt.Sprintf("INDEX `%s` ON %s(%s)", f.Name, o.Table(), f.Name)
 
 	_, err := p.Exec(createIndexSQL)
 	return err
 
 }
 
-func (p *Mysql) DropIndex(name string, o *SqlOptions) error {
+func (p *Mysql) DropIndex(name string, o *orm.SqlOptions) error {
 	_, err := p.Exec(fmt.Sprintf("DROP INDEX `%s` ON `%s`", name, o.Table()))
 	return err
 }
 
-func (p *Mysql) HasIndex(name string, o *SqlOptions) bool {
+func (p *Mysql) HasIndex(name string, o *orm.SqlOptions) bool {
 	var count int64
 	p.Query("SELECT count(*) FROM information_schema.statistics WHERE table_schema=? AND table_name=? AND index_name=?",
 		p.CurrentDatabase(), o.Table(), name).Row(&count)
@@ -413,10 +421,4 @@ func (p *Mysql) HasIndex(name string, o *SqlOptions) bool {
 func (p *Mysql) CurrentDatabase() (name string) {
 	p.Query("SELECT DATABASE()").Row(&name)
 	return
-}
-
-func init() {
-	Register("mysql", func(db DB) Driver {
-		return &Mysql{DB: db}
-	})
 }

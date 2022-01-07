@@ -118,6 +118,10 @@ func (o *SqlOptions) Error(err error) error {
 	return err
 }
 
+func (o *SqlOptions) Sample() interface{} {
+	return o.sample
+}
+
 type SqlOption func(*SqlOptions)
 
 func WithTable(table string) SqlOption {

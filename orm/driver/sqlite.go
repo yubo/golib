@@ -1,4 +1,4 @@
-package orm
+package driver
 
 import (
 	"database/sql"
@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/yubo/golib/orm"
 	"github.com/yubo/golib/util"
 )
 
@@ -19,79 +20,85 @@ type sqliteColumn struct {
 	NumericScale           sql.NullInt64
 }
 
-func (p *sqliteColumn) FiledOptions() FieldOptions {
-	ret := FieldOptions{
-		name:           p.ColumnName,
-		driverDataType: p.Datatype,
+func (p *sqliteColumn) FiledOptions() orm.StructField {
+	ret := orm.StructField{
+		Name:           p.ColumnName,
+		DriverDataType: p.Datatype,
 	}
 
 	if p.CharacterMaximumLength.Valid {
-		ret.size = util.Int64(p.CharacterMaximumLength.Int64)
+		ret.Size = util.Int64(p.CharacterMaximumLength.Int64)
 	}
 
 	if p.IsNullable.Valid {
-		ret.notNull = util.Bool(p.IsNullable.String != "YES")
+		ret.NotNull = util.Bool(p.IsNullable.String != "YES")
 	}
 
 	return ret
 }
 
-var _ Driver = &Sqlite{}
+var _ orm.Driver = &Sqlite{}
+
+func RegisterSqlite() {
+	orm.Register("sqlite3", func(db orm.Execer) orm.Driver {
+		return &Sqlite{db}
+	})
+}
 
 // Sqlite m struct
 type Sqlite struct {
-	DB
+	orm.Execer
 }
 
 // TODO
-func (p *Sqlite) ParseField(f *field) {
-	f.driverDataType = p.driverDataTypeOf(f)
+func (p *Sqlite) ParseField(f *orm.StructField) {
+	f.DriverDataType = p.driverDataTypeOf(f)
 }
 
-func (p *Sqlite) driverDataTypeOf(f *field) string {
-	switch f.dataType {
-	case Bool:
+func (p *Sqlite) driverDataTypeOf(f *orm.StructField) string {
+	switch f.DataType {
+	case orm.Bool:
 		return "numeric"
-	case Int, Uint:
-		if f.autoIncrement && !f.primaryKey {
+	case orm.Int, orm.Uint:
+		if f.AutoIncrement && !f.PrimaryKey {
 			// https://www.sqlite.org/autoinc.html
 			return "integer PRIMARY KEY AUTOINCREMENT"
 		} else {
 			return "integer"
 		}
-	case Float:
+	case orm.Float:
 		return "real"
-	case String:
+	case orm.String:
 		return "text"
-	case Time:
+	case orm.Time:
 		return "datetime"
-	case Bytes:
+	case orm.Bytes:
 		return "blob"
 	}
 
-	return string(f.dataType)
+	return string(f.DataType)
 }
 
-func (p *Sqlite) FullDataTypeOf(field *FieldOptions) string {
-	SQL := field.driverDataType
+func (p *Sqlite) FullDataTypeOf(field *orm.StructField) string {
+	SQL := field.DriverDataType
 
-	if field.notNull != nil && *field.notNull {
+	if field.NotNull != nil && *field.NotNull {
 		SQL += " NOT NULL"
 	}
 
-	if field.unique != nil && *field.unique {
+	if field.Unique != nil && *field.Unique {
 		SQL += " UNIQUE"
 	}
 
-	if field.defaultValue != "" {
-		SQL += " DEFAULT " + field.defaultValue
+	if field.DefaultValue != "" {
+		SQL += " DEFAULT " + field.DefaultValue
 	}
 	return SQL
 }
 
 // AutoMigrate
-func (p *Sqlite) AutoMigrate(sample interface{}, opts ...SqlOption) error {
-	o, err := sqlOptions(sample, opts)
+func (p *Sqlite) AutoMigrate(sample interface{}, opts ...orm.SqlOption) error {
+	o, err := orm.NewSqlOptions(sample, opts)
 	if err != nil {
 		return err
 	}
@@ -101,13 +108,13 @@ func (p *Sqlite) AutoMigrate(sample interface{}, opts ...SqlOption) error {
 	}
 
 	actualFields, _ := p.ColumnTypes(o)
-	expectFields := tableFields(o.sample, p)
+	expectFields := orm.GetFields(o.Sample(), p)
 
-	for _, expectField := range expectFields.list {
-		var foundField *FieldOptions
+	for _, expectField := range expectFields.Fields {
+		var foundField *orm.StructField
 
 		for _, acturalField := range actualFields {
-			if acturalField.name == expectField.name {
+			if acturalField.Name == expectField.Name {
 				foundField = &acturalField
 				break
 			}
@@ -115,19 +122,19 @@ func (p *Sqlite) AutoMigrate(sample interface{}, opts ...SqlOption) error {
 
 		if foundField == nil {
 			// not found, add column
-			if err := p.AddColumn(expectField.name, o); err != nil {
+			if err := p.AddColumn(expectField.Name, o); err != nil {
 				return err
 			}
-		} else if err := p.MigrateColumn(expectField.FieldOptions, foundField, o); err != nil {
+		} else if err := p.MigrateColumn(expectField, foundField, o); err != nil {
 			// found, smart migrate
 			return err
 		}
 	}
 
 	// index
-	for _, f := range expectFields.list {
-		if f.indexKey && !p.HasIndex(f.name, o) {
-			if err := p.CreateIndex(f.name, o); err != nil {
+	for _, f := range expectFields.Fields {
+		if f.IndexKey && !p.HasIndex(f.Name, o) {
+			if err := p.CreateIndex(f.Name, o); err != nil {
 				return err
 			}
 		}
@@ -141,23 +148,23 @@ func (p *Sqlite) GetTables() (tableList []string, err error) {
 	return
 }
 
-func (p *Sqlite) CreateTable(o *SqlOptions) (err error) {
+func (p *Sqlite) CreateTable(o *orm.SqlOptions) (err error) {
 	var (
 		SQL                     = "CREATE TABLE `" + o.Table() + "` ("
 		hasPrimaryKeyInDataType bool
 	)
 
-	fields := tableFields(o.sample, p)
-	for _, f := range fields.list {
-		hasPrimaryKeyInDataType = hasPrimaryKeyInDataType || strings.Contains(strings.ToUpper(f.driverDataType), "PRIMARY KEY")
-		SQL += fmt.Sprintf("`%s` %s,", f.name, p.FullDataTypeOf(f.FieldOptions))
+	fields := orm.GetFields(o.Sample(), p)
+	for _, f := range fields.Fields {
+		hasPrimaryKeyInDataType = hasPrimaryKeyInDataType || strings.Contains(strings.ToUpper(f.DriverDataType), "PRIMARY KEY")
+		SQL += fmt.Sprintf("`%s` %s,", f.Name, p.FullDataTypeOf(f))
 	}
 
 	{
 		primaryKeys := []string{}
-		for _, f := range fields.list {
-			if f.primaryKey {
-				primaryKeys = append(primaryKeys, "`"+f.name+"`")
+		for _, f := range fields.Fields {
+			if f.PrimaryKey {
+				primaryKeys = append(primaryKeys, "`"+f.Name+"`")
 			}
 		}
 
@@ -166,14 +173,14 @@ func (p *Sqlite) CreateTable(o *SqlOptions) (err error) {
 		}
 	}
 
-	for _, f := range fields.list {
-		if !f.indexKey {
+	for _, f := range fields.Fields {
+		if !f.IndexKey {
 			continue
 		}
 
-		defer func(f *field) {
+		defer func(f *orm.StructField) {
 			if err == nil {
-				err = p.CreateIndex(f.name, o)
+				err = p.CreateIndex(f.Name, o)
 			}
 		}(f)
 	}
@@ -187,31 +194,31 @@ func (p *Sqlite) CreateTable(o *SqlOptions) (err error) {
 	return err
 }
 
-func (p *Sqlite) DropTable(o *SqlOptions) error {
+func (p *Sqlite) DropTable(o *orm.SqlOptions) error {
 	_, err := p.Exec("DROP TABLE IF EXISTS `" + o.Table() + "`")
 	return err
 }
 
 func (p *Sqlite) HasTable(tableName string) bool {
 	var count int64
-	err := p.Query("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Row(&count)
-	dlog(1, "count %d err %v", count, err)
+	p.Query("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Row(&count)
+	//dlog(1, "count %d err %v", count, err)
 	return count > 0
 }
 
-func (p *Sqlite) AddColumn(field string, o *SqlOptions) error {
+func (p *Sqlite) AddColumn(field string, o *orm.SqlOptions) error {
 	// avoid using the same name field
-	f := tableFieldLookup(o.sample, field, p)
+	f := orm.GetField(o.Sample(), field, p)
 	if f == nil {
 		return fmt.Errorf("failed to look up field with name: %s", field)
 	}
 
-	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` ADD `" + f.name + "` " + p.FullDataTypeOf(f))
+	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` ADD `" + f.Name + "` " + p.FullDataTypeOf(f))
 
 	return err
 }
 
-func (p *Sqlite) DropColumn(field string, o *SqlOptions) error {
+func (p *Sqlite) DropColumn(field string, o *orm.SqlOptions) error {
 	return p.recreateTable(o, func(rawDDL string) (sql string, sqlArgs []interface{}, err error) {
 		name := field
 
@@ -226,23 +233,23 @@ func (p *Sqlite) DropColumn(field string, o *SqlOptions) error {
 	})
 }
 
-func (p *Sqlite) AlterColumn(field string, o *SqlOptions) error {
+func (p *Sqlite) AlterColumn(field string, o *orm.SqlOptions) error {
 	return p.recreateTable(o, func(rawDDL string) (sql string, sqlArgs []interface{}, err error) {
-		f := tableFieldLookup(o.sample, field, p)
+		f := orm.GetField(o.Sample(), field, p)
 		if f == nil {
 			err = fmt.Errorf("failed to look up field with name: %s", field)
 			return
 		}
 
 		var reg *regexp.Regexp
-		reg, err = regexp.Compile("(`|'|\"| )" + f.name + "(`|'|\"| ) .*?,")
+		reg, err = regexp.Compile("(`|'|\"| )" + f.Name + "(`|'|\"| ) .*?,")
 		if err != nil {
 			return
 		}
 
 		sql = reg.ReplaceAllString(
 			rawDDL,
-			fmt.Sprintf("`%v` %s,", f.name, p.FullDataTypeOf(f)),
+			fmt.Sprintf("`%v` %s,", f.Name, p.FullDataTypeOf(f)),
 		)
 		sqlArgs = []interface{}{}
 
@@ -250,7 +257,7 @@ func (p *Sqlite) AlterColumn(field string, o *SqlOptions) error {
 	})
 }
 
-func (p *Sqlite) HasColumn(name string, o *SqlOptions) bool {
+func (p *Sqlite) HasColumn(name string, o *orm.SqlOptions) bool {
 	var count int64
 	p.Query("SELECT count(*) FROM sqlite_master WHERE type = ? AND tbl_name = ? AND (sql LIKE ? OR sql LIKE ? OR sql LIKE ? OR sql LIKE ? OR sql LIKE ?)",
 		"table", o.Table(), `%"`+name+`" %`, `%`+name+` %`, "%`"+name+"`%", "%["+name+"]%", "%\t"+name+"\t%",
@@ -261,33 +268,30 @@ func (p *Sqlite) HasColumn(name string, o *SqlOptions) bool {
 
 // field: 1 - expect
 // columntype: 2 - actual
-func (p *Sqlite) MigrateColumn(expect, actual *FieldOptions, o *SqlOptions) error {
+func (p *Sqlite) MigrateColumn(expect, actual *orm.StructField, o *orm.SqlOptions) error {
 	alterColumn := false
 
 	// check size
-	if actual.size != nil && util.Int64Value(expect.size) != util.Int64Value(actual.size) {
+	if actual.Size != nil && util.Int64Value(expect.Size) != util.Int64Value(actual.Size) {
 		alterColumn = true
 	}
 
 	// check nullable
-	if expect.notNull != nil && util.BoolValue(expect.notNull) != util.BoolValue(actual.notNull) {
+	if expect.NotNull != nil && util.BoolValue(expect.NotNull) != util.BoolValue(actual.NotNull) {
 		alterColumn = true
 	}
 
 	if alterColumn {
-		return p.AlterColumn(expect.name, o)
+		return p.AlterColumn(expect.Name, o)
 	}
 
 	return nil
 }
 
 // ColumnTypes return columnTypes []gorm.ColumnType and execErr error
-func (p *Sqlite) ColumnTypes(o *SqlOptions) ([]FieldOptions, error) {
+func (p *Sqlite) ColumnTypes(o *orm.SqlOptions) ([]orm.StructField, error) {
 
-	r := p.Query("select * from `" + o.Table() + "` limit 1")
-
-	rows, err := r.rows, r.err
-
+	rows, err := p.RawDB().Query("select * from `" + o.Table() + "` limit 1")
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +306,7 @@ func (p *Sqlite) ColumnTypes(o *SqlOptions) ([]FieldOptions, error) {
 		return nil, err
 	}
 
-	columnTypes := []FieldOptions{}
+	columnTypes := []orm.StructField{}
 	for _, c := range rawColumnTypes {
 		columnTypes = append(columnTypes, p.convertFieldOptions(c))
 	}
@@ -310,46 +314,46 @@ func (p *Sqlite) ColumnTypes(o *SqlOptions) ([]FieldOptions, error) {
 	return columnTypes, nil
 }
 
-func (p *Sqlite) convertFieldOptions(c *sql.ColumnType) FieldOptions {
-	ret := FieldOptions{
-		name:           c.Name(),
-		driverDataType: c.DatabaseTypeName(),
+func (p *Sqlite) convertFieldOptions(c *sql.ColumnType) orm.StructField {
+	ret := orm.StructField{
+		Name:           c.Name(),
+		DriverDataType: c.DatabaseTypeName(),
 	}
 
 	if size, ok := c.Length(); ok {
-		ret.size = util.Int64(size)
+		ret.Size = util.Int64(size)
 	}
 
 	if nullable, ok := c.Nullable(); ok {
-		ret.notNull = util.Bool(!nullable)
+		ret.NotNull = util.Bool(!nullable)
 	}
 
 	return ret
 }
 
-func (p *Sqlite) CreateIndex(name string, o *SqlOptions) error {
-	f := tableFieldLookup(o.sample, name, p)
+func (p *Sqlite) CreateIndex(name string, o *orm.SqlOptions) error {
+	f := orm.GetField(o.Sample(), name, p)
 	if f == nil {
 		return fmt.Errorf("failed to create index with name %s", name)
 	}
 
 	createIndexSQL := "CREATE "
-	if f.class != "" {
-		createIndexSQL += f.class + " "
+	if f.Class != "" {
+		createIndexSQL += f.Class + " "
 	}
-	createIndexSQL += fmt.Sprintf("INDEX `%s` ON %s(%s)", f.name, o.Table(), f.name)
+	createIndexSQL += fmt.Sprintf("INDEX `%s` ON %s(%s)", f.Name, o.Table(), f.Name)
 
 	_, err := p.Exec(createIndexSQL)
 	return err
 
 }
 
-func (p *Sqlite) DropIndex(name string, o *SqlOptions) error {
+func (p *Sqlite) DropIndex(name string, o *orm.SqlOptions) error {
 	_, err := p.Exec("DROP INDEX `" + name + "`")
 	return err
 }
 
-func (p *Sqlite) HasIndex(name string, o *SqlOptions) bool {
+func (p *Sqlite) HasIndex(name string, o *orm.SqlOptions) bool {
 	var count int64
 	p.Query("SELECT count(*) FROM sqlite_master WHERE type = ? AND tbl_name = ? AND name = ?",
 		"index", o.Table(), name).Row(&count)
@@ -368,7 +372,7 @@ func (p *Sqlite) getRawDDL(table string) (createSQL string, err error) {
 	return
 }
 
-func (p *Sqlite) recreateTable(o *SqlOptions,
+func (p *Sqlite) recreateTable(o *orm.SqlOptions,
 	getCreateSQL func(rawDDL string) (sql string, sqlArgs []interface{}, err error),
 ) error {
 	table := o.Table()
@@ -551,10 +555,4 @@ func (p *sqliteDDL) getColumns() []string {
 		}
 	}
 	return res
-}
-
-func init() {
-	Register("sqlite3", func(db DB) Driver {
-		return &Sqlite{DB: db}
-	})
 }
