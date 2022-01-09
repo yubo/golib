@@ -170,18 +170,19 @@ func GenInsertSql(table string, sample interface{}, db Driver) (string, []interf
 
 func genInsertSql(rv reflect.Value, values *[]kv, db Driver) error {
 	fields := cachedTypeFields(rv.Type(), db)
-	for _, f := range fields.Fields {
+	curTime := defaultClock.Now()
 
+	for _, f := range fields.Fields {
 		if f.AutoCreatetime > 0 {
 			*values = append(*values, kv{
 				f.Name,
-				NewCurTime(f.AutoCreatetime),
+				NewCurTime(f.AutoCreatetime, curTime),
 			})
 			continue
 		} else if f.AutoUpdatetime > 0 {
 			*values = append(*values, kv{
 				f.Name,
-				NewCurTime(f.AutoUpdatetime),
+				NewCurTime(f.AutoUpdatetime, curTime),
 			})
 			continue
 		}
@@ -200,8 +201,7 @@ func genInsertSql(rv reflect.Value, values *[]kv, db Driver) error {
 	return nil
 }
 
-func NewCurTime(t TimeType) interface{} {
-	cur := defaultClock.Now()
+func NewCurTime(t TimeType, cur time.Time) interface{} {
 	switch t {
 	case UnixTime:
 		return cur
@@ -347,13 +347,14 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 
 func genUpdateSql(rv reflect.Value, set, where *[]kv, db Driver) error {
 	fields := cachedTypeFields(rv.Type(), db)
+	curTime := defaultClock.Now()
 	for _, f := range fields.Fields {
 		if f.AutoCreatetime > 0 {
 			continue
 		} else if f.AutoUpdatetime > 0 {
 			*set = append(*set, kv{
 				f.Name,
-				NewCurTime(f.AutoUpdatetime),
+				NewCurTime(f.AutoUpdatetime, curTime),
 			})
 			continue
 		}
