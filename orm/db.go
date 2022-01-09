@@ -96,7 +96,7 @@ func open(opts *Options) (DB, error) {
 	return db, nil
 }
 
-func (p *ormDB) DB() *sql.DB {
+func (p *ormDB) SqlDB() *sql.DB {
 	return p.db
 }
 

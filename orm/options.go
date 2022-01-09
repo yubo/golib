@@ -7,6 +7,7 @@ import (
 
 	"github.com/yubo/golib/api/errors"
 	"github.com/yubo/golib/queries"
+	"github.com/yubo/golib/util"
 )
 
 const (
@@ -183,7 +184,7 @@ func (p *SqlOptions) Table() string {
 		rt = rt.Elem()
 	}
 
-	p.table = dbName(rt.Name())
+	p.table = util.SnakeCasedName(rt.Name())
 	return p.table
 }
 

@@ -244,7 +244,7 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 	opt.FieldName = sf.Name
 	opt.Name = set.Get("name")
 	if opt.Name == "" {
-		opt.Name = dbName(opt.FieldName)
+		opt.Name = util.SnakeCasedName(opt.FieldName)
 	}
 	opt.Name = strings.ToLower(opt.Name)
 

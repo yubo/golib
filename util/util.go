@@ -27,6 +27,20 @@ const (
 	alphaDelta = 'a' - 'A'
 )
 
+var (
+	// https://github.com/golang/lint/blob/master/lint.go#L770
+	commonInitialismsReplacer *strings.Replacer
+)
+
+func init() {
+	keys := []string{"API", "ASCII", "CPU", "CSS", "DNS", "EOF", "GUID", "HTML", "HTTP", "HTTPS", "ID", "IP", "JSON", "LHS", "QPS", "RAM", "RHS", "RPC", "SLA", "SMTP", "SSH", "TLS", "TTL", "UID", "UI", "UUID", "URI", "URL", "UTF8", "VM", "XML", "XSRF", "XSS"}
+	oldnews := make([]string, 0, len(keys))
+	for _, key := range keys {
+		oldnews = append(oldnews, key, strings.Title(strings.ToLower(key)))
+	}
+	commonInitialismsReplacer = strings.NewReplacer(oldnews...)
+}
+
 func IndentLines(i int, lines string) (ret string) {
 	ls := strings.Split(strings.Trim(lines, "\n"), "\n")
 	indent := strings.Repeat(" ", i*IndentSize)
@@ -505,8 +519,12 @@ func ErrorString(err error) *string {
 	return String(err.Error())
 }
 
-// convert like this: "HelloWorld" to "hello_world"
 func SnakeCasedName(name string) string {
+	return snakeCasedName(commonInitialismsReplacer.Replace(name))
+}
+
+// convert like this: "HelloWorld" to "hello_world"
+func snakeCasedName(name string) string {
 	newstr := make([]rune, 0, len(name)+8)
 	lastAppend := false
 

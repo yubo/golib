@@ -27,7 +27,7 @@ const (
 )
 
 type DB interface {
-	DB() *sql.DB
+	SqlDB() *sql.DB
 	Close() error
 	Begin() (Tx, error)
 	BeginTx(ctx context.Context, ops *sql.TxOptions) (Tx, error)

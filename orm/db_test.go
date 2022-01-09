@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
 
-	_ "github.com/yubo/golib/orm/mysql"
-	_ "github.com/yubo/golib/orm/sqlite"
+	_ "github.com/go-sql-driver/mysql"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -36,7 +36,7 @@ func init() {
 	driver = envDef("TEST_DB_DRIVER", "sqlite3")
 	dsn = envDef("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory")
 	if db, err := Open(driver, dsn); err == nil {
-		if err = db.DB().Ping(); err == nil {
+		if err = db.SqlDB().Ping(); err == nil {
 			available = true
 		}
 		db.Close()
@@ -412,7 +412,7 @@ func TestQueryRowsStructPtr(t *testing.T) {
 
 func TestPing(t *testing.T) {
 	RunTests(t, dsn, func(dbt *DBTest) {
-		if err := dbt.db.DB().Ping(); err != nil {
+		if err := dbt.db.SqlDB().Ping(); err != nil {
 			dbt.fail("Ping", "Ping", err)
 		}
 	})
