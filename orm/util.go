@@ -147,14 +147,14 @@ func GenInsertSql(table string, sample interface{}, db Driver) (string, []interf
 	}
 
 	if len(values) == 0 {
-		return "", nil, fmt.Errorf("insert into `%s` `values` is empty", table)
+		return "", nil, fmt.Errorf("INSERT INTO `%s` `VALUES` is empty", table)
 	}
 
 	buf := &bytes.Buffer{}
 	buf2 := &bytes.Buffer{}
 	args := []interface{}{}
 
-	buf.WriteString("insert into `" + table + "` (")
+	buf.WriteString("INSERT INTO `" + table + "` (")
 
 	for i, v := range values {
 		if i != 0 {
@@ -166,7 +166,7 @@ func GenInsertSql(table string, sample interface{}, db Driver) (string, []interf
 		args = append(args, v.v)
 	}
 
-	return buf.String() + ") values (" + buf2.String() + ")", args, nil
+	return buf.String() + ") VALUES (" + buf2.String() + ")", args, nil
 }
 
 func genInsertSql(rv reflect.Value, values *[]kv, db Driver) error {
@@ -223,10 +223,10 @@ func GenListSql(table string, cols []string, selector queries.Selector, orderby 
 		return "", "", nil, errTableEmpty
 	}
 
-	// select *
-	buf := bytes.NewBufferString("select")
-	// select count(*)
-	buf2 := bytes.NewBufferString("select count(*) from `" + table + "`")
+	// SELECT *
+	buf := bytes.NewBufferString("SELECT")
+	// SELECT count(*)
+	buf2 := bytes.NewBufferString("SELECT COUNT(*) FROM `" + table + "`")
 	args := []interface{}{}
 
 	// cols
@@ -242,25 +242,25 @@ func GenListSql(table string, cols []string, selector queries.Selector, orderby 
 	}
 
 	// table
-	buf.WriteString(" from `" + table + "`")
+	buf.WriteString(" FROM `" + table + "`")
 
 	// selector
 	if selector != nil {
 		if q, a := selector.Sql(); q != "" {
-			buf.WriteString(" where " + q)
-			buf2.WriteString(" where " + q)
+			buf.WriteString(" WHERE " + q)
+			buf2.WriteString(" WHERE " + q)
 			args = a
 		}
 	}
 
 	// order
 	if len(orderby) > 0 {
-		buf.WriteString(" order by " + strings.Join(orderby, ", "))
+		buf.WriteString(" ORDER BY " + strings.Join(orderby, ", "))
 	}
 
 	// limit
 	if offset != nil && limit != nil {
-		fmt.Fprintf(buf, " limit %d, %d", *offset, *limit)
+		fmt.Fprintf(buf, " LIMIT %d, %d", *offset, *limit)
 	}
 
 	return buf.String(), buf2.String(), args, nil
@@ -279,8 +279,8 @@ func GenGetSql(table string, cols []string, selector queries.Selector) (string, 
 		return "", nil, errQueryEmpty
 	}
 
-	// select *
-	buf := bytes.NewBufferString("select")
+	// SELECT *
+	buf := bytes.NewBufferString("SELECT")
 
 	// cols
 	if len(cols) == 0 {
@@ -295,7 +295,7 @@ func GenGetSql(table string, cols []string, selector queries.Selector) (string, 
 	}
 
 	// table
-	buf.WriteString(" from `" + table + "` where " + query)
+	buf.WriteString(" FROM `" + table + "` WHERE " + query)
 
 	return buf.String(), args, nil
 }
@@ -318,13 +318,13 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 	}
 
 	if len(set) == 0 {
-		return "", nil, fmt.Errorf("Update `%s` `set` is empty", table)
+		return "", nil, fmt.Errorf("UPDATE `%s` `SET` is empty", table)
 	}
 	if len(where) == 0 {
-		return "", nil, fmt.Errorf("update `%s` `where` is empty", table)
+		return "", nil, fmt.Errorf("UPDATE `%s` `WHERE` is empty", table)
 	}
 
-	buf := bytes.NewBufferString("update `" + table + "` set")
+	buf := bytes.NewBufferString("UPDATE `" + table + "` SET")
 	args := []interface{}{}
 	for i, v := range set {
 		if i != 0 {
@@ -334,10 +334,10 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 		args = append(args, v.v)
 	}
 
-	buf.WriteString(" where")
+	buf.WriteString(" WHERE")
 	for i, v := range where {
 		if i != 0 {
-			buf.WriteString(" and")
+			buf.WriteString(" AND")
 		}
 		buf.WriteString(" `" + v.k + "` = ?")
 		args = append(args, v.v)
@@ -396,7 +396,7 @@ func GenDeleteSql(table string, selector queries.Selector) (string, []interface{
 		return "", nil, errQueryEmpty
 	}
 
-	return fmt.Sprintf("delete from `%s` where %s", table, query), args, nil
+	return fmt.Sprintf("DELETE FROM `%s` WHERE %s", table, query), args, nil
 }
 
 func NewOptions(opts ...SqlOption) *SqlOptions {

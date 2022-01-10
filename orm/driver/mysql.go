@@ -228,7 +228,7 @@ func (p *Mysql) AutoMigrate(sample interface{}, opts ...orm.SqlOption) error {
 }
 
 func (p *Mysql) GetTables() (tableList []string, err error) {
-	err = p.Query("SELECT TABLE_NAME FROM information_schema.tables where TABLE_SCHEMA=?", p.CurrentDatabase()).Rows(&tableList)
+	err = p.Query("SELECT TABLE_NAME FROM information_schema.tables WHERE TABLE_SCHEMA=?", p.CurrentDatabase()).Rows(&tableList)
 	return
 }
 

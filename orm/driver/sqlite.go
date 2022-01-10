@@ -144,7 +144,7 @@ func (p *Sqlite) AutoMigrate(sample interface{}, opts ...orm.SqlOption) error {
 }
 
 func (p *Sqlite) GetTables() (tableList []string, err error) {
-	err = p.Query("SELECT name FROM sqlite_master where type=?", "table").Rows(&tableList)
+	err = p.Query("SELECT name FROM sqlite_master WHERE type=?", "table").Rows(&tableList)
 	return
 }
 
@@ -201,7 +201,7 @@ func (p *Sqlite) DropTable(o *orm.SqlOptions) error {
 
 func (p *Sqlite) HasTable(tableName string) bool {
 	var count int64
-	p.Query("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Row(&count)
+	p.Query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Row(&count)
 	//dlog(1, "count %d err %v", count, err)
 	return count > 0
 }
@@ -291,7 +291,7 @@ func (p *Sqlite) MigrateColumn(expect, actual *orm.StructField, o *orm.SqlOption
 // ColumnTypes return columnTypes []gorm.ColumnType and execErr error
 func (p *Sqlite) ColumnTypes(o *orm.SqlOptions) ([]orm.StructField, error) {
 
-	rows, err := p.RawDB().Query("select * from `" + o.Table() + "` limit 1")
+	rows, err := p.RawDB().Query("SELECT * FROM `" + o.Table() + "` LIMIT 1")
 	if err != nil {
 		return nil, err
 	}

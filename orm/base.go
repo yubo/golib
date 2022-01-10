@@ -160,6 +160,7 @@ func (p *baseInterface) List(into interface{}, opts ...SqlOption) error {
 	}
 
 	if o.total != nil {
+		dlogSql(1, countSql, args...)
 		if err := p.query(countSql, args...).Row(o.total); err != nil {
 			return err
 		}

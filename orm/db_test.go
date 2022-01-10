@@ -193,13 +193,13 @@ func TestDelRows(t *testing.T) {
 
 		dbt.mustExec("INSERT INTO test VALUES (?)", 1)
 
-		n, err := dbt.db.ExecNum("delete from test where value = ?", 1)
+		n, err := dbt.db.ExecNum("DELETE FROM test WHERE value = ?", 1)
 		if n != 1 {
 			dbt.fail("execNum",
 				fmt.Sprintf("got %d want 1", n), err)
 		}
 
-		n, err = dbt.db.ExecNum("delete from test where value = ?", 1)
+		n, err = dbt.db.ExecNum("DELETE FROM test WHERE value = ?", 1)
 		if err != nil || n != 0 {
 			dbt.fail("execNum", fmt.Sprintf("got (%d, %v) want (0, nil)", n, err), err)
 		}
@@ -213,8 +213,8 @@ func TestExecNum(t *testing.T) {
 		dbt.mustExec("CREATE TABLE test (value int)")
 
 		dbt.mustExecNum("INSERT INTO test VALUES (?)", 1)
-		dbt.mustExecNum("update test set value=? where value=?", 2, 1)
-		dbt.mustExecNum("delete from test  where value=?", 2)
+		dbt.mustExecNum("UPDATE test SET value=? WHERE value=?", 2, 1)
+		dbt.mustExecNum("DELETE FROM test  WHERE value=?", 2)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
 	})
@@ -256,7 +256,7 @@ func TestQueryRowStruct(t *testing.T) {
 		{
 			var got *vt2
 			var want *vt2
-			dbt.queryRow(&got, "SELECT * FROM test where point_x = 0")
+			dbt.queryRow(&got, "SELECT * FROM test WHERE point_x = 0")
 			assert.Equal(t, got, want)
 		}
 
@@ -347,7 +347,7 @@ func TestQueryRowStruct2(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := test{}
-			dbt.mustQueryRow(&got, "SELECT * FROM test where n = ?", c.N)
+			dbt.mustQueryRow(&got, "SELECT * FROM test WHERE n = ?", c.N)
 			assert.Equal(t, c, got)
 		}
 		dbt.mustExec("DROP TABLE IF EXISTS test")
@@ -427,7 +427,7 @@ func TestSqlArg(t *testing.T) {
 
 		dbt.mustExec("INSERT INTO test VALUES (?);", a)
 
-		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", a)
+		dbt.mustQueryRow(&v, "SELECT value FROM test WHERE value=?;", a)
 		assert.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
@@ -440,7 +440,7 @@ func TestSqlArg(t *testing.T) {
 
 		dbt.mustExec("INSERT INTO test VALUES (?);", &a)
 
-		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", &a)
+		dbt.mustQueryRow(&v, "SELECT value FROM test WHERE value=?;", &a)
 		assert.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
@@ -464,7 +464,7 @@ func TestSqlArg(t *testing.T) {
 		dbt.mustQueryRow(&v, "SELECT * FROM test;")
 		assert.Equal(t, v, vt{&pointX, nil, nil, nil})
 
-		// dbt.mustQueryRow(&v, "SELECT value FROM test where b = ?;", 0)
+		// dbt.mustQueryRow(&v, "SELECT value FROM test WHERE b = ?;", 0)
 		// assert.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
@@ -497,7 +497,7 @@ func TestTx(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbt.mustQueryRow(&v, "SELECT value FROM test where value=?;", &a)
+		dbt.mustQueryRow(&v, "SELECT value FROM test WHERE value=?;", &a)
 		assert.Equal(t, 1, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
@@ -519,7 +519,7 @@ func TestTx(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		dbt.queryRow(&v, "SELECT value FROM test where value=?;", &a)
+		dbt.queryRow(&v, "SELECT value FROM test WHERE value=?;", &a)
 		assert.Equal(t, 0, v)
 
 		dbt.mustExec("DROP TABLE IF EXISTS test;")
@@ -595,7 +595,7 @@ func TestList(t *testing.T) {
 
 		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
-		dbt.mustQueryRows(&v, "SELECT value FROM test where value in (1, 2, 3)")
+		dbt.mustQueryRows(&v, "SELECT value FROM test WHERE value in (1, 2, 3)")
 
 		if len(v) != 3 {
 			t.Fatalf("query rows want 3 got %d", len(v))
@@ -610,7 +610,7 @@ func TestList(t *testing.T) {
 
 		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
-		dbt.mustQueryRows(&v, "SELECT value FROM test where value in ('1', '2', '3')")
+		dbt.mustQueryRows(&v, "SELECT value FROM test WHERE value IN ('1', '2', '3')")
 
 		if len(v) != 3 {
 			t.Fatalf("query rows want 3 got %d", len(v))
