@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/yubo/golib/queries"
+	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/clock"
 	"k8s.io/klog/v2"
 )
@@ -521,4 +522,15 @@ func AddSqlArgs(sql string, args []interface{},
 
 func SetClock(clock clock.Clock) {
 	defaultClock = clock
+}
+
+func typeOfArray(in interface{}) string {
+	rt := reflect.TypeOf(in)
+	if rt.Kind() == reflect.Ptr {
+		rt = rt.Elem()
+	}
+	if k := rt.Kind(); k == reflect.Slice || k == reflect.Array {
+		rt = rt.Elem()
+	}
+	return util.SnakeCasedName(rt.Name())
 }

@@ -145,6 +145,10 @@ func (p *baseInterface) List(into interface{}, opts ...SqlOption) error {
 		return err
 	}
 
+	if o.table == "" {
+		o.table = typeOfArray(into)
+	}
+
 	querySql, countSql, args, err := o.GenListSql()
 	if err != nil {
 		return err
