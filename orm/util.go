@@ -399,28 +399,6 @@ func GenDeleteSql(table string, selector queries.Selector) (string, []interface{
 	return fmt.Sprintf("DELETE FROM `%s` WHERE %s", table, query), args, nil
 }
 
-func NewOptions(opts ...SqlOption) *SqlOptions {
-	o := &SqlOptions{}
-	for _, opt := range opts {
-		opt(o)
-	}
-
-	return o
-}
-
-func NewSqlOptions(sample interface{}, opts []SqlOption) (*SqlOptions, error) {
-	o := &SqlOptions{}
-	for _, opt := range append(opts, WithSample(sample)) {
-		opt(o)
-	}
-
-	if o.err != nil {
-		return nil, o.err
-	}
-
-	return o, nil
-}
-
 func GetFields(sample interface{}, driver Driver) StructFields {
 	return cachedTypeFields(reflect.Indirect(reflect.ValueOf(sample)).Type(), driver)
 }

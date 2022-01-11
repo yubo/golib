@@ -9,7 +9,7 @@ import (
 
 var _ Interface = &baseInterface{}
 
-func NewBaseInterface(driver Driver, db RawDB, opts *Options) Interface {
+func NewBaseInterface(driver Driver, db RawDB, opts *DBOptions) Interface {
 	if driver == nil {
 		driver = &nonDriver{}
 	}
@@ -17,7 +17,7 @@ func NewBaseInterface(driver Driver, db RawDB, opts *Options) Interface {
 }
 
 type baseInterface struct {
-	*Options
+	*DBOptions
 	Driver
 	db RawDB
 }
@@ -27,7 +27,7 @@ func (p *baseInterface) RawDB() RawDB {
 }
 
 func (p *baseInterface) WithRawDB(raw RawDB) Interface {
-	return NewBaseInterface(p.Driver, raw, p.Options)
+	return NewBaseInterface(p.Driver, raw, p.DBOptions)
 }
 
 func (p *baseInterface) Exec(query string, args ...interface{}) (sql.Result, error) {
@@ -99,18 +99,18 @@ func (p *baseInterface) Query(query string, args ...interface{}) *Rows {
 
 func (p *baseInterface) query(query string, args ...interface{}) *Rows {
 	ret := &Rows{
-		db:      p,
-		Options: p.Options,
-		query:   query,
-		args:    args,
-		maxRows: p.maxRows,
+		db:        p,
+		DBOptions: p.DBOptions,
+		query:     query,
+		args:      args,
+		maxRows:   p.maxRows,
 	}
 	ret.rows, ret.err = p.db.Query(query, args...)
 	return ret
 }
 
-func (p *baseInterface) Insert(sample interface{}, opts ...SqlOption) error {
-	o, err := NewSqlOptions(sample, opts)
+func (p *baseInterface) Insert(sample interface{}, opts ...Option) error {
+	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return err
 	}
@@ -124,8 +124,8 @@ func (p *baseInterface) Insert(sample interface{}, opts ...SqlOption) error {
 	return p.execNumErr(query, args...)
 }
 
-func (p *baseInterface) InsertLastId(sample interface{}, opts ...SqlOption) (int64, error) {
-	o, err := NewSqlOptions(sample, opts)
+func (p *baseInterface) InsertLastId(sample interface{}, opts ...Option) (int64, error) {
+	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return 0, err
 	}
@@ -139,8 +139,8 @@ func (p *baseInterface) InsertLastId(sample interface{}, opts ...SqlOption) (int
 	return p.execLastId(query, args...)
 }
 
-func (p *baseInterface) List(into interface{}, opts ...SqlOption) error {
-	o, err := NewSqlOptions(into, opts)
+func (p *baseInterface) List(into interface{}, opts ...Option) error {
+	o, err := NewOptions(append(opts, WithSample(into))...)
 	if err != nil {
 		return err
 	}
@@ -169,8 +169,8 @@ func (p *baseInterface) List(into interface{}, opts ...SqlOption) error {
 	return nil
 }
 
-func (p *baseInterface) Get(into interface{}, opts ...SqlOption) error {
-	o, err := NewSqlOptions(into, opts)
+func (p *baseInterface) Get(into interface{}, opts ...Option) error {
+	o, err := NewOptions(append(opts, WithSample(into))...)
 	if err != nil {
 		return err
 	}
@@ -184,8 +184,8 @@ func (p *baseInterface) Get(into interface{}, opts ...SqlOption) error {
 	return o.Error(p.query(query, args...).Row(into))
 }
 
-func (p *baseInterface) Update(sample interface{}, opts ...SqlOption) error {
-	o, err := NewSqlOptions(sample, opts)
+func (p *baseInterface) Update(sample interface{}, opts ...Option) error {
+	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return err
 	}
@@ -199,8 +199,8 @@ func (p *baseInterface) Update(sample interface{}, opts ...SqlOption) error {
 	return o.Error(p.execNumErr(query, args...))
 }
 
-func (p *baseInterface) Delete(sample interface{}, opts ...SqlOption) error {
-	o, err := NewSqlOptions(sample, opts)
+func (p *baseInterface) Delete(sample interface{}, opts ...Option) error {
+	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return err
 	}

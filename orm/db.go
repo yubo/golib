@@ -30,14 +30,14 @@ func Register(name string, d DBFactory) {
 }
 
 type ormDB struct {
-	*Options
+	*DBOptions
 	db *sql.DB // DB
 
 	Interface
 }
 
-func Open(driverName, dataSourceName string, opts ...Option) (DB, error) {
-	o := &Options{}
+func Open(driverName, dataSourceName string, opts ...DBOption) (DB, error) {
+	o := &DBOptions{}
 	for _, opt := range append(opts, WithDirver(driverName), WithDsn(dataSourceName)) {
 		opt(o)
 	}
@@ -49,7 +49,7 @@ func Open(driverName, dataSourceName string, opts ...Option) (DB, error) {
 	return open(o)
 }
 
-func open(opts *Options) (DB, error) {
+func open(opts *DBOptions) (DB, error) {
 	rawDB, err := sql.Open(opts.driver, opts.dsn)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func open(opts *Options) (DB, error) {
 
 	driver := Driver(&nonDriver{})
 	db := &ormDB{
-		Options:   opts,
+		DBOptions: opts,
 		db:        rawDB,
 		Interface: NewBaseInterface(driver, rawDB, opts),
 	}
@@ -196,7 +196,7 @@ func (p *ormTx) Commit() error {
 }
 
 type Rows struct {
-	*Options
+	*DBOptions
 	db    Interface
 	query string
 	args  []interface{}

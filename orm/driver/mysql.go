@@ -180,8 +180,8 @@ func (p Mysql) FullDataTypeOf(field *orm.StructField) string {
 }
 
 // AutoMigrate
-func (p *Mysql) AutoMigrate(sample interface{}, opts ...orm.SqlOption) error {
-	o, err := orm.NewSqlOptions(sample, opts)
+func (p *Mysql) AutoMigrate(sample interface{}, opts ...orm.Option) error {
+	o, err := orm.NewSampleOptions(sample, opts)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (p *Mysql) GetTables() (tableList []string, err error) {
 	return
 }
 
-func (p *Mysql) CreateTable(o *orm.SqlOptions) (err error) {
+func (p *Mysql) CreateTable(o *orm.Options) (err error) {
 	var (
 		SQL                     = "CREATE TABLE `" + o.Table() + "` ("
 		hasPrimaryKeyInDataType bool
@@ -291,7 +291,7 @@ func (p *Mysql) CreateTable(o *orm.SqlOptions) (err error) {
 	return err
 }
 
-func (p *Mysql) DropTable(o *orm.SqlOptions) error {
+func (p *Mysql) DropTable(o *orm.Options) error {
 	//p.Exec("SET FOREIGN_KEY_CHECKS = 0;")
 	_, err := p.Exec("DROP TABLE IF EXISTS `" + o.Table() + "`")
 	//p.Exec("SET FOREIGN_KEY_CHECKS = 1;")
@@ -305,7 +305,7 @@ func (p *Mysql) HasTable(tableName string) bool {
 	return count > 0
 }
 
-func (p *Mysql) AddColumn(field string, o *orm.SqlOptions) error {
+func (p *Mysql) AddColumn(field string, o *orm.Options) error {
 	// avoid using the same name field
 	f := orm.GetField(o.Sample(), field, p)
 	if f == nil {
@@ -317,12 +317,12 @@ func (p *Mysql) AddColumn(field string, o *orm.SqlOptions) error {
 	return err
 }
 
-func (p *Mysql) DropColumn(field string, o *orm.SqlOptions) error {
+func (p *Mysql) DropColumn(field string, o *orm.Options) error {
 	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` DROP COLUMN `" + field + "`")
 	return err
 }
 
-func (p *Mysql) AlterColumn(field string, o *orm.SqlOptions) error {
+func (p *Mysql) AlterColumn(field string, o *orm.Options) error {
 	f := orm.GetField(o.Sample(), field, p)
 	if f == nil {
 		return fmt.Errorf("failed to look up field with name: %s", field)
@@ -332,7 +332,7 @@ func (p *Mysql) AlterColumn(field string, o *orm.SqlOptions) error {
 	return err
 }
 
-func (p *Mysql) HasColumn(field string, o *orm.SqlOptions) bool {
+func (p *Mysql) HasColumn(field string, o *orm.Options) bool {
 	var count int64
 	p.Query("SELECT count(*) FROM INFORMATION_SCHEMA.columns WHERE table_schema=? AND table_name=? AND column_name=?",
 		p.CurrentDatabase(), o.Table(), field,
@@ -343,7 +343,7 @@ func (p *Mysql) HasColumn(field string, o *orm.SqlOptions) bool {
 
 // field: 1 - expect
 // columntype: 2 - actual
-func (p *Mysql) MigrateColumn(expect, actual *orm.StructField, o *orm.SqlOptions) error {
+func (p *Mysql) MigrateColumn(expect, actual *orm.StructField, o *orm.Options) error {
 	alterColumn := false
 
 	// check size
@@ -370,7 +370,7 @@ func (p *Mysql) MigrateColumn(expect, actual *orm.StructField, o *orm.SqlOptions
 }
 
 // ColumnTypes return columnTypes []gorm.ColumnType and execErr error
-func (p *Mysql) ColumnTypes(o *orm.SqlOptions) ([]orm.StructField, error) {
+func (p *Mysql) ColumnTypes(o *orm.Options) ([]orm.StructField, error) {
 	query := "SELECT column_name, is_nullable, data_type, character_maximum_length, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema=? AND table_name=?"
 
 	columns := []mysqlColumn{}
@@ -388,7 +388,7 @@ func (p *Mysql) ColumnTypes(o *orm.SqlOptions) ([]orm.StructField, error) {
 
 }
 
-func (p *Mysql) CreateIndex(name string, o *orm.SqlOptions) error {
+func (p *Mysql) CreateIndex(name string, o *orm.Options) error {
 	f := orm.GetField(o.Sample(), name, p)
 	if f == nil {
 		return fmt.Errorf("failed to create index with name %s", name)
@@ -405,12 +405,12 @@ func (p *Mysql) CreateIndex(name string, o *orm.SqlOptions) error {
 
 }
 
-func (p *Mysql) DropIndex(name string, o *orm.SqlOptions) error {
+func (p *Mysql) DropIndex(name string, o *orm.Options) error {
 	_, err := p.Exec(fmt.Sprintf("DROP INDEX `%s` ON `%s`", name, o.Table()))
 	return err
 }
 
-func (p *Mysql) HasIndex(name string, o *orm.SqlOptions) bool {
+func (p *Mysql) HasIndex(name string, o *orm.Options) bool {
 	var count int64
 	p.Query("SELECT count(*) FROM information_schema.statistics WHERE table_schema=? AND table_name=? AND index_name=?",
 		p.CurrentDatabase(), o.Table(), name).Row(&count)

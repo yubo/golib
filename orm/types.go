@@ -56,12 +56,12 @@ type Interface interface {
 }
 
 type Store interface {
-	Insert(sample interface{}, opts ...SqlOption) error
-	InsertLastId(sample interface{}, opts ...SqlOption) (int64, error)
-	Get(into interface{}, opts ...SqlOption) error
-	List(into interface{}, opts ...SqlOption) error
-	Update(sample interface{}, opts ...SqlOption) error
-	Delete(sample interface{}, opts ...SqlOption) error
+	Insert(sample interface{}, opts ...Option) error
+	InsertLastId(sample interface{}, opts ...Option) (int64, error)
+	Get(into interface{}, opts ...Option) error
+	List(into interface{}, opts ...Option) error
+	Update(sample interface{}, opts ...Option) error
+	Delete(sample interface{}, opts ...Option) error
 }
 
 type Execer interface {
@@ -76,7 +76,7 @@ type Execer interface {
 
 type Driver interface {
 	// refer: https://gorm.io/docs/migration.html
-	AutoMigrate(sample interface{}, opts ...SqlOption) error
+	AutoMigrate(sample interface{}, opts ...Option) error
 
 	//  parse datatype
 	ParseField(opts *StructField)
@@ -86,41 +86,41 @@ type Driver interface {
 	FullDataTypeOf(field *StructField) string
 
 	// Tables
-	CreateTable(o *SqlOptions) error
-	DropTable(o *SqlOptions) error
+	CreateTable(o *Options) error
+	DropTable(o *Options) error
 	HasTable(tableName string) bool
 	GetTables() (tableList []string, err error)
 
 	// Columns
-	AddColumn(field string, o *SqlOptions) error
-	DropColumn(field string, o *SqlOptions) error
-	AlterColumn(field string, o *SqlOptions) error
-	MigrateColumn(expect, actual *StructField, o *SqlOptions) error
-	HasColumn(field string, o *SqlOptions) bool
-	ColumnTypes(o *SqlOptions) ([]StructField, error)
+	AddColumn(field string, o *Options) error
+	DropColumn(field string, o *Options) error
+	AlterColumn(field string, o *Options) error
+	MigrateColumn(expect, actual *StructField, o *Options) error
+	HasColumn(field string, o *Options) bool
+	ColumnTypes(o *Options) ([]StructField, error)
 
 	// Indexes
-	CreateIndex(name string, o *SqlOptions) error
-	DropIndex(name string, o *SqlOptions) error
-	HasIndex(name string, o *SqlOptions) bool
+	CreateIndex(name string, o *Options) error
+	DropIndex(name string, o *Options) error
+	HasIndex(name string, o *Options) bool
 }
 
 type nonDriver struct{}
 
-func (b nonDriver) AutoMigrate(sample interface{}, opts ...SqlOption) error        { return nil }
-func (b nonDriver) ParseField(opts *StructField)                                   {}
-func (b nonDriver) CurrentDatabase() string                                        { return "" }
-func (b nonDriver) FullDataTypeOf(field *StructField) string                       { return "" }
-func (b nonDriver) CreateTable(o *SqlOptions) error                                { return nil }
-func (b nonDriver) DropTable(o *SqlOptions) error                                  { return nil }
-func (b nonDriver) HasTable(tableName string) bool                                 { return false }
-func (b nonDriver) GetTables() (tableList []string, err error)                     { return nil, nil }
-func (b nonDriver) AddColumn(field string, o *SqlOptions) error                    { return nil }
-func (b nonDriver) DropColumn(field string, o *SqlOptions) error                   { return nil }
-func (b nonDriver) AlterColumn(field string, o *SqlOptions) error                  { return nil }
-func (b nonDriver) MigrateColumn(expect, actual *StructField, o *SqlOptions) error { return nil }
-func (b nonDriver) HasColumn(field string, o *SqlOptions) bool                     { return false }
-func (b nonDriver) ColumnTypes(o *SqlOptions) ([]StructField, error)               { return nil, nil }
-func (b nonDriver) CreateIndex(name string, o *SqlOptions) error                   { return nil }
-func (b nonDriver) DropIndex(name string, o *SqlOptions) error                     { return nil }
-func (b nonDriver) HasIndex(name string, o *SqlOptions) bool                       { return false }
+func (b nonDriver) AutoMigrate(sample interface{}, opts ...Option) error        { return nil }
+func (b nonDriver) ParseField(opts *StructField)                                {}
+func (b nonDriver) CurrentDatabase() string                                     { return "" }
+func (b nonDriver) FullDataTypeOf(field *StructField) string                    { return "" }
+func (b nonDriver) CreateTable(o *Options) error                                { return nil }
+func (b nonDriver) DropTable(o *Options) error                                  { return nil }
+func (b nonDriver) HasTable(tableName string) bool                              { return false }
+func (b nonDriver) GetTables() (tableList []string, err error)                  { return nil, nil }
+func (b nonDriver) AddColumn(field string, o *Options) error                    { return nil }
+func (b nonDriver) DropColumn(field string, o *Options) error                   { return nil }
+func (b nonDriver) AlterColumn(field string, o *Options) error                  { return nil }
+func (b nonDriver) MigrateColumn(expect, actual *StructField, o *Options) error { return nil }
+func (b nonDriver) HasColumn(field string, o *Options) bool                     { return false }
+func (b nonDriver) ColumnTypes(o *Options) ([]StructField, error)               { return nil, nil }
+func (b nonDriver) CreateIndex(name string, o *Options) error                   { return nil }
+func (b nonDriver) DropIndex(name string, o *Options) error                     { return nil }
+func (b nonDriver) HasIndex(name string, o *Options) bool                       { return false }
