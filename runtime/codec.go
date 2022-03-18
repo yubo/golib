@@ -22,11 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"reflect"
 
-	"github.com/emicklei/go-restful"
 	"k8s.io/klog/v2"
 )
 
@@ -114,19 +111,19 @@ func (n NoopEncoder) Identifier() Identifier {
 	return noopEncoderIdentifier
 }
 
-type Parameters struct {
-	Header http.Header
-	Query  url.Values
-	Path   map[string]string
-}
+//type Parameters struct {
+//	Header http.Header
+//	Query  url.Values
+//	Path   map[string]string
+//}
 
-func NewParameters() *Parameters {
-	return &Parameters{
-		Header: make(http.Header),
-		Query:  make(url.Values),
-		Path:   make(map[string]string),
-	}
-}
+//func NewParameters() *Parameters {
+//	return &Parameters{
+//		Header: make(http.Header),
+//		Query:  make(url.Values),
+//		Path:   make(map[string]string),
+//	}
+//}
 
 // NoopDecoder converts an Encoder to a Serializer or Codec for code that expects them but only uses encoding.
 type NoopDecoder struct {
@@ -140,33 +137,33 @@ func (n NoopDecoder) Decode(data []byte, into Object) (Object, error) {
 }
 
 // NewParameterCodec creates a ParameterCodec capable of transforming url values into versioned objects and back.
-func NewParameterCodec() ParameterCodec {
-	return &parameterCodec{}
-}
+//func NewParameterCodec() ParameterCodec {
+//	return &parameterCodec{}
+//}
 
 //
 //// parameterCodec implements conversion to and from query parameters and objects.
-type parameterCodec struct{}
+//type parameterCodec struct{}
 
 //
-var _ ParameterCodec = &parameterCodec{}
+//var _ ParameterCodec = &parameterCodec{}
 
 //
 //// DecodeParameters converts the provided url.Values into an object of type From with the kind of into, and then
 //// converts that object to into (if necessary). Returns an error if the operation cannot be completed.
-func (c *parameterCodec) DecodeParameters(parameters *Parameters, into Object) error {
-	return decodeParameters(parameters, into)
-}
-
-// EncodeParameters converts the provided object into the to version, then converts that object to url.Values.
-// Returns an error if conversion is not possible.
-func (c *parameterCodec) EncodeParameters(obj Object) (*Parameters, error) {
-	return encodeParameters(obj)
-}
-
-func (c *parameterCodec) RouteBuilderParameters(rb *restful.RouteBuilder, obj Object) {
-	buildParameters(rb, obj)
-}
+//func (c *parameterCodec) DecodeParameters(parameters *Parameters, into Object) error {
+//	return decodeParameters(parameters, into)
+//}
+//
+//// EncodeParameters converts the provided object into the to version, then converts that object to url.Values.
+//// Returns an error if conversion is not possible.
+//func (c *parameterCodec) EncodeParameters(obj Object) (*Parameters, error) {
+//	return encodeParameters(obj)
+//}
+//
+//func (c *parameterCodec) RouteBuilderParameters(rb *restful.RouteBuilder, obj Object) {
+//	buildParameters(rb, obj)
+//}
 
 type base64Serializer struct {
 	Encoder

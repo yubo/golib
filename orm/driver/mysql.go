@@ -181,7 +181,7 @@ func (p Mysql) FullDataTypeOf(field *orm.StructField) string {
 
 // AutoMigrate
 func (p *Mysql) AutoMigrate(sample interface{}, opts ...orm.Option) error {
-	o, err := orm.NewSampleOptions(sample, opts)
+	o, err := orm.NewOptions(append(opts, orm.WithSample(sample))...)
 	if err != nil {
 		return err
 	}

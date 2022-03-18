@@ -18,8 +18,6 @@ package runtime
 
 import (
 	"io"
-
-	"github.com/emicklei/go-restful"
 )
 
 const (
@@ -28,6 +26,10 @@ const (
 	// special behavior in this package.
 	APIVersionInternal = "__internal"
 )
+
+type Validator interface {
+	Validate() error
+}
 
 // GroupVersioner refines a set of possible conversion targets into a single option.
 //type GroupVersioner interface {
@@ -95,15 +97,15 @@ type Codec Serializer
 // ParameterCodec defines methods for serializing and deserializing API objects to url.Values and
 // performing any necessary conversion. Unlike the normal Codec, query parameters are not self describing
 // and the desired version must be specified.
-type ParameterCodec interface {
-	// DecodeParameters takes the given url.Values in the specified group version and decodes them
-	// into the provided object, or returns an error.
-	DecodeParameters(parameter *Parameters, into Object) error
-	// EncodeParameters encodes the provided object as query parameters or returns an error.
-	EncodeParameters(obj Object) (*Parameters, error)
-
-	RouteBuilderParameters(rb *restful.RouteBuilder, obj Object)
-}
+//type ParameterCodec interface {
+//	// DecodeParameters takes the given url.Values in the specified group version and decodes them
+//	// into the provided object, or returns an error.
+//	DecodeParameters(parameter *Parameters, into Object) error
+//	// EncodeParameters encodes the provided object as query parameters or returns an error.
+//	EncodeParameters(obj Object) (*Parameters, error)
+//
+//	RouteBuilderParameters(rb *restful.RouteBuilder, obj Object)
+//}
 
 // Framer is a factory for creating readers and writers that obey a particular framing pattern.
 type Framer interface {

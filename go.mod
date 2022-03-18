@@ -7,7 +7,6 @@ require (
 	github.com/creack/pty v1.1.11
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/spdystream v0.0.0-20160310174837-449fdfce4d96
-	github.com/emicklei/go-restful v2.15.0+incompatible
 	github.com/evanphx/json-patch v4.11.0+incompatible
 	github.com/go-ldap/ldap v3.0.3+incompatible
 	github.com/go-logr/logr v0.4.0
