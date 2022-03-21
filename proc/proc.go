@@ -269,10 +269,12 @@ func (p *Process) Init(cmd *cobra.Command, opts ...ProcessOption) error {
 		opt(p.ProcessOptions)
 	}
 
+	if err := p.RegisterHooks(p.hooks); err != nil {
+		return err
+	}
 	if c, ok := configer.ConfigerFrom(p.ctx); ok {
 		p.parsedConfiger = c
 	}
-
 	if _, ok := AttrFrom(p.ctx); !ok {
 		p.ctx = WithAttr(p.ctx, make(map[interface{}]interface{}))
 	}

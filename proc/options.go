@@ -13,6 +13,7 @@ type ProcessOptions struct {
 	name            string
 	ctx             context.Context
 	cancel          context.CancelFunc
+	hooks           []HookOps //  WithHooks
 	description     string
 	noloop          bool
 	group           bool
@@ -37,6 +38,12 @@ type ProcessOption func(*ProcessOptions)
 func WithContext(ctx context.Context) ProcessOption {
 	return func(p *ProcessOptions) {
 		p.ctx, p.cancel = context.WithCancel(ctx)
+	}
+}
+
+func WithHooks(hooks ...HookOps) ProcessOption {
+	return func(p *ProcessOptions) {
+		p.hooks = append(p.hooks, hooks...)
 	}
 }
 

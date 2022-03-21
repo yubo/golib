@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
-	"github.com/yubo/golib/logs"
 	"k8s.io/klog/v2"
 )
 
@@ -32,7 +31,6 @@ import (
 // We do this in order to prevent unwanted flags from leaking into the component's flagset.
 func AddGlobalFlags(fs *pflag.FlagSet) {
 	addKlogFlags(fs)
-	logs.AddFlags(fs)
 
 	fs.BoolP("help", "h", false, fmt.Sprintf("help for %s", os.Args[0]))
 }

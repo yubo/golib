@@ -14,50 +14,58 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package logs
+package registry
 
 import (
 	"fmt"
 	"sort"
 
 	"github.com/go-logr/logr"
-	json "github.com/yubo/golib/logs/json"
+	"github.com/yubo/golib/logs/config"
 )
 
-const (
-	jsonLogFormat = "json"
-)
-
-var logRegistry = NewLogFormatRegistry()
+// LogRegistry is new init LogFormatRegistry struct
+var LogRegistry = NewLogFormatRegistry()
 
 // LogFormatRegistry store klog format registry
 type LogFormatRegistry struct {
-	registry map[string]logr.Logger
+	registry map[string]LogFormatFactory
 	frozen   bool
+}
+
+// LogFormatFactory provides support for a certain additional,
+// non-default log format.
+type LogFormatFactory interface {
+	// Create returns a logger with the requested configuration.
+	// Returning a flush function for the logger is optional.
+	// If provided, the caller must ensure that it is called
+	// periodically (if desired) and at program exit.
+	Create(options config.FormatOptions) (log logr.Logger, flush func())
 }
 
 // NewLogFormatRegistry return new init LogFormatRegistry struct
 func NewLogFormatRegistry() *LogFormatRegistry {
 	return &LogFormatRegistry{
-		registry: make(map[string]logr.Logger),
+		registry: make(map[string]LogFormatFactory),
 		frozen:   false,
 	}
 }
 
-// Register new log format registry to global logRegistry
-func (lfr *LogFormatRegistry) Register(name string, logger logr.Logger) error {
+// Register new log format registry to global logRegistry.
+// nil is valid and selects the default klog output.
+func (lfr *LogFormatRegistry) Register(name string, factory LogFormatFactory) error {
 	if lfr.frozen {
 		return fmt.Errorf("log format is frozen, unable to register log format")
 	}
 	if _, ok := lfr.registry[name]; ok {
 		return fmt.Errorf("log format: %s already exists", name)
 	}
-	lfr.registry[name] = logger
+	lfr.registry[name] = factory
 	return nil
 }
 
 // Get specified log format logger
-func (lfr *LogFormatRegistry) Get(name string) (logr.Logger, error) {
+func (lfr *LogFormatRegistry) Get(name string) (LogFormatFactory, error) {
 	re, ok := lfr.registry[name]
 	if !ok {
 		return nil, fmt.Errorf("log format: %s does not exists", name)
@@ -66,12 +74,12 @@ func (lfr *LogFormatRegistry) Get(name string) (logr.Logger, error) {
 }
 
 // Set specified log format logger
-func (lfr *LogFormatRegistry) Set(name string, logger logr.Logger) error {
+func (lfr *LogFormatRegistry) Set(name string, factory LogFormatFactory) error {
 	if lfr.frozen {
 		return fmt.Errorf("log format is frozen, unable to set log format")
 	}
 
-	lfr.registry[name] = logger
+	lfr.registry[name] = factory
 	return nil
 }
 
@@ -98,10 +106,4 @@ func (lfr *LogFormatRegistry) List() []string {
 // Freeze freezes the log format registry
 func (lfr *LogFormatRegistry) Freeze() {
 	lfr.frozen = true
-}
-
-func init() {
-	// Text format is default klog format
-	logRegistry.Register(defaultLogFormat, nil)
-	logRegistry.Register(jsonLogFormat, json.JSONLogger)
 }

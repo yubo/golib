@@ -17,117 +17,82 @@ limitations under the License.
 package logs
 
 import (
-	"flag"
-	"fmt"
-	"strings"
-
-	"github.com/go-logr/logr"
 	"github.com/spf13/pflag"
-
+	"github.com/yubo/golib/api/resource"
 	"github.com/yubo/golib/logs/sanitization"
+
 	"k8s.io/klog/v2"
-)
 
-const (
-	logFormatFlagName = "logging-format"
-	defaultLogFormat  = "text"
+	"github.com/yubo/golib/logs/config"
+	"github.com/yubo/golib/logs/registry"
 )
-
-// List of logs (k8s.io/klog + github.com/yubo/golib/logs) flags supported by all logging formats
-var supportedLogsFlags = map[string]struct{}{
-	"v": {},
-	// TODO: support vmodule after 1.19 Alpha
-}
 
 // Options has klog format parameters
 type Options struct {
-	LogFormat       string
-	LogSanitization bool
+	Config config.LoggingConfiguration
+}
+
+// RecommendedLoggingConfiguration defaults logging configuration.
+// This will set the recommended default
+// values, but they may be subject to change between API versions. This function
+// is intentionally not registered in the scheme as a "normal" `SetDefaults_Foo`
+// function to allow consumers of this type to set whatever defaults for their
+// embedded configs. Forcing consumers to use these defaults would be problematic
+// as defaulting in the scheme is done as part of the conversion, and there would
+// be no easy way to opt-out. Instead, if you want to use this defaulting method
+// run it in your wrapper struct of this type in its `SetDefaults_` method.
+func RecommendedLoggingConfiguration(obj *config.LoggingConfiguration) {
+	if obj.Format == "" {
+		obj.Format = "text"
+	}
+	var empty resource.QuantityValue
+	if obj.Options.JSON.InfoBufferSize == empty {
+		obj.Options.JSON.InfoBufferSize = resource.QuantityValue{
+			// This is similar, but not quite the same as a default
+			// constructed instance.
+			Quantity: *resource.NewQuantity(0, resource.DecimalSI),
+		}
+		// This sets the unexported Quantity.s which will be compared
+		// by reflect.DeepEqual in some tests.
+		_ = obj.Options.JSON.InfoBufferSize.String()
+	}
 }
 
 // NewOptions return new klog options
 func NewOptions() *Options {
-	return &Options{
-		LogFormat: defaultLogFormat,
-	}
+	o := &Options{}
+	RecommendedLoggingConfiguration(&o.Config)
+
+	return o
 }
 
 // Validate verifies if any unsupported flag is set
 // for non-default logging format
 func (o *Options) Validate() []error {
-	errs := []error{}
-	if o.LogFormat != defaultLogFormat {
-		allFlags := UnsupportedLoggingFlags()
-		for _, fname := range allFlags {
-			if flagIsSet(fname) {
-				errs = append(errs, fmt.Errorf("non-default logging format doesn't honor flag: %s", fname))
-			}
-		}
+	errs := ValidateLoggingConfiguration(&o.Config, nil)
+	if len(errs) != 0 {
+		return errs.ToAggregate().Errors()
 	}
-	if _, err := o.Get(); err != nil {
-		errs = append(errs, fmt.Errorf("unsupported log format: %s", o.LogFormat))
-	}
-	return errs
-}
-
-func flagIsSet(name string) bool {
-	f := flag.Lookup(name)
-	if f != nil {
-		return f.DefValue != f.Value.String()
-	}
-	pf := pflag.Lookup(name)
-	if pf != nil {
-		return pf.DefValue != pf.Value.String()
-	}
-	panic("failed to lookup unsupported log flag")
+	return nil
 }
 
 // AddFlags add logging-format flag
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
-	unsupportedFlags := fmt.Sprintf("--%s", strings.Join(UnsupportedLoggingFlags(), ", --"))
-	formats := fmt.Sprintf(`"%s"`, strings.Join(logRegistry.List(), `", "`))
-	fs.StringVar(&o.LogFormat, logFormatFlagName, defaultLogFormat, fmt.Sprintf("Sets the log format. Permitted formats: %s.\nNon-default formats don't honor these flags: %s.\nNon-default choices are currently alpha and subject to change without warning.", formats, unsupportedFlags))
-
-	// No new log formats should be added after generation is of flag options
-	logRegistry.Freeze()
-	fs.BoolVar(&o.LogSanitization, "experimental-logging-sanitization", o.LogSanitization, `[Experimental] When enabled prevents logging of fields tagged as sensitive (passwords, keys, tokens).
-Runtime log sanitization may introduce significant computation overhead and therefore should not be enabled in production.`)
+	BindLoggingFlags(&o.Config, fs)
 }
 
 // Apply set klog logger from LogFormat type
 func (o *Options) Apply() {
 	// if log format not exists, use nil loggr
-	loggr, _ := o.Get()
-	klog.SetLogger(loggr)
-	if o.LogSanitization {
+	factory, _ := registry.LogRegistry.Get(o.Config.Format)
+	if factory == nil {
+		klog.ClearLogger()
+	} else {
+		log, flush := factory.Create(o.Config.Options)
+		klog.SetLogger(log)
+		logrFlush = flush
+	}
+	if o.Config.Sanitization {
 		klog.SetLogFilter(&sanitization.SanitizingFilter{})
 	}
-}
-
-// Get logger with LogFormat field
-func (o *Options) Get() (logr.Logger, error) {
-	return logRegistry.Get(o.LogFormat)
-}
-
-func UnsupportedLoggingFlags() []string {
-	allFlags := []string{}
-
-	// k8s.io/klog flags
-	fs := &flag.FlagSet{}
-	klog.InitFlags(fs)
-	fs.VisitAll(func(flag *flag.Flag) {
-		if _, found := supportedLogsFlags[flag.Name]; !found {
-			allFlags = append(allFlags, strings.Replace(flag.Name, "_", "-", -1))
-		}
-	})
-
-	// github.com/yubo/golib/logs flags
-	pfs := &pflag.FlagSet{}
-	AddFlags(pfs)
-	pfs.VisitAll(func(flag *pflag.Flag) {
-		if _, found := supportedLogsFlags[flag.Name]; !found {
-			allFlags = append(allFlags, flag.Name)
-		}
-	})
-	return allFlags
 }
