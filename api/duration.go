@@ -31,7 +31,7 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 		if err := json.Unmarshal(b, &pd); err != nil {
 			return err
 		}
-		d.Duration = time.Duration(pd)
+		d.Duration = time.Duration(pd) * time.Second
 		return nil
 	}
 

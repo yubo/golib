@@ -17,6 +17,7 @@ var (
 	dbFactories       = map[string]DBFactory{}
 	DefaultStringSize = 255
 	DEBUG             = false
+	LogDepthOffset    = 0
 )
 
 type DBFactory func(db Execer) Driver

@@ -107,11 +107,11 @@ func testCreateTable(t *testing.T) {
 	c.SetTime(testCreatedTime)
 
 	type User1 struct {
-		ID        int64  `sql:"id,auto_increment,primary_key"`
-		Name      string `sql:",index"`
-		Age       int    `sql:",index"`
-		CreatedAt time.Time
-		UpdatedAt time.Time
+		ID        int64     `sql:"id,auto_increment,primary_key"`
+		Name      string    `sql:",index"`
+		Age       int       `sql:",index"`
+		CreatedAt time.Time `sql:",auto_createtime"`
+		UpdatedAt time.Time `sql:",auto_updatetime"`
 	}
 
 	if err := testdb.AutoMigrate(&User1{}, orm.WithTable(testTable)); err != nil {
@@ -248,6 +248,5 @@ func TestStruct(t *testing.T) {
 			t.Fatal(err)
 		}
 		assert.Equal(t, v, got, "test struct")
-
 	})
 }

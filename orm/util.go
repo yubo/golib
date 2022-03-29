@@ -66,7 +66,7 @@ func dlogSql(depth int, query string, args ...interface{}) {
 				}
 			}
 		}
-		klog.InfoDepth(depth, fmt.Sprintf(strings.Replace(query, "?", "`%v`", -1), args2...))
+		klog.InfoDepth(depth+LogDepthOffset, fmt.Sprintf(strings.Replace(query, "?", "`%v`", -1), args2...))
 	}
 }
 
