@@ -1,14 +1,12 @@
 package orm
 
 import (
-	"database/sql"
-	"fmt"
 	"os"
-	"runtime/debug"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/yubo/golib/util"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -24,17 +22,16 @@ var (
 	testTable       = "test"
 )
 
-func envDef(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
 // See https://github.com/go-sql-driver/mysql/wiki/Testing
 func init() {
-	driver = envDef("TEST_DB_DRIVER", "sqlite3")
-	dsn = envDef("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory")
+	env := func(key, defaultValue string) string {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+		return defaultValue
+	}
+	driver = env("TEST_DB_DRIVER", "sqlite3")
+	dsn = env("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory")
 	if db, err := Open(driver, dsn); err == nil {
 		if err = db.SqlDB().Ping(); err == nil {
 			available = true
@@ -45,16 +42,10 @@ func init() {
 	testUpdatedTime = time.Unix(2000, 0)
 }
 
-type DBTest struct {
-	*testing.T
-	db DB
-}
-
-func RunTests(t *testing.T, dsn string, tests ...func(dbt *DBTest)) {
+func runTests(t *testing.T, dsn string, tests ...func(db DB)) {
 	var (
 		err error
 		db  DB
-		dbt *DBTest
 	)
 
 	if !available {
@@ -69,554 +60,385 @@ func RunTests(t *testing.T, dsn string, tests ...func(dbt *DBTest)) {
 
 	db.Exec("DROP TABLE IF EXISTS test")
 
-	dbt = &DBTest{t, db}
 	for _, test := range tests {
-		test(dbt)
-		dbt.db.Exec("DROP TABLE IF EXISTS test")
+		test(db)
+		db.Exec("DROP TABLE IF EXISTS test")
 	}
-}
-
-func (dbt *DBTest) fail(method, query string, err error) {
-	if len(query) > 300 {
-		query = "[query too large to print]"
-	}
-	dbt.Log(string(debug.Stack()))
-	dbt.Fatalf("error on %s %s: %s", method, query, err.Error())
-}
-
-func (dbt *DBTest) queryRow(output interface{}, query string, args ...interface{}) {
-	dbt.db.Query(query, args...).Row(output)
-}
-
-func (dbt *DBTest) mustQueryRow(output interface{}, query string, args ...interface{}) {
-	err := dbt.db.Query(query, args...).Row(output)
-	if err != nil {
-		dbt.fail("query row", query, err)
-	}
-}
-
-func (dbt *DBTest) mustQueryRows(output interface{}, query string, args ...interface{}) {
-	err := dbt.db.Query(query, args...).Rows(output)
-	if err != nil {
-		dbt.fail("query rows", query, err)
-	}
-}
-
-func (dbt *DBTest) mustExecNum(query string, args ...interface{}) {
-	err := dbt.db.ExecNumErr(query, args...)
-	if err != nil {
-		dbt.fail("execNum", query, err)
-	}
-}
-
-func (dbt *DBTest) mustExec(query string, args ...interface{}) (res sql.Result) {
-	res, err := dbt.db.Exec(query, args...)
-	if err != nil {
-		dbt.fail("exec", query, err)
-	}
-	return res
 }
 
 func TestInsert(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		var v int
-		dbt.mustExec("CREATE TABLE test (value int);")
+	runTests(t, dsn,
+		func(db DB) {
+			db.Exec("CREATE TABLE test (value int)")
+			_, err := db.Exec("INSERT INTO test VALUES (?)", 1)
+			require.NoError(t, err)
 
-		dbt.mustExec("INSERT INTO test VALUES (?);", 1)
+			var v int
+			err = db.Query("SELECT value FROM test").Row(&v)
+			require.NoError(t, err)
+			require.Equal(t, 1, v)
+		},
+		func(db DB) {
 
-		dbt.mustQueryRow(&v, "SELECT value FROM test;")
+			if driver != "mysql" {
+				t.Skipf("skip insert with auto_increment for %s", dsn)
+			}
 
-		dbt.mustExec("DROP TABLE IF EXISTS test;")
-	})
+			type foo struct {
+				Id    int
+				Value int
+			}
+
+			_, err := db.Exec(`CREATE TABLE test
+(
+  id int not null auto_increment,
+  value int,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB auto_increment=1000;`)
+			require.NoError(t, err)
+
+			n, err := db.InsertLastId(&foo{Value: 1}, WithTable("test"))
+			require.NoError(t, err)
+			require.Equal(t, 1000, n)
+
+		},
+	)
 }
 
 func TestQueryRows(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		var v []int
-		dbt.mustExec("CREATE TABLE test (value int)")
+	runTests(t, dsn,
+		func(db DB) {
+			db.Exec("CREATE TABLE test (value int)")
+			db.Exec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
-		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+			var v []int
+			db.Query("SELECT value FROM test").Rows(&v)
+			require.Equal(t, 3, len(v))
+		},
+		func(db DB) {
+			db.Exec("CREATE TABLE test (value int)")
+			db.Exec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
-		dbt.mustQueryRows(&v, "SELECT value FROM test")
+			var v []*int
+			db.Query("SELECT value FROM test").Rows(&v)
+			require.Equal(t, 3, len(v))
+		},
+		func(db DB) {
+			db.Exec("CREATE TABLE test (value int)")
+			db.Exec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
-		if len(v) != 3 {
-			t.Fatalf("query rows want 3 got %d", len(v))
-		}
+			var v []*int
+			iter, err := db.Query("SELECT value FROM test").Iterator()
+			if err != nil {
+				t.Fatalf("query rows iter %s", err)
+			}
+			defer iter.Close()
 
-		dbt.mustExec("DROP TABLE IF EXISTS test")
-	})
-	RunTests(t, dsn, func(dbt *DBTest) {
-		var v []*int
-		dbt.mustExec("CREATE TABLE test (value int)")
+			for iter.Next() {
+				i := new(int)
+				iter.Row(i)
+				v = append(v, i)
+			}
 
-		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
-
-		dbt.mustQueryRows(&v, "SELECT value FROM test")
-
-		if len(v) != 3 {
-			t.Fatalf("query rows want 3 got %d", len(v))
-		}
-
-		dbt.mustExec("DROP TABLE IF EXISTS test")
-	})
-
-	RunTests(t, dsn, func(dbt *DBTest) {
-		var v []*int
-		dbt.mustExec("CREATE TABLE test (value int)")
-
-		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
-
-		iter, err := dbt.db.Query("SELECT value FROM test").Iterator()
-		if err != nil {
-			t.Fatalf("query rows iter %s", err)
-		}
-		defer iter.Close()
-
-		for iter.Next() {
-			i := new(int)
-			iter.Row(i)
-			v = append(v, i)
-		}
-
-		if len(v) != 3 {
-			t.Fatalf("query rows want 3 got %d", len(v))
-		}
-
-		dbt.mustExec("DROP TABLE IF EXISTS test")
-	})
-
+			require.Equal(t, 3, len(v))
+		})
 }
 
 func TestDelRows(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		dbt.mustExec("CREATE TABLE test (value int)")
+	runTests(t, dsn, func(db DB) {
+		db.Exec("CREATE TABLE test (value int)")
+		db.Exec("INSERT INTO test VALUES (?)", 1)
 
-		dbt.mustExec("INSERT INTO test VALUES (?)", 1)
+		n, err := db.ExecNum("DELETE FROM test WHERE value = ?", 1)
+		require.NoError(t, err)
+		require.Equal(t, 1, int(n))
 
-		n, err := dbt.db.ExecNum("DELETE FROM test WHERE value = ?", 1)
-		if n != 1 {
-			dbt.fail("execNum",
-				fmt.Sprintf("got %d want 1", n), err)
-		}
+		n, err = db.ExecNum("DELETE FROM test WHERE value = ?", 1)
+		require.NoError(t, err)
+		require.Equal(t, 0, int(n))
 
-		n, err = dbt.db.ExecNum("DELETE FROM test WHERE value = ?", 1)
-		if err != nil || n != 0 {
-			dbt.fail("execNum", fmt.Sprintf("got (%d, %v) want (0, nil)", n, err), err)
-		}
-
-		dbt.mustExec("DROP TABLE IF EXISTS test")
+		err = db.ExecNumErr("DELETE FROM test WHERE value = ?", 1)
+		require.Error(t, err)
 	})
 }
 
 func TestExecNum(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		dbt.mustExec("CREATE TABLE test (value int)")
+	runTests(t, dsn, func(db DB) {
+		db.Exec("CREATE TABLE test (value int)")
 
-		dbt.mustExecNum("INSERT INTO test VALUES (?)", 1)
-		dbt.mustExecNum("UPDATE test SET value=? WHERE value=?", 2, 1)
-		dbt.mustExecNum("DELETE FROM test  WHERE value=?", 2)
+		n, err := db.ExecNum("INSERT INTO test VALUES (?)", 1)
+		require.NoError(t, err)
+		require.Equal(t, 1, int(n))
 
-		dbt.mustExec("DROP TABLE IF EXISTS test;")
+		_, err = db.ExecNum("UPDATE test SET value=? WHERE value=?", 2, 1)
+		require.NoError(t, err)
+		require.Equal(t, 1, int(n))
+
+		_, err = db.ExecNum("DELETE FROM test  WHERE value=?", 2)
+		require.NoError(t, err)
+		require.Equal(t, 1, int(n))
 	})
 }
 
 func TestQueryRowStruct(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		type vt struct {
-			PointX  int64
-			PointY  int64 `sql:"point_y"`
-			Private int64
-			private int64
-		}
-
-		type vt2 struct {
-			PointX  *int64
-			PointY  *int64 `sql:"point_y"`
-			Private *int64
-			private *int64
-		}
-
-		dbt.mustExec("CREATE TABLE test (point_x int, point_y int, point_z int)")
-		dbt.mustExec("INSERT INTO test VALUES (?, ?, ?)", 1, 2, 3)
-
-		{
-			got := vt{}
-			want := vt{1, 2, 0, 0}
-			dbt.mustQueryRow(&got, "SELECT * FROM test")
-			assert.Equal(t, got, want)
-		}
-
-		{
-			got := vt2{}
-			want := vt2{util.Int64(1), util.Int64(2), nil, nil}
-			dbt.mustQueryRow(&got, "SELECT * FROM test")
-			assert.Equal(t, got, want)
-		}
-
-		{
-			var got *vt2
-			var want *vt2
-			dbt.queryRow(&got, "SELECT * FROM test WHERE point_x = 0")
-			assert.Equal(t, got, want)
-		}
-
-		{
-			var got *vt2
-			want := &vt2{util.Int64(1), util.Int64(2), nil, nil}
-			dbt.mustQueryRow(&got, "SELECT * FROM test")
-			assert.Equal(t, got, want)
-		}
-
-		{
-			v := vt{Private: 3}
-			dbt.mustQueryRow(&v, "SELECT * FROM test")
-			if v.PointX != 1 {
-				t.Fatalf("query PointX want 1 got %d", v.PointX)
+	runTests(t, dsn,
+		func(db DB) {
+			type foo struct {
+				PointX  int64
+				PointY  int64 `sql:"point_y"`
+				Private int64
+				private int64
 			}
-			if v.PointY != 2 {
-				t.Fatalf("query PointY want 1 got %d", v.PointY)
+
+			db.Exec("CREATE TABLE test (point_x int, point_y int, point_z int)")
+			db.Exec("INSERT INTO test VALUES (?, ?, ?)", 1, 2, 3)
+
+			{
+				v := foo{}
+				err := db.Query("SELECT * FROM test").Row(&v)
+				require.NoError(t, err)
+				require.Equal(t, foo{1, 2, 0, 0}, v)
 			}
-			if v.Private != 3 {
-				t.Fatalf("query Private want 3 got %d", v.Private)
+
+			{
+				v := foo{0, 0, 3, 0}
+				err := db.Query("SELECT * FROM test").Row(&v)
+				require.NoError(t, err)
+				require.Equal(t, foo{1, 2, 3, 0}, v)
 			}
-		}
-		{
-			var v *vt
-			dbt.mustQueryRow(&v, "SELECT * FROM test")
-			if v.PointX != 1 {
-				t.Fatalf("query PointX want 1 got %d", v.PointX)
+
+			{
+				var v *foo
+				err := db.Query("SELECT * FROM test").Row(&v)
+				require.NoError(t, err)
+				require.Equal(t, foo{1, 2, 0, 0}, *v)
 			}
-			if v.PointY != 2 {
-				t.Fatalf("query PointY want 1 got %d", v.PointY)
+
+			{
+				var v *int
+				err := db.Query("SELECT point_x FROM test").Row(&v)
+				require.NoError(t, err)
+				require.Equal(t, 1, *v)
 			}
-		}
-		{
-			var x *int64
-			dbt.mustQueryRow(&x, "SELECT point_x FROM test")
-			if *x != 1 {
-				t.Fatalf("query PointX want 1 got %d", *x)
+		},
+		func(db DB) {
+			db.Exec("CREATE TABLE test (point_x int, point_y int, point_z int)")
+			db.Exec("INSERT INTO test VALUES (?, ?, ?)", 1, 2, 3)
+
+			type foo struct {
+				PointX  *int64
+				PointY  *int64 `sql:"point_y"`
+				Private *int64
+				private *int64
 			}
-		}
 
-		dbt.mustExec("DROP TABLE IF EXISTS test")
-	})
-}
-
-func TestQueryRowStruct2(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		type Point struct {
-			X int
-			Y int
-		}
-		type test struct {
-			A []string
-			B map[string]string
-			C *Point
-			D Point
-			E []byte
-			F **string
-			G *string
-			N int
-		}
-
-		dbt.mustExec("CREATE TABLE test (a blob, b blob, c blob, d blob, e blob, f blob, g blob, n int)")
-
-		v := util.String("string")
-		cases := []test{{
-			[]string{"a", "b"},
-			map[string]string{"c": "d", "e": "f"},
-			&Point{1, 2},
-			Point{3, 4},
-			[]byte{'5', '6'},
-			&v,
-			util.String("hello"),
-			0,
-		}, {
-			nil,
-			nil,
-			nil,
-			Point{},
-			nil,
-			nil,
-			nil,
-			1,
-		}}
-
-		for _, c := range cases {
-			if err := dbt.db.Insert(c); err != nil {
-				t.Fatal(err)
+			{
+				var v foo
+				err := db.Query("SELECT * FROM test").Row(&v)
+				require.NoError(t, err)
+				require.Equal(t, foo{util.Int64(1), util.Int64(2), nil, nil}, v)
 			}
-			got := test{}
-			dbt.mustQueryRow(&got, "SELECT * FROM test WHERE n = ?", c.N)
-			assert.Equal(t, c, got)
-		}
-		dbt.mustExec("DROP TABLE IF EXISTS test")
-	})
-}
 
-func TestQueryRowsStruct(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		var v []struct {
-			PointX  int64
-			PointY  int64 `sql:"point_y"`
-			Private int64 `sql:"-"`
-			private int64
-		}
+			{
+				var v *foo
+				err := db.Query("SELECT * FROM test").Row(&v)
+				require.NoError(t, err)
+				require.Equal(t, foo{util.Int64(1), util.Int64(2), nil, nil}, *v)
+			}
 
-		dbt.mustExec("CREATE TABLE test (point_x int, point_y int)")
+			{
+				var v *foo
+				err := db.Query("SELECT * FROM test where 1 = 2").Row(&v)
+				require.Error(t, err)
+				require.Nil(t, v)
+			}
+		},
+		func(db DB) {
+			type Point struct {
+				X int
+				Y int
+			}
+			type foo struct {
+				A []string
+				B map[string]string
+				C *Point
+				D Point
+				E []byte
+				F **string
+				G *string
+				N int
+			}
 
-		dbt.mustExec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
+			db.Exec("CREATE TABLE test (a blob, b blob, c blob, d blob, e blob, f blob, g blob, n int)")
 
-		dbt.mustQueryRows(&v, "SELECT * FROM test")
+			v := util.String("string")
+			cases := []foo{{
+				A: []string{"a", "b"},
+				B: map[string]string{"c": "d", "e": "f"},
+				C: &Point{1, 2},
+				D: Point{3, 4},
+				E: []byte{'5', '6'},
+				F: &v,
+				G: util.String("hello"),
+				N: 0,
+			}, {
+				A: nil,
+				B: nil,
+				C: nil,
+				D: Point{},
+				E: nil,
+				F: nil,
+				G: nil,
+				N: 1,
+			}}
 
-		if len(v) != 3 {
-			t.Fatalf("query rows want 3 got %d", len(v))
-		}
-		if v[2].PointX != 5 {
-			t.Fatalf("v[2].PointX want 5 got %d", v[2].PointX)
-		}
-		if v[2].PointY != 6 {
-			t.Fatalf("v[2].PointY want 6 got %d", v[2].PointY)
-		}
+			for _, c := range cases {
+				err := db.Insert(c, WithTable("test"))
+				require.NoError(t, err)
 
-		dbt.mustExec("DROP TABLE IF EXISTS test")
-	})
-}
+				got := foo{}
+				db.Query("SELECT * FROM test WHERE n = ?", c.N).Row(&got)
+				require.Equal(t, c, got)
+			}
+		},
+		func(db DB) {
+			var foo []struct {
+				PointX  int64
+				PointY  int64 `sql:"point_y"`
+				Private int64 `sql:"-"`
+				private int64
+			}
 
-func TestQueryRowsStructPtr(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		var v []*struct {
-			PointX int64
-			PointY int64 `sql:"point_y"`
-		}
+			db.Exec("CREATE TABLE test (point_x int, point_y int)")
+			db.Exec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
 
-		dbt.mustExec("CREATE TABLE test (point_x int, point_y int)")
+			err := db.Query("SELECT * FROM test").Rows(&foo)
+			require.NoError(t, err)
+			require.Equal(t, 3, len(foo))
+		},
+		func(db DB) {
+			var foo []*struct {
+				PointX int64
+				PointY int64 `sql:"point_y"`
+			}
 
-		dbt.mustExec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
+			db.Exec("CREATE TABLE test (point_x int, point_y int)")
+			db.Exec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
 
-		dbt.mustQueryRows(&v, "SELECT * FROM test")
-
-		if len(v) != 3 {
-			t.Fatalf("query rows want 3 got %d", len(v))
-		}
-		if v[2].PointX != 5 {
-			t.Fatalf("v[2].PointX want 5 got %d", v[2].PointX)
-		}
-		if v[2].PointY != 6 {
-			t.Fatalf("v[2].PointY want 6 got %d", v[2].PointY)
-		}
-
-		dbt.mustExec("DROP TABLE IF EXISTS test")
-	})
+			err := db.Query("SELECT * FROM test").Rows(&foo)
+			require.NoError(t, err)
+			require.Equal(t, 3, len(foo))
+		},
+	)
 }
 
 func TestPing(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
-		if err := dbt.db.SqlDB().Ping(); err != nil {
-			dbt.fail("Ping", "Ping", err)
-		}
+	runTests(t, dsn, func(db DB) {
+		err := db.SqlDB().Ping()
+		require.NoError(t, err)
 	})
 }
 
 func TestSqlArg(t *testing.T) {
+	runTests(t, dsn, func(db DB) {
+		db.Exec("CREATE TABLE test (value int);")
+		db.Exec("INSERT INTO test VALUES (?);", 1)
 
-	RunTests(t, dsn, func(dbt *DBTest) {
-		a := 1
 		var v int
-		dbt.mustExec("CREATE TABLE test (value int);")
-
-		dbt.mustExec("INSERT INTO test VALUES (?);", a)
-
-		dbt.mustQueryRow(&v, "SELECT value FROM test WHERE value=?;", a)
-		assert.Equal(t, 1, v)
-
-		dbt.mustExec("DROP TABLE IF EXISTS test;")
+		db.Query("SELECT value FROM test WHERE value=?;", 1).Row(&v)
+		require.Equal(t, 1, v)
 	})
 
-	RunTests(t, dsn, func(dbt *DBTest) {
+	runTests(t, dsn, func(db DB) {
 		a := 1
+		db.Exec("CREATE TABLE test (value int);")
+		db.Exec("INSERT INTO test VALUES (?);", &a)
+
 		var v int
-		dbt.mustExec("CREATE TABLE test (value int);")
-
-		dbt.mustExec("INSERT INTO test VALUES (?);", &a)
-
-		dbt.mustQueryRow(&v, "SELECT value FROM test WHERE value=?;", &a)
-		assert.Equal(t, 1, v)
-
-		dbt.mustExec("DROP TABLE IF EXISTS test;")
+		db.Query("SELECT value FROM test WHERE value=?;", &a).Row(&v)
+		require.Equal(t, 1, v)
 	})
 
-	RunTests(t, dsn, func(dbt *DBTest) {
-
-		type vt struct {
+	runTests(t, dsn, func(db DB) {
+		type foo struct {
 			PointX  *int
 			PointY  *int `sql:"point_y"`
 			Private *int `sql:"-"`
 			private *int
 		}
-		pointX := 1
+		x := 1
 
-		dbt.mustExec("CREATE TABLE test (point_x int, point_y int);")
+		db.Exec("CREATE TABLE test (point_x int, point_y int)")
+		db.Exec("INSERT INTO test VALUES (?, ?)", &x, nil)
 
-		dbt.mustExec("INSERT INTO test VALUES (?, ?);", &pointX, nil)
-
-		v := vt{}
-		dbt.mustQueryRow(&v, "SELECT * FROM test;")
-		assert.Equal(t, v, vt{&pointX, nil, nil, nil})
-
-		// dbt.mustQueryRow(&v, "SELECT value FROM test WHERE b = ?;", 0)
-		// assert.Equal(t, 1, v)
-
-		dbt.mustExec("DROP TABLE IF EXISTS test;")
+		v := foo{}
+		db.Query("SELECT * FROM test;").Row(&v)
+		require.Equal(t, v, foo{&x, nil, nil, nil})
 	})
 
 }
 
-//type Foo struct {
-//	Id    *int
-//	Value *int
-//}
-
 func TestTx(t *testing.T) {
 	if driver != "mysql" {
-		return
+		t.Skipf("TestTx skiped for %s", dsn)
 	}
-	RunTests(t, dsn, func(dbt *DBTest) {
-		a := 1
-		var v int
-		dbt.mustExec("CREATE TABLE test (value int) ENGINE=InnoDB;")
+	runTests(t, dsn,
+		func(db DB) {
+			db.Exec("CREATE TABLE test (value int) ENGINE=InnoDB;")
 
-		tx, err := dbt.db.Begin()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := tx.Exec("INSERT INTO test VALUES (?);", &a); err != nil {
-			t.Fatal(err)
-		}
-		if err := tx.Commit(); err != nil {
-			t.Fatal(err)
-		}
+			tx, err := db.Begin()
+			require.NoError(t, err)
 
-		dbt.mustQueryRow(&v, "SELECT value FROM test WHERE value=?;", &a)
-		assert.Equal(t, 1, v)
+			a := 1
+			_, err = tx.Exec("INSERT INTO test VALUES (?);", &a)
+			require.NoError(t, err)
 
-		dbt.mustExec("DROP TABLE IF EXISTS test;")
-	})
+			err = tx.Commit()
+			require.NoError(t, err)
 
-	RunTests(t, dsn, func(dbt *DBTest) {
-		a := 1
-		var v int
-		dbt.mustExec("CREATE TABLE test (value int) ENGINE=InnoDB;")
+			var v int
+			db.Query("SELECT value FROM test WHERE value=?;", &a).Row(&v)
+			require.Equal(t, 1, v)
+		},
+		func(db DB) {
+			db.Exec("CREATE TABLE test (value int) ENGINE=InnoDB;")
 
-		tx, err := dbt.db.Begin()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := tx.Exec("INSERT INTO test VALUES (?);", &a); err != nil {
-			t.Fatal(err)
-		}
-		if err := tx.Rollback(); err != nil {
-			t.Fatal(err)
-		}
+			tx, err := db.Begin()
+			require.NoError(t, err)
 
-		dbt.queryRow(&v, "SELECT value FROM test WHERE value=?;", &a)
-		assert.Equal(t, 0, v)
+			a := 1
+			_, err = tx.Exec("INSERT INTO test VALUES (?);", &a)
+			require.NoError(t, err)
 
-		dbt.mustExec("DROP TABLE IF EXISTS test;")
-	})
+			err = tx.Rollback()
+			require.NoError(t, err)
 
-	RunTests(t, dsn, func(dbt *DBTest) {
-		type Test struct {
-			Id    *int
-			Value *int
-		}
-		dbt.mustExec(`CREATE TABLE test (
-id int not null auto_increment,
-value int,
-PRIMARY KEY (id)
-) ENGINE=InnoDB auto_increment=1000;`)
-
-		{
-			tx, err := dbt.db.Begin()
-			if err != nil {
-				t.Fatal(err)
-			}
-			for i := 0; i < 10; i++ {
-				if _, err := tx.InsertLastId(&Test{Value: &i}); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			{
-				var v []int
-				if err := tx.Query("SELECT value FROM test").Rows(&v); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			if err := tx.Rollback(); err != nil {
-				t.Fatal(err)
-			}
-
-			{
-				var v []int
-				if err := dbt.db.Query("SELECT value FROM test").Rows(&v); err != nil {
-					t.Log(err)
-				}
-			}
-
-		}
-
-		{
-			tx, err := dbt.db.Begin()
-			if err != nil {
-				t.Fatal(err)
-			}
-			for i := 0; i < 10; i++ {
-				if _, err := tx.InsertLastId(&Test{Value: &i}); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			if err := tx.Commit(); err != nil {
-				t.Fatal(err)
-			}
-		}
-
-		dbt.mustExec("DROP TABLE IF EXISTS test;")
-	})
+			var v int
+			db.Query("SELECT value FROM test WHERE value=?;", &a).Row(&v)
+			assert.Equal(t, 0, v)
+		},
+	)
 
 }
 
 func TestList(t *testing.T) {
-	RunTests(t, dsn, func(dbt *DBTest) {
+	runTests(t, dsn, func(db DB) {
+		db.Exec("CREATE TABLE test (value int)")
+		db.Exec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+
 		var v []int
-		dbt.mustExec("CREATE TABLE test (value int)")
-
-		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
-
-		dbt.mustQueryRows(&v, "SELECT value FROM test WHERE value in (1, 2, 3)")
-
-		if len(v) != 3 {
-			t.Fatalf("query rows want 3 got %d", len(v))
-		}
-
-		dbt.mustExec("DROP TABLE IF EXISTS test")
+		err := db.Query("SELECT value FROM test WHERE value in (1, 2, 3)").Rows(&v)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(v))
 	})
 
-	RunTests(t, dsn, func(dbt *DBTest) {
+	runTests(t, dsn, func(db DB) {
+		db.Exec("CREATE TABLE test (value int)")
+		db.Exec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+
 		var v []int
-		dbt.mustExec("CREATE TABLE test (value int)")
-
-		dbt.mustExec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
-
-		dbt.mustQueryRows(&v, "SELECT value FROM test WHERE value IN ('1', '2', '3')")
-
-		if len(v) != 3 {
-			t.Fatalf("query rows want 3 got %d", len(v))
-		}
-
-		dbt.mustExec("DROP TABLE IF EXISTS test")
+		err := db.Query("SELECT value FROM test WHERE value IN ('1', '2', '3')").Rows(&v)
+		require.NoError(t, err)
+		require.Equal(t, 3, len(v))
 	})
-
 }

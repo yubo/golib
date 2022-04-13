@@ -13,7 +13,7 @@ func NewPeriodTime(period time.Duration, min, max float64) *PeriodTime {
 }
 
 type PeriodTime struct {
-	period time.Duration
+	period int64
 	min    float64
 	max    float64
 }
