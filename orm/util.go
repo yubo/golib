@@ -22,11 +22,11 @@ var (
 	regRealDataType = regexp.MustCompile(`[^\d](\d+)[^\d]?`)
 	regFullDataType = regexp.MustCompile(`[^\d]*(\d+)[^\d]?`)
 
-	errSampleNil               = errors.New("input sample is nil")
-	errTableEmpty              = errors.New("table name is not set")
-	errSelectorNil             = errors.New("selector is nil")
-	errQueryEmpty              = errors.New("query is empty")
-	defaultClock   clock.Clock = clock.RealClock{}
+	errSampleNil                 = errors.New("input sample is nil")
+	errTableEmpty                = errors.New("table name is not set")
+	errSelectorNil               = errors.New("selector is nil")
+	errSelectorEmpty             = errors.New("selector is empty")
+	defaultClock     clock.Clock = clock.RealClock{}
 )
 
 func printString(b []byte) string {
@@ -276,7 +276,7 @@ func GenGetSql(table string, cols []string, selector queries.Selector) (string, 
 
 	query, args := selector.Sql()
 	if query == "" {
-		return "", nil, errQueryEmpty
+		return "", nil, errSelectorEmpty
 	}
 
 	// SELECT *
@@ -300,7 +300,7 @@ func GenGetSql(table string, cols []string, selector queries.Selector) (string, 
 	return buf.String(), args, nil
 }
 
-func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interface{}, error) {
+func GenUpdateSql(table string, sample interface{}, db Driver, selector queries.Selector) (string, []interface{}, error) {
 	if table == "" {
 		return "", nil, errTableEmpty
 	}
@@ -320,9 +320,6 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 	if len(set) == 0 {
 		return "", nil, fmt.Errorf("UPDATE `%s` `SET` is empty", table)
 	}
-	if len(where) == 0 {
-		return "", nil, fmt.Errorf("UPDATE `%s` `WHERE` is empty", table)
-	}
 
 	buf := bytes.NewBufferString("UPDATE `" + table + "` SET")
 	args := []interface{}{}
@@ -335,12 +332,25 @@ func GenUpdateSql(table string, sample interface{}, db Driver) (string, []interf
 	}
 
 	buf.WriteString(" WHERE")
-	for i, v := range where {
-		if i != 0 {
-			buf.WriteString(" AND")
+
+	// selector
+	if selector != nil {
+		query, args2 := selector.Sql()
+		if query == "" {
+			return "", nil, errSelectorEmpty
 		}
-		buf.WriteString(" `" + v.k + "` = ?")
-		args = append(args, v.v)
+		buf.WriteString(" " + query)
+		args = append(args, args2...)
+	} else if len(where) > 0 {
+		for i, v := range where {
+			if i != 0 {
+				buf.WriteString(" AND")
+			}
+			buf.WriteString(" `" + v.k + "` = ?")
+			args = append(args, v.v)
+		}
+	} else {
+		return "", nil, fmt.Errorf("UPDATE `%s` `WHERE` is empty", table)
 	}
 
 	return buf.String(), args, nil
@@ -393,7 +403,7 @@ func GenDeleteSql(table string, selector queries.Selector) (string, []interface{
 
 	query, args := selector.Sql()
 	if query == "" {
-		return "", nil, errQueryEmpty
+		return "", nil, errSelectorEmpty
 	}
 
 	return fmt.Sprintf("DELETE FROM `%s` WHERE %s", table, query), args, nil

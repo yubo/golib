@@ -8,22 +8,23 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/clock"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
-	dsn             string
-	driver          string
-	available       bool
-	testCreatedTime time.Time
-	testUpdatedTime time.Time
-	testTable       = "test"
+	dsn       string
+	driver    string
+	available bool
 )
 
 // See https://github.com/go-sql-driver/mysql/wiki/Testing
 func init() {
+	RegisterMysql()
+	RegisterSqlite()
+
 	env := func(key, defaultValue string) string {
 		if value := os.Getenv(key); value != "" {
 			return value
@@ -38,24 +39,19 @@ func init() {
 		}
 		db.Close()
 	}
-	testCreatedTime = time.Unix(1000, 0)
-	testUpdatedTime = time.Unix(2000, 0)
 }
 
-func runTests(t *testing.T, dsn string, tests ...func(db DB)) {
-	var (
-		err error
-		db  DB
-	)
-
+func runTests(t *testing.T, tests ...func(db DB)) {
 	if !available {
 		t.Skipf("SQL server not running on %s", dsn)
 	}
 
-	db, err = Open(driver, dsn)
-	if err != nil {
-		t.Fatalf("error connecting: %s", err.Error())
-	}
+	_runTests(t, driver, dsn, tests...)
+}
+
+func _runTests(t *testing.T, driver, dsn string, tests ...func(db DB)) {
+	db, err := Open(driver, dsn)
+	require.NoError(t, err)
 	defer db.Close()
 
 	db.Exec("DROP TABLE IF EXISTS test")
@@ -64,10 +60,11 @@ func runTests(t *testing.T, dsn string, tests ...func(db DB)) {
 		test(db)
 		db.Exec("DROP TABLE IF EXISTS test")
 	}
+
 }
 
 func TestInsert(t *testing.T) {
-	runTests(t, dsn,
+	runTests(t,
 		func(db DB) {
 			db.Exec("CREATE TABLE test (value int)")
 			_, err := db.Exec("INSERT INTO test VALUES (?)", 1)
@@ -101,12 +98,11 @@ func TestInsert(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, 1000, n)
 
-		},
-	)
+		})
 }
 
 func TestQueryRows(t *testing.T) {
-	runTests(t, dsn,
+	runTests(t,
 		func(db DB) {
 			db.Exec("CREATE TABLE test (value int)")
 			db.Exec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
@@ -129,9 +125,7 @@ func TestQueryRows(t *testing.T) {
 
 			var v []*int
 			iter, err := db.Query("SELECT value FROM test").Iterator()
-			if err != nil {
-				t.Fatalf("query rows iter %s", err)
-			}
+			require.NoError(t, err)
 			defer iter.Close()
 
 			for iter.Next() {
@@ -141,47 +135,52 @@ func TestQueryRows(t *testing.T) {
 			}
 
 			require.Equal(t, 3, len(v))
-		})
+		},
+	)
 }
 
 func TestDelRows(t *testing.T) {
-	runTests(t, dsn, func(db DB) {
-		db.Exec("CREATE TABLE test (value int)")
-		db.Exec("INSERT INTO test VALUES (?)", 1)
+	runTests(t,
+		func(db DB) {
+			db.Exec("CREATE TABLE test (value int)")
+			db.Exec("INSERT INTO test VALUES (?)", 1)
 
-		n, err := db.ExecNum("DELETE FROM test WHERE value = ?", 1)
-		require.NoError(t, err)
-		require.Equal(t, 1, int(n))
+			n, err := db.ExecNum("DELETE FROM test WHERE value = ?", 1)
+			require.NoError(t, err)
+			require.Equal(t, 1, int(n))
 
-		n, err = db.ExecNum("DELETE FROM test WHERE value = ?", 1)
-		require.NoError(t, err)
-		require.Equal(t, 0, int(n))
+			n, err = db.ExecNum("DELETE FROM test WHERE value = ?", 1)
+			require.NoError(t, err)
+			require.Equal(t, 0, int(n))
 
-		err = db.ExecNumErr("DELETE FROM test WHERE value = ?", 1)
-		require.Error(t, err)
-	})
+			err = db.ExecNumErr("DELETE FROM test WHERE value = ?", 1)
+			require.Error(t, err)
+		},
+	)
 }
 
 func TestExecNum(t *testing.T) {
-	runTests(t, dsn, func(db DB) {
-		db.Exec("CREATE TABLE test (value int)")
+	runTests(t,
+		func(db DB) {
+			db.Exec("CREATE TABLE test (value int)")
 
-		n, err := db.ExecNum("INSERT INTO test VALUES (?)", 1)
-		require.NoError(t, err)
-		require.Equal(t, 1, int(n))
+			n, err := db.ExecNum("INSERT INTO test VALUES (?)", 1)
+			require.NoError(t, err)
+			require.Equal(t, 1, int(n))
 
-		_, err = db.ExecNum("UPDATE test SET value=? WHERE value=?", 2, 1)
-		require.NoError(t, err)
-		require.Equal(t, 1, int(n))
+			_, err = db.ExecNum("UPDATE test SET value=? WHERE value=?", 2, 1)
+			require.NoError(t, err)
+			require.Equal(t, 1, int(n))
 
-		_, err = db.ExecNum("DELETE FROM test  WHERE value=?", 2)
-		require.NoError(t, err)
-		require.Equal(t, 1, int(n))
-	})
+			_, err = db.ExecNum("DELETE FROM test  WHERE value=?", 2)
+			require.NoError(t, err)
+			require.Equal(t, 1, int(n))
+		},
+	)
 }
 
 func TestQueryRowStruct(t *testing.T) {
-	runTests(t, dsn,
+	runTests(t,
 		func(db DB) {
 			type foo struct {
 				PointX  int64
@@ -333,14 +332,14 @@ func TestQueryRowStruct(t *testing.T) {
 }
 
 func TestPing(t *testing.T) {
-	runTests(t, dsn, func(db DB) {
+	runTests(t, func(db DB) {
 		err := db.SqlDB().Ping()
 		require.NoError(t, err)
 	})
 }
 
 func TestSqlArg(t *testing.T) {
-	runTests(t, dsn, func(db DB) {
+	runTests(t, func(db DB) {
 		db.Exec("CREATE TABLE test (value int);")
 		db.Exec("INSERT INTO test VALUES (?);", 1)
 
@@ -349,7 +348,7 @@ func TestSqlArg(t *testing.T) {
 		require.Equal(t, 1, v)
 	})
 
-	runTests(t, dsn, func(db DB) {
+	runTests(t, func(db DB) {
 		a := 1
 		db.Exec("CREATE TABLE test (value int);")
 		db.Exec("INSERT INTO test VALUES (?);", &a)
@@ -359,7 +358,7 @@ func TestSqlArg(t *testing.T) {
 		require.Equal(t, 1, v)
 	})
 
-	runTests(t, dsn, func(db DB) {
+	runTests(t, func(db DB) {
 		type foo struct {
 			PointX  *int
 			PointY  *int `sql:"point_y"`
@@ -382,7 +381,7 @@ func TestTx(t *testing.T) {
 	if driver != "mysql" {
 		t.Skipf("TestTx skiped for %s", dsn)
 	}
-	runTests(t, dsn,
+	runTests(t,
 		func(db DB) {
 			db.Exec("CREATE TABLE test (value int) ENGINE=InnoDB;")
 
@@ -422,7 +421,7 @@ func TestTx(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
-	runTests(t, dsn, func(db DB) {
+	runTests(t, func(db DB) {
 		db.Exec("CREATE TABLE test (value int)")
 		db.Exec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
@@ -432,7 +431,7 @@ func TestList(t *testing.T) {
 		require.Equal(t, 3, len(v))
 	})
 
-	runTests(t, dsn, func(db DB) {
+	runTests(t, func(db DB) {
 		db.Exec("CREATE TABLE test (value int)")
 		db.Exec("INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
@@ -440,5 +439,148 @@ func TestList(t *testing.T) {
 		err := db.Query("SELECT value FROM test WHERE value IN ('1', '2', '3')").Rows(&v)
 		require.NoError(t, err)
 		require.Equal(t, 3, len(v))
+	})
+}
+
+func TestAutoMigrate(t *testing.T) {
+	runTests(t, func(db DB) {
+		createdAt := time.Unix(1000, 0).UTC()
+		updatedAt := time.Unix(2000, 0).UTC()
+
+		c := &clock.FakeClock{}
+		SetClock(c)
+		c.SetTime(createdAt)
+
+		type test struct {
+			Name      string `sql:",where"`
+			Age       int
+			Address   string
+			NickName  *string `sql:",size=1024"`
+			CreatedAt time.Time
+			UpdatedAt time.Time
+		}
+
+		err := db.AutoMigrate(&test{})
+		require.NoError(t, err)
+
+		// create
+		user := test{Name: "tom", Age: 14}
+		err = db.Insert(&user)
+		require.NoError(t, err)
+
+		user.CreatedAt = createdAt
+		user.UpdatedAt = createdAt
+
+		// read
+		var got test
+		err = db.Get(&got, WithSelector("name=tom"))
+		require.NoError(t, err)
+		assert.Equalf(t, user, got, "user get")
+
+		// update
+		c.SetTime(updatedAt)
+		user = test{Name: "tom", Age: 14, Address: "beijing", NickName: util.String("t")}
+		err = db.Update(&user)
+		require.NoError(t, err)
+		user.CreatedAt = createdAt
+		user.UpdatedAt = updatedAt
+
+		got = test{}
+		err = db.Get(&got, WithSelector("name=tom"))
+		require.NoError(t, err)
+		assert.Equalf(t, util.JsonStr(user), util.JsonStr(got), "user get")
+
+		// delete
+		user = test{Name: "tom"}
+		err = db.Delete(&user, WithSelector("name=tom"))
+		require.NoError(t, err)
+	})
+}
+
+func TestStruct(t *testing.T) {
+	runTests(t, func(db DB) {
+		//DEBUG = true
+
+		type User struct {
+			UserID   int
+			UserName string
+		}
+		type Group struct {
+			GroupID   int
+			GroupName string
+		}
+
+		type Role struct {
+			RouteID  int
+			RoleName string
+		}
+
+		type test struct {
+			Name  string //
+			User         // inline
+			Group Group  `sql:",inline"`        // inline
+			Role  Role   `sql:"role,size=1024"` // use json.Marshal as []byte
+		}
+
+		v := test{Name: "test", User: User{1, "user-name"}, Group: Group{2, "group-name"}, Role: Role{3, "role-name"}}
+
+		err := db.AutoMigrate(&v)
+		require.NoError(t, err)
+
+		err = db.Insert(&v)
+		require.NoError(t, err)
+
+		var got test
+		err = db.Get(&got, WithSelector("name=test"))
+		require.NoError(t, err)
+		assert.Equal(t, v, got, "test struct")
+	})
+}
+
+func TestTime(t *testing.T) {
+	runTests(t, func(db DB) {
+		createdAt := time.Unix(1000, 0).UTC()
+		updatedAt := time.Unix(2000, 0).UTC()
+		c := &clock.FakeClock{}
+		SetClock(c)
+		c.SetTime(createdAt)
+
+		type test struct {
+			Name      string     `sql:",where"`
+			TimeSec   int64      `sql:",auto_updatetime"`
+			TimeMilli int64      `sql:",auto_updatetime=milli"`
+			TimeNano  int64      `sql:",auto_updatetime=nano"`
+			Time      time.Time  `sql:",auto_updatetime"`
+			TimeP     *time.Time `sql:",auto_updatetime"`
+		}
+
+		v := test{Name: "test"}
+		err := db.AutoMigrate(&v)
+		require.NoError(t, err)
+
+		err = db.Insert(&v)
+		require.NoError(t, err)
+
+		v = test{}
+		err = db.Get(&v, WithSelector("name=test"))
+		require.NoError(t, err)
+		assert.Equal(t, createdAt.Unix(), v.TimeSec, "time sec")
+		assert.Equal(t, createdAt.UnixMilli(), v.TimeMilli, "time milli")
+		assert.Equal(t, createdAt.UnixNano(), v.TimeNano, "time nano")
+		assert.WithinDuration(t, createdAt, v.Time, time.Second, "time")
+		assert.WithinDuration(t, createdAt, *v.TimeP, time.Second, "time")
+
+		c.SetTime(updatedAt)
+		err = db.Update(&v)
+		require.NoError(t, err)
+
+		v = test{}
+		err = db.Get(&v, WithSelector("name=test"))
+		require.NoError(t, err)
+		assert.Equal(t, updatedAt.Unix(), v.TimeSec, "time sec")
+		assert.Equal(t, updatedAt.UnixMilli(), v.TimeMilli, "time milli")
+		assert.Equal(t, updatedAt.UnixNano(), v.TimeNano, "time nano")
+		assert.WithinDuration(t, updatedAt, v.Time, time.Second, "time")
+		assert.WithinDuration(t, updatedAt, *v.TimeP, time.Second, "time")
 	})
 }

@@ -2,9 +2,9 @@ package mysql
 
 import (
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/yubo/golib/orm/driver"
+	"github.com/yubo/golib/orm"
 )
 
 func init() {
-	driver.RegisterMysql()
+	orm.RegisterMysql()
 }

@@ -3,28 +3,31 @@
 ## Quick Start
 
 * Open orm
-```Go
+```go
 db, err := orm.Open(driverName, dataSourceName)
 ```
 
-* Define table struct to database
-
-```Go
+* Define table struct to database and automigrate
+```go
 type User struct {
     Name   string
     Age    int
     Passwd *string
 }
+
+// create table `user` if not exist
+db.AutoMigrate(&User{})
 ```
 
 * `Exec` runs a SQL string, it returns `error`
-```Go
+
+```go
 err := db.ExecNumErr("delete from user where name=?", "test")
 ```
 
 
 * `Insert` one record to database
-```Go
+```go
 err := db.Insert(&user)
 // insert into user () values ()
 
@@ -34,12 +37,12 @@ err := db.Insert(&user, orm.WithTable("system_user"))
 
 * `Query` query one record from database
 
-```Go
+```go
 err := db.Query("select * from user limit 1").Row(&user)
 ```
 
 * check if one record or affected exist with query/exec
-```Go
+```go
 import "github.com/yubo/golib/api/errors"
 
 if errors.IsNotFound(err) {
@@ -48,7 +51,7 @@ if errors.IsNotFound(err) {
 ```
 
 * `Rows` query multiple records from database
-```Go
+```go
 var users []User
 err := db.Query("select * from user where age > ?", 10).Rows(&users)
 ```
@@ -63,25 +66,30 @@ err := db.Query("select * from user where age > ?", 10).Count(&total).Rows(&user
 ```
 
 * `Update` update one record
-```Go
+```go
 type User struct {
-    Name   string `sql:",where"`
-    Age    int
+    Name   *string `sql:",where"`
+    Age    *int
     Passwd *string
 }
 
-affected, err := db.Update(&user)
+db.Update(&user)
 // if user.Passwd == nil
 // update user set age=? where name = ?
 // else
 // update user set age=?, passwd=? where name = ?
 
-affected, err := db.Update(&user, orm.WithTable("system_user"))
+// with selector
+passwd := ""
+db.Update(&user{Passwd:&passwd}, orm.WithSelector("age<16"))
+// update user set passwd='' where age < 16
+
+db.Update(&user, orm.WithTable("system_user"))
 // update system_user set ... where name = ?
 ```
 
 * Transation
-```Go
+```go
 tx, err := db.Begin()
 if err != nil {
 	return err

@@ -206,7 +206,7 @@ func (p *Options) GenGetSql() (string, []interface{}, error) {
 }
 
 func (p *Options) GenUpdateSql(db Driver) (string, []interface{}, error) {
-	return GenUpdateSql(p.Table(), p.sample, db)
+	return GenUpdateSql(p.Table(), p.sample, db, p.selector)
 }
 
 // TODO: generate selector from sample.fields, like GenUpdateSql

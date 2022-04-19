@@ -116,36 +116,59 @@ func TestGenGetSql(t *testing.T) {
 	}
 }
 
+func newSelector(s string) queries.Selector {
+	selector, _ := queries.Parse(s)
+	return selector
+}
+
 func TestGenUpdateSql(t *testing.T) {
 	type User struct {
-		Name string `sql:",where"`
-		Age  int
+		Name   *string `sql:",where"`
+		Age    *int
+		Passwd *string
 	}
+
 	cases := []struct {
-		table  string
-		sample *User
-		query  string
-		args   []interface{}
-		isErr  bool
+		table    string
+		sample   *User
+		query    string
+		args     []interface{}
+		isErr    bool
+		selector queries.Selector
 	}{
 		{
 			isErr: true,
 		},
 		{
 			table:  "user",
-			sample: &User{"tom", 14},
+			sample: &User{util.String("tom"), util.Int(14), nil},
 			query:  "UPDATE `user` SET `age` = ? WHERE `name` = ?",
 			args:   []interface{}{14, "tom"},
 			isErr:  false,
 		},
+		{
+			table:    "user",
+			sample:   &User{Age: util.Int(14)},
+			query:    "UPDATE `user` SET `age` = ? WHERE `name` = ?",
+			args:     []interface{}{14, "tom"},
+			isErr:    false,
+			selector: newSelector("name=tom"),
+		},
+		{
+			table:    "user",
+			sample:   &User{Passwd: util.String("")},
+			query:    "UPDATE `user` SET `passwd` = ? WHERE `age` < ?",
+			args:     []interface{}{"", "16"},
+			isErr:    false,
+			selector: newSelector("age<16"),
+		},
 	}
 
 	for i, c := range cases {
-		query, args, err := GenUpdateSql(c.table, c.sample, &nonDriver{})
+		query, args, err := GenUpdateSql(c.table, c.sample, &nonDriver{}, c.selector)
 		assert.Equal(t, c.query, query, "case-%d", i)
 		assert.Equal(t, c.args, args, "case-%d", i)
 		assert.Equal(t, c.isErr, err != nil, "case-%d", i)
-
 	}
 }
 
