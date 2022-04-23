@@ -182,71 +182,77 @@ func TestExecNum(t *testing.T) {
 func TestQueryRowStruct(t *testing.T) {
 	runTests(t,
 		func(db DB) {
-			type foo struct {
-				PointX  int64
-				PointY  int64 `sql:"point_y"`
+			type test struct {
+				X       int64
+				Y       int64 `sql:"point_y"`
 				Private int64
 				private int64
 			}
 
-			db.Exec("CREATE TABLE test (point_x int, point_y int, point_z int)")
-			db.Exec("INSERT INTO test VALUES (?, ?, ?)", 1, 2, 3)
+			err := db.AutoMigrate(&test{})
+			require.NoError(t, err)
+
+			err = db.Insert(&test{X: 1, Y: 2})
+			require.NoError(t, err)
 
 			{
-				v := foo{}
+				v := test{}
 				err := db.Query("SELECT * FROM test").Row(&v)
 				require.NoError(t, err)
-				require.Equal(t, foo{1, 2, 0, 0}, v)
+				require.Equal(t, test{1, 2, 0, 0}, v)
 			}
 
 			{
-				v := foo{0, 0, 3, 0}
+				v := test{0, 0, 3, 0}
 				err := db.Query("SELECT * FROM test").Row(&v)
 				require.NoError(t, err)
-				require.Equal(t, foo{1, 2, 3, 0}, v)
+				require.Equal(t, test{1, 2, 0, 0}, v)
 			}
 
 			{
-				var v *foo
+				var v *test
 				err := db.Query("SELECT * FROM test").Row(&v)
 				require.NoError(t, err)
-				require.Equal(t, foo{1, 2, 0, 0}, *v)
+				require.Equal(t, test{1, 2, 0, 0}, *v)
 			}
 
 			{
 				var v *int
-				err := db.Query("SELECT point_x FROM test").Row(&v)
+				err := db.Query("SELECT point_y FROM test").Row(&v)
 				require.NoError(t, err)
-				require.Equal(t, 1, *v)
+				require.Equal(t, 2, *v)
 			}
 		},
 		func(db DB) {
-			db.Exec("CREATE TABLE test (point_x int, point_y int, point_z int)")
-			db.Exec("INSERT INTO test VALUES (?, ?, ?)", 1, 2, 3)
-
-			type foo struct {
-				PointX  *int64
-				PointY  *int64 `sql:"point_y"`
+			type test struct {
+				X       *int64
+				Y       *int64 `sql:"point_y"`
 				Private *int64
 				private *int64
 			}
 
+			err := db.AutoMigrate(&test{})
+			require.NoError(t, err)
+
+			err = db.Insert(&test{util.Int64(1), util.Int64(2), nil, nil})
+			require.NoError(t, err)
+
 			{
-				var v foo
+				var v test
 				err := db.Query("SELECT * FROM test").Row(&v)
 				require.NoError(t, err)
-				require.Equal(t, foo{util.Int64(1), util.Int64(2), nil, nil}, v)
+				require.Equal(t, test{util.Int64(1), util.Int64(2), nil, nil}, v)
 			}
 
 			{
-				var v *foo
+				var v *test
 				err := db.Query("SELECT * FROM test").Row(&v)
 				require.NoError(t, err)
-				require.Equal(t, foo{util.Int64(1), util.Int64(2), nil, nil}, *v)
+				require.Equal(t, test{util.Int64(1), util.Int64(2), nil, nil}, *v)
 			}
 
 			{
-				var v *foo
+				var v *test
 				err := db.Query("SELECT * FROM test where 1 = 2").Row(&v)
 				require.Error(t, err)
 				require.Nil(t, v)
@@ -257,7 +263,7 @@ func TestQueryRowStruct(t *testing.T) {
 				X int
 				Y int
 			}
-			type foo struct {
+			type test struct {
 				A []string
 				B map[string]string
 				C *Point
@@ -268,10 +274,12 @@ func TestQueryRowStruct(t *testing.T) {
 				N int
 			}
 
-			db.Exec("CREATE TABLE test (a blob, b blob, c blob, d blob, e blob, f blob, g blob, n int)")
+			// CREATE TABLE `test` (`a` blob,`b` blob,`c` blob,`d` blob,`e` blob,`f` ,`g` text,`n` integer)
+			err := db.AutoMigrate(&test{})
+			require.NoError(t, err)
 
 			v := util.String("string")
-			cases := []foo{{
+			cases := []test{{
 				A: []string{"a", "b"},
 				B: map[string]string{"c": "d", "e": "f"},
 				C: &Point{1, 2},
@@ -295,38 +303,48 @@ func TestQueryRowStruct(t *testing.T) {
 				err := db.Insert(c, WithTable("test"))
 				require.NoError(t, err)
 
-				got := foo{}
+				got := test{}
 				db.Query("SELECT * FROM test WHERE n = ?", c.N).Row(&got)
 				require.Equal(t, c, got)
 			}
 		},
 		func(db DB) {
-			var foo []struct {
-				PointX  int64
-				PointY  int64 `sql:"point_y"`
-				Private int64 `sql:"-"`
-				private int64
+			type test struct {
+				X int64
+				Y int64 `sql:"point_y"`
+				z int64
 			}
 
-			db.Exec("CREATE TABLE test (point_x int, point_y int)")
-			db.Exec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
-
-			err := db.Query("SELECT * FROM test").Rows(&foo)
+			// CREATE TABLE `test` (`x` integer,`point_y` integer)
+			err := db.AutoMigrate(&test{})
 			require.NoError(t, err)
-			require.Equal(t, 3, len(foo))
+
+			_, err = db.Exec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
+			require.NoError(t, err)
+
+			var v []test
+			err = db.Query("SELECT * FROM test").Rows(&v)
+			require.NoError(t, err)
+			require.Equal(t, 3, len(v))
 		},
 		func(db DB) {
-			var foo []*struct {
-				PointX int64
-				PointY int64 `sql:"point_y"`
+			type test struct {
+				X int64
+				Y int64 `sql:"point_y"`
+				z int64
 			}
 
-			db.Exec("CREATE TABLE test (point_x int, point_y int)")
-			db.Exec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
-
-			err := db.Query("SELECT * FROM test").Rows(&foo)
+			// CREATE TABLE `test` (`x` integer,`point_y` integer)
+			err := db.AutoMigrate(&test{})
 			require.NoError(t, err)
-			require.Equal(t, 3, len(foo))
+
+			_, err = db.Exec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
+			require.NoError(t, err)
+
+			var v []*test
+			err = db.Query("SELECT * FROM test").Rows(&v)
+			require.NoError(t, err)
+			require.Equal(t, 3, len(v))
 		},
 	)
 }
@@ -442,7 +460,7 @@ func TestList(t *testing.T) {
 	})
 }
 
-func TestAutoMigrate(t *testing.T) {
+func TestStructCRUD(t *testing.T) {
 	runTests(t, func(db DB) {
 		createdAt := time.Unix(1000, 0).UTC()
 		updatedAt := time.Unix(2000, 0).UTC()
@@ -460,6 +478,7 @@ func TestAutoMigrate(t *testing.T) {
 			UpdatedAt time.Time
 		}
 
+		// sqlite: CREATE TABLE `test` (`name` text,`age` integer,`address` text,`nick_name` text,`created_at` datetime,`updated_at` datetime)
 		err := db.AutoMigrate(&test{})
 		require.NoError(t, err)
 
@@ -499,8 +518,6 @@ func TestAutoMigrate(t *testing.T) {
 
 func TestStruct(t *testing.T) {
 	runTests(t, func(db DB) {
-		//DEBUG = true
-
 		type User struct {
 			UserID   int
 			UserName string
