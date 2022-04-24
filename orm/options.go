@@ -10,10 +10,6 @@ import (
 	"github.com/yubo/golib/util"
 )
 
-const (
-	DefaultMaxRows = 1000
-)
-
 type DBOptions struct {
 	ctx context.Context
 	//greatest        string
@@ -26,15 +22,20 @@ type DBOptions struct {
 	maxOpenConns    *int
 	connMaxLifetime *time.Duration
 	connMaxIdletime *time.Duration
+	stringSize      int
 	err             error
+}
+
+func NewDefaultDBOptions() *DBOptions {
+	return &DBOptions{
+		maxRows:    1000,
+		stringSize: 255,
+	}
 }
 
 type DBOption func(*DBOptions)
 
 func (p *DBOptions) Validate() error {
-	if p.maxRows == 0 {
-		p.maxRows = DefaultMaxRows
-	}
 	return p.err
 }
 
@@ -112,6 +113,7 @@ type Options struct {
 	sample         interface{}
 	total          *int64
 	table          string
+	tableOptions   []string
 	selector       queries.Selector
 	cols           []string
 	orderby        []string
@@ -137,6 +139,13 @@ type Option func(*Options)
 func WithTable(table string) Option {
 	return func(o *Options) {
 		o.table = table
+	}
+}
+
+// for automigrate, add to `create table xxx () {tableoptions}`
+func WithTableOptions(options ...string) Option {
+	return func(o *Options) {
+		o.tableOptions = append(o.tableOptions, options...)
 	}
 }
 

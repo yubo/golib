@@ -12,8 +12,8 @@ import (
 var _ Driver = &mysql{}
 
 func RegisterMysql() {
-	Register("mysql", func(db Execer) Driver {
-		return &mysql{db}
+	Register("mysql", func(db Execer, opts *DBOptions) Driver {
+		return &mysql{db, opts}
 	})
 }
 
@@ -46,6 +46,7 @@ func (p *mysqlColumn) FiledOptions() StructField {
 // mysql m struct
 type mysql struct {
 	Execer
+	*DBOptions
 }
 
 func (p *mysql) ParseField(f *StructField) {
@@ -110,8 +111,8 @@ func (p *mysql) getSchemaStringType(f *StructField) string {
 	size := util.Int64Value(f.Size)
 
 	if size == 0 {
-		if DefaultStringSize > 0 {
-			size = int64(DefaultStringSize)
+		if p.stringSize > 0 {
+			size = int64(p.stringSize)
 		} else {
 			hasIndex := f.Has("index") || f.Has("unique")
 			// TEXT, GEOMETRY or JSON column can't have a default value
@@ -256,6 +257,7 @@ func (p *mysql) CreateTable(o *Options) (err error) {
 		}
 	}
 
+	var autoIncrementNum int64
 	for _, f := range fields.Fields {
 		if !f.IndexKey {
 			continue
@@ -278,12 +280,24 @@ func (p *mysql) CreateTable(o *Options) (err error) {
 			SQL += " " + f.IndexOption
 		}
 
+		if f.AutoIncrement && f.AutoIncrementNum > 0 {
+			autoIncrementNum = f.AutoIncrementNum
+		}
+
 		SQL += ","
 	}
 
 	SQL = strings.TrimSuffix(SQL, ",")
 
 	SQL += ")"
+
+	for _, v := range o.tableOptions {
+		SQL += " " + v
+	}
+
+	if autoIncrementNum > 0 {
+		SQL += fmt.Sprintf(" auto_increment=%d", autoIncrementNum)
+	}
 
 	_, err = p.Exec(SQL)
 

@@ -39,14 +39,15 @@ func (p *sqliteColumn) FiledOptions() StructField {
 var _ Driver = &sqlite{}
 
 func RegisterSqlite() {
-	Register("sqlite3", func(db Execer) Driver {
-		return &sqlite{db}
+	Register("sqlite3", func(db Execer, opts *DBOptions) Driver {
+		return &sqlite{db, opts}
 	})
 }
 
 // sqlite m struct
 type sqlite struct {
 	Execer
+	*DBOptions
 }
 
 // TODO
@@ -151,9 +152,12 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 	var (
 		SQL                     = "CREATE TABLE `" + o.Table() + "` ("
 		hasPrimaryKeyInDataType bool
+		autoIncrementNum        int64
+		autoIncrementField      string
 	)
 
 	fields := GetFields(o.Sample(), p)
+
 	for _, f := range fields.Fields {
 		hasPrimaryKeyInDataType = hasPrimaryKeyInDataType || strings.Contains(strings.ToUpper(f.DriverDataType), "PRIMARY KEY")
 		SQL += fmt.Sprintf("`%s` %s,", f.Name, p.FullDataTypeOf(f))
@@ -173,6 +177,11 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 	}
 
 	for _, f := range fields.Fields {
+		if f.AutoIncrement && f.AutoIncrementNum > 0 {
+			autoIncrementNum = f.AutoIncrementNum
+			autoIncrementField = f.Name
+		}
+
 		if !f.IndexKey {
 			continue
 		}
@@ -190,7 +199,20 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 
 	_, err = p.Exec(SQL)
 
+	if err == nil && autoIncrementNum > 1 {
+		id := autoIncrementNum - 1
+
+		if _, err = p.Exec("insert into `"+o.Table()+"` (`"+autoIncrementField+"`) VALUES (?)", id); err != nil {
+			return err
+		}
+
+		if _, err = p.Exec("delete from `"+o.Table()+"` where `"+autoIncrementField+"`=?", id); err != nil {
+			return err
+		}
+	}
+
 	return err
+
 }
 
 func (p *sqlite) DropTable(o *Options) error {

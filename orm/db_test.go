@@ -76,28 +76,23 @@ func TestInsert(t *testing.T) {
 			require.Equal(t, 1, v)
 		},
 		func(db DB) {
-
-			if driver != "mysql" {
-				t.Skipf("skip insert with auto_increment for %s", dsn)
-			}
-
-			type foo struct {
-				Id    int
+			type test struct {
+				Id    *int `sql:",auto_increment=1000"`
 				Value int
 			}
 
-			_, err := db.Exec(`CREATE TABLE test
-(
-  id int not null auto_increment,
-  value int,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB auto_increment=1000;`)
+			DEBUG = true
+			err := db.AutoMigrate(&test{})
 			require.NoError(t, err)
 
-			n, err := db.InsertLastId(&foo{Value: 1}, WithTable("test"))
+			n, err := db.InsertLastId(&test{Value: 1})
 			require.NoError(t, err)
-			require.Equal(t, 1000, n)
+			assert.Equal(t, 1000, int(n))
 
+			var got test
+			err = db.Get(&got, WithSelector("value=1"))
+			require.NoError(t, err)
+			assert.Equal(t, test{util.Int(1000), 1}, got)
 		})
 }
 
@@ -396,12 +391,9 @@ func TestSqlArg(t *testing.T) {
 }
 
 func TestTx(t *testing.T) {
-	if driver != "mysql" {
-		t.Skipf("TestTx skiped for %s", dsn)
-	}
 	runTests(t,
 		func(db DB) {
-			db.Exec("CREATE TABLE test (value int) ENGINE=InnoDB;")
+			db.Exec("CREATE TABLE test (value int)")
 
 			tx, err := db.Begin()
 			require.NoError(t, err)
@@ -418,7 +410,7 @@ func TestTx(t *testing.T) {
 			require.Equal(t, 1, v)
 		},
 		func(db DB) {
-			db.Exec("CREATE TABLE test (value int) ENGINE=InnoDB;")
+			db.Exec("CREATE TABLE test (value int)")
 
 			tx, err := db.Begin()
 			require.NoError(t, err)
@@ -435,7 +427,6 @@ func TestTx(t *testing.T) {
 			assert.Equal(t, 0, v)
 		},
 	)
-
 }
 
 func TestList(t *testing.T) {
@@ -457,6 +448,17 @@ func TestList(t *testing.T) {
 		err := db.Query("SELECT value FROM test WHERE value IN ('1', '2', '3')").Rows(&v)
 		require.NoError(t, err)
 		require.Equal(t, 3, len(v))
+	})
+}
+
+func TestAutoMigrate(t *testing.T) {
+
+	runTests(t, func(db DB) {
+		type foo struct {
+			Id    int
+			Value int
+		}
+
 	})
 }
 

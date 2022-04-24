@@ -14,13 +14,12 @@ import (
 )
 
 var (
-	dbFactories       = map[string]DBFactory{}
-	DefaultStringSize = 255
-	DEBUG             = false
-	LogDepthOffset    = 0
+	dbFactories    = map[string]DBFactory{}
+	DEBUG          = false
+	LogDepthOffset = 0
 )
 
-type DBFactory func(db Execer) Driver
+type DBFactory func(db Execer, opts *DBOptions) Driver
 
 func Register(name string, d DBFactory) {
 	if _, ok := dbFactories[name]; ok {
@@ -38,7 +37,7 @@ type ormDB struct {
 }
 
 func Open(driverName, dataSourceName string, opts ...DBOption) (DB, error) {
-	o := &DBOptions{}
+	o := NewDefaultDBOptions()
 	for _, opt := range append(opts, WithDirver(driverName), WithDsn(dataSourceName)) {
 		opt(o)
 	}
@@ -91,7 +90,7 @@ func open(opts *DBOptions) (DB, error) {
 	}
 
 	if f, ok := dbFactories[opts.driver]; ok {
-		db.Interface = NewBaseInterface(f(db), rawDB, opts)
+		db.Interface = NewBaseInterface(f(db, opts), rawDB, opts)
 	}
 
 	return db, nil
