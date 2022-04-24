@@ -259,6 +259,10 @@ func (p *mysql) CreateTable(o *Options) (err error) {
 
 	var autoIncrementNum int64
 	for _, f := range fields.Fields {
+		if f.AutoIncrement && f.AutoIncrementNum > 0 {
+			autoIncrementNum = f.AutoIncrementNum
+		}
+
 		if !f.IndexKey {
 			continue
 		}
@@ -278,10 +282,6 @@ func (p *mysql) CreateTable(o *Options) (err error) {
 
 		if f.IndexOption != "" {
 			SQL += " " + f.IndexOption
-		}
-
-		if f.AutoIncrement && f.AutoIncrementNum > 0 {
-			autoIncrementNum = f.AutoIncrementNum
 		}
 
 		SQL += ","

@@ -202,11 +202,11 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 	if err == nil && autoIncrementNum > 1 {
 		id := autoIncrementNum - 1
 
-		if _, err = p.Exec("insert into `"+o.Table()+"` (`"+autoIncrementField+"`) VALUES (?)", id); err != nil {
+		if _, err = p.Exec("INSERT INTO `"+o.Table()+"` (`"+autoIncrementField+"`) VALUES (?)", id); err != nil {
 			return err
 		}
 
-		if _, err = p.Exec("delete from `"+o.Table()+"` where `"+autoIncrementField+"`=?", id); err != nil {
+		if _, err = p.Exec("DELETE FROM `"+o.Table()+"` WHERE `"+autoIncrementField+"` = ?", id); err != nil {
 			return err
 		}
 	}
@@ -376,8 +376,8 @@ func (p *sqlite) DropIndex(name string, o *Options) error {
 
 func (p *sqlite) HasIndex(name string, o *Options) bool {
 	var count int64
-	p.Query("SELECT count(*) FROM sqlite_master WHERE type = ? AND tbl_name = ? AND name = ?",
-		"index", o.Table(), name).Row(&count)
+	p.Query("SELECT count(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?",
+		o.Table(), name).Row(&count)
 
 	return count > 0
 }
@@ -389,7 +389,7 @@ func (p *sqlite) CurrentDatabase() (name string) {
 }
 
 func (p *sqlite) getRawDDL(table string) (createSQL string, err error) {
-	err = p.Query("SELECT sql FROM sqlite_master WHERE type = ? AND tbl_name = ? AND name = ?", "table", table, table).Row(&createSQL)
+	err = p.Query("SELECT sql FROM sqlite_master WHERE type = 'table' AND tbl_name = ? AND name = ?", table, table).Row(&createSQL)
 	return
 }
 

@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	dsn       string
-	driver    string
-	available bool
+	testDsn       string
+	testDriver    string
+	testAvailable bool
 )
 
 // See https://github.com/go-sql-driver/mysql/wiki/Testing
@@ -31,22 +31,27 @@ func init() {
 		}
 		return defaultValue
 	}
-	driver = env("TEST_DB_DRIVER", "sqlite3")
-	dsn = env("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory")
-	if db, err := Open(driver, dsn); err == nil {
+
+	if os.Getenv("DEBUG") != "" {
+		DEBUG = true
+	}
+
+	testDriver = env("TEST_DB_DRIVER", "sqlite3")
+	testDsn = env("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory")
+	if db, err := Open(testDriver, testDsn); err == nil {
 		if err = db.SqlDB().Ping(); err == nil {
-			available = true
+			testAvailable = true
 		}
 		db.Close()
 	}
 }
 
 func runTests(t *testing.T, tests ...func(db DB)) {
-	if !available {
-		t.Skipf("SQL server not running on %s", dsn)
+	if !testAvailable {
+		t.Skipf("SQL server not running on %s", testDsn)
 	}
 
-	_runTests(t, driver, dsn, tests...)
+	_runTests(t, testDriver, testDsn, tests...)
 }
 
 func _runTests(t *testing.T, driver, dsn string, tests ...func(db DB)) {
@@ -60,7 +65,49 @@ func _runTests(t *testing.T, driver, dsn string, tests ...func(db DB)) {
 		test(db)
 		db.Exec("DROP TABLE IF EXISTS test")
 	}
+}
 
+func TestAutoMigrate(t *testing.T) {
+	runTests(t, func(db DB) {
+		{
+			type test struct {
+				Id   *int   `sql:",primary_key,auto_increment=1000"`
+				Name string `sql:",index,unique"`
+			}
+
+			// mysql: CREATE TABLE `test` (`id` bigint AUTO_INCREMENT,`name` varchar(255) UNIQUE,PRIMARY KEY (`id`),INDEX (`name`) ) auto_increment=1000
+			err := db.AutoMigrate(&test{})
+			require.NoError(t, err)
+		}
+
+		{
+			type test struct {
+				Id          *int `sql:",auto_increment=1000"`
+				Name        string
+				DisplayName string
+			}
+
+			// mysql: ALTER TABLE `test` ADD `display_name` varchar(255)
+			err := db.AutoMigrate(&test{})
+			require.NoError(t, err)
+		}
+
+		{
+			type test struct {
+				Id          *int `sql:",auto_increment=1000"`
+				Name        string
+				DisplayName string
+				CreatedAt   int64 `sql:",auto_createtime"`
+				UpdatedAt   int64 `sql:",auto_updatetime"`
+			}
+
+			// mysql: ALTER TABLE `test` ADD `created_at` bigint
+			// mysql: ALTER TABLE `test` ADD `updated_at` bigint
+			err := db.AutoMigrate(&test{})
+			require.NoError(t, err)
+		}
+
+	})
 }
 
 func TestInsert(t *testing.T) {
@@ -81,7 +128,6 @@ func TestInsert(t *testing.T) {
 				Value int
 			}
 
-			DEBUG = true
 			err := db.AutoMigrate(&test{})
 			require.NoError(t, err)
 
@@ -451,17 +497,6 @@ func TestList(t *testing.T) {
 	})
 }
 
-func TestAutoMigrate(t *testing.T) {
-
-	runTests(t, func(db DB) {
-		type foo struct {
-			Id    int
-			Value int
-		}
-
-	})
-}
-
 func TestStructCRUD(t *testing.T) {
 	runTests(t, func(db DB) {
 		createdAt := time.Unix(1000, 0).UTC()
@@ -480,7 +515,7 @@ func TestStructCRUD(t *testing.T) {
 			UpdatedAt time.Time
 		}
 
-		// sqlite: CREATE TABLE `test` (`name` text,`age` integer,`address` text,`nick_name` text,`created_at` datetime,`updated_at` datetime)
+		// mysql: CREATE TABLE `test` (`name` varchar(255),`age` bigint,`address` varchar(255),`nick_name` varchar(1024),`created_at` datetime NULL,`updated_at` datetime NULL)
 		err := db.AutoMigrate(&test{})
 		require.NoError(t, err)
 

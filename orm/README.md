@@ -10,13 +10,13 @@ db, err := orm.Open(driverName, dataSourceName)
 * Define table struct to database and automigrate
 ```go
 type User struct {
-    Name   string
-    Age    int
-    Passwd *string
+    Id   *int   `sql:",index,auto_increment=1000"`
+    Name string `sql:",primary_key"`
 }
 
 // create table `user` if not exist
 db.AutoMigrate(&User{})
+// msyql: CREATE TABLE `test` (`id` bigint AUTO_INCREMENT,`name` varchar(255),PRIMARY KEY (`name`),INDEX (`id`) ) auto_increment=1000
 ```
 
 * `Exec` runs a SQL string, it returns `error`
@@ -104,3 +104,30 @@ if err := tx.Insert(&user); err != nil {
 
 return tx.Commit()
 ```
+
+## tags
+```
+type User struct {
+        ID    int64   `sql:"<sqltag>"`
+}
+
+sqltag: [name=]<name>,<key>[=<value>],...
+```
+
+sql tags:
+  - `name`: name of the field
+  - `where`
+  - `inline`
+  - `index`
+  - `primary_key`
+  - `auto_increment`
+  - `default`
+  - `size`
+  - `precision`
+  - `scale`
+  - `not_null`
+  - `unique`
+  - `comment`
+  - `auto_createtime`
+  - `auto_updatetime`
+  - `type`

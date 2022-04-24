@@ -13,6 +13,24 @@ import (
 
 var (
 	fieldCache sync.Map // map[reflect.Type]s
+	keyWords   = []string{
+		"name",
+		"where",
+		"inline",
+		"index",
+		"primary_key",
+		"auto_increment",
+		"default",
+		"size",
+		"precision",
+		"scale",
+		"not_null",
+		"unique",
+		"comment",
+		"auto_createtime",
+		"auto_updatetime",
+		"type",
+	}
 )
 
 type StructFields struct {
@@ -231,7 +249,9 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 		return opt, nil
 	}
 
-	set := ParseFields("name=" + tag)
+	tag = prepareTag(tag)
+
+	set := ParseFields(tag)
 	if set.Has("where") {
 		opt.Where = true
 	}
@@ -431,4 +451,16 @@ func panicType(ft reflect.Type, args ...interface{}) {
 		panic(fmt.Sprint(args...) + " " + msg)
 	}
 	panic(msg)
+}
+
+func prepareTag(tag string) string {
+	if tag == "" {
+		return ""
+	}
+
+	if tags := strings.SplitN(tag, ",", 2); tags[0] == "" || strings.IndexByte(tags[0], '=') > 0 {
+		return tag
+	}
+
+	return "name=" + tag
 }
