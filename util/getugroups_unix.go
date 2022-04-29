@@ -1,10 +1,11 @@
+//go:build (dragonfly || freebsd || (!android && linux) || netbsd || openbsd || solaris || darwin) && cgo
 // +build dragonfly freebsd !android,linux netbsd openbsd solaris darwin
 // +build cgo
 
 package util
 
 /*
-#cgo CFLAGS: -D_BSD_SOURCE
+#cgo CFLAGS: -D_DEFAULT_SOURCE
 #include <sys/types.h>
 #include <grp.h>
 
