@@ -14,7 +14,7 @@ import (
 )
 
 func PrintErrln(err error) int {
-	if err == nil || err == ErrDryrun {
+	if err == nil || err == DryRunErr {
 		return 0
 	}
 

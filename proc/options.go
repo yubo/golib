@@ -6,17 +6,24 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/go-openapi/spec"
 	"github.com/yubo/golib/configer"
+	"github.com/yubo/golib/version"
 )
 
 type ProcessOptions struct {
-	name            string
+	name        string
+	description string
+	license     *spec.License
+	contact     *spec.ContactInfo
+	version     *version.Info
+
 	ctx             context.Context
 	cancel          context.CancelFunc
 	hooks           []HookOps //  WithHooks
-	description     string
 	noloop          bool
 	group           bool
+	report          bool
 	wg              *sync.WaitGroup
 	configerOptions []configer.ConfigerOption
 }
@@ -52,9 +59,28 @@ func WithName(name string) ProcessOption {
 		p.name = name
 	}
 }
+
 func WithDescription(description string) ProcessOption {
 	return func(p *ProcessOptions) {
 		p.description = description
+	}
+}
+
+func WithLicense(license *spec.License) ProcessOption {
+	return func(p *ProcessOptions) {
+		p.license = license
+	}
+}
+
+func WithContact(contact *spec.ContactInfo) ProcessOption {
+	return func(p *ProcessOptions) {
+		p.contact = contact
+	}
+}
+
+func WithVersion(version version.Info) ProcessOption {
+	return func(p *ProcessOptions) {
+		p.version = &version
 	}
 }
 
@@ -79,5 +105,11 @@ func WithWaitGroup(wg *sync.WaitGroup) ProcessOption {
 func WithConfigOptions(options ...configer.ConfigerOption) ProcessOption {
 	return func(p *ProcessOptions) {
 		p.configerOptions = append(p.configerOptions, options...)
+	}
+}
+
+func WithReport() ProcessOption {
+	return func(p *ProcessOptions) {
+		p.report = true
 	}
 }

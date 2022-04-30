@@ -5,18 +5,9 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/spf13/pflag"
 	"github.com/yubo/golib/configer"
 	"k8s.io/klog/v2"
 )
-
-type ConfigOps struct {
-	fs     *pflag.FlagSet
-	group  string
-	path   string
-	sample interface{}
-	opts   []configer.ConfigFieldsOption
-}
 
 type HookFn func(context.Context) error
 

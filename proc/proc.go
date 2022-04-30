@@ -13,11 +13,13 @@ import (
 	"time"
 
 	"github.com/coreos/go-systemd/daemon"
+	"github.com/go-openapi/spec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/yubo/golib/cli/flag"
 	"github.com/yubo/golib/cli/globalflag"
 	"github.com/yubo/golib/configer"
+	"github.com/yubo/golib/version"
 	"k8s.io/klog/v2"
 )
 
@@ -27,8 +29,9 @@ const (
 )
 
 var (
-	DefaultProcess = NewProcess()
-	ErrDryrun      = errors.New("dry run")
+	DefaultProcess    = NewProcess()
+	DryRunErr         = errors.New("dry run")
+	InvalidVersionErr = errors.New("can not get version infomation")
 )
 
 type Process struct {
@@ -37,7 +40,9 @@ type Process struct {
 	configer       configer.Configer
 	parsedConfiger configer.ParsedConfiger
 	//fs             *pflag.FlagSet
-	configOps     []*ConfigOps // catalog of RegisterConfig
+
+	// config
+	configs       []*configOptions // catalog of RegisterConfig
 	namedFlagSets flag.NamedFlagSets
 
 	debugConfig bool // print config after proc.init()
@@ -79,10 +84,6 @@ func Context() context.Context {
 	return DefaultProcess.Context()
 }
 
-func Configer() configer.ParsedConfiger {
-	return DefaultProcess.parsedConfiger
-}
-
 func NewRootCmd(opts ...ProcessOption) *cobra.Command {
 	return DefaultProcess.NewRootCmd(opts...)
 }
@@ -121,59 +122,50 @@ func Description() string {
 	return DefaultProcess.Description()
 }
 
+func License() *spec.License {
+	return DefaultProcess.License()
+}
+func Contact() *spec.ContactInfo {
+	return DefaultProcess.Contact()
+}
+func Version() *version.Info {
+	return DefaultProcess.Version()
+}
+
 func NamedFlagSets() *flag.NamedFlagSets {
 	return &DefaultProcess.namedFlagSets
+}
+
+func NewVersionCmd() *cobra.Command {
+	return DefaultProcess.NewVersionCmd()
 }
 
 func RegisterHooks(in []HookOps) error {
 	return DefaultProcess.RegisterHooks(in)
 }
 
-func ConfigVar(fs *pflag.FlagSet, path string, sample interface{}, opts ...configer.ConfigFieldsOption) error {
-	return DefaultProcess.ConfigVar(fs, path, sample, opts...)
+func Configer() configer.ParsedConfiger {
+	return DefaultProcess.Configer()
 }
+
+func ReadConfig(path string, into interface{}) error {
+	return DefaultProcess.parsedConfiger.Read(path, into)
+}
+
+func AddConfig(path string, sample interface{}, opts ...ConfigOption) error {
+	return DefaultProcess.AddConfig(path, sample, opts...)
+}
+
+func AddGlobalConfig(sample interface{}) error {
+	return DefaultProcess.AddConfig("", sample, WithConfigGroup("global"))
+}
+
+//func ConfigVar(fs *pflag.FlagSet, path string, sample interface{}, opts ...configer.ConfigFieldsOption) error {
+//	return DefaultProcess.ConfigVar(fs, path, sample, opts...)
+//}
 
 func Parse(fs *pflag.FlagSet, opts ...configer.ConfigerOption) (configer.ParsedConfiger, error) {
 	return DefaultProcess.Parse(fs, opts...)
-}
-
-// must invoke before cmd.Execute()/pflag.Parse()
-//func AddRegisteredFlags(fs *pflag.FlagSet) error {
-//	return DefaultProcess.AddRegisteredFlags(fs)
-//}
-
-func RegisterFlags(configPath, groupName string, sample interface{}, opts ...configer.ConfigFieldsOption) error {
-	return DefaultProcess.RegisterFlags(configPath, groupName, sample, opts...)
-}
-
-func (p *Process) RegisterFlags(configPath, groupName string, sample interface{}, opts ...configer.ConfigFieldsOption) error {
-	p.configOps = append(p.configOps, &ConfigOps{
-		fs:     p.namedFlagSets.FlagSet(groupName),
-		group:  groupName,
-		path:   configPath,
-		sample: sample,
-		opts:   opts,
-	})
-	return nil
-}
-
-func (p *Process) BindRegisteredFlags(fs *pflag.FlagSet) error {
-	for _, v := range p.configOps {
-		//klog.InfoS("add Var", "path", v.path, "group", v.group, "type", reflect.TypeOf(v.sample).String())
-		if err := p.configer.Var(v.fs, v.path, v.sample, v.opts...); err != nil {
-			return err
-		}
-	}
-
-	for _, f := range p.namedFlagSets.FlagSets {
-		fs.AddFlagSet(f)
-	}
-
-	return nil
-}
-
-func (p *Process) ConfigVar(fs *pflag.FlagSet, path string, sample interface{}, opts ...configer.ConfigFieldsOption) error {
-	return p.configer.Var(fs, path, sample, opts...)
 }
 
 // RegisterHooks register hookOps as a module
@@ -199,7 +191,7 @@ func (p *Process) NewRootCmd(opts ...ProcessOption) *cobra.Command {
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			err := p.Start(cmd.Flags())
-			if err == ErrDryrun {
+			if err == DryRunErr {
 				return nil
 			}
 			return err
@@ -228,6 +220,12 @@ func (p *Process) Start(fs *pflag.FlagSet) error {
 		return p.stop()
 	}
 
+	if p.report {
+		if err := p.reporterStart(); err != nil {
+			return err
+		}
+	}
+
 	return p.loop()
 }
 
@@ -253,7 +251,7 @@ func (p *Process) Parse(fs *pflag.FlagSet, opts ...configer.ConfigerOption) (con
 	if p.dryrun {
 		// ugly hack
 		// Do not initialize any stateful objects before this
-		return nil, ErrDryrun
+		return nil, DryRunErr
 	}
 
 	return p.parsedConfiger, nil
@@ -287,7 +285,9 @@ func (p *Process) Init(cmd *cobra.Command, opts ...ProcessOption) error {
 	fs := cmd.PersistentFlags()
 	fs.ParseErrorsWhitelist.UnknownFlags = true
 
-	p.BindRegisteredFlags(fs)
+	if err := p.BindRegisteredFlags(fs); err != nil {
+		return fmt.Errorf("proc.BindRegisteredFlags %s", err)
+	}
 
 	if p.group {
 		setGroupCommandFunc(cmd, p.namedFlagSets)
@@ -458,4 +458,35 @@ func (p *Process) Name() string {
 
 func (p *Process) Description() string {
 	return p.description
+}
+func (p *Process) License() *spec.License {
+	return p.license
+}
+func (p *Process) Contact() *spec.ContactInfo {
+	return p.contact
+}
+func (p *Process) Version() *version.Info {
+	return p.version
+}
+
+func (p *Process) NewVersionCmd() *cobra.Command {
+	ver := p.version
+	if ver == nil {
+		panic(InvalidVersionErr)
+	}
+
+	return &cobra.Command{
+		Use:   "version",
+		Short: "show version, git commit",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("Git Version:     %s\n", ver.GitVersion)
+			fmt.Printf("Git Commit:      %s\n", ver.GitCommit)
+			fmt.Printf("Git Tree State:  %s\n", ver.GitTreeState)
+			fmt.Printf("Build Date:      %s\n", ver.BuildDate)
+			fmt.Printf("Go Version:      %s\n", ver.GoVersion)
+			fmt.Printf("Compiler:        %s\n", ver.Compiler)
+			fmt.Printf("Platform:        %s\n", ver.Platform)
+			return nil
+		},
+	}
 }
