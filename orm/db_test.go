@@ -592,49 +592,77 @@ func TestStruct(t *testing.T) {
 }
 
 func TestTime(t *testing.T) {
-	runTests(t, func(db DB) {
-		createdAt := time.Unix(1000, 0).UTC()
-		updatedAt := time.Unix(2000, 0).UTC()
-		c := &clock.FakeClock{}
-		SetClock(c)
-		c.SetTime(createdAt)
+	runTests(t,
+		func(db DB) {
+			createdAt := time.Unix(1000, 0).UTC()
+			updatedAt := time.Unix(2000, 0).UTC()
+			c := &clock.FakeClock{}
+			SetClock(c)
+			c.SetTime(createdAt)
 
-		type test struct {
-			Name      string     `sql:",where"`
-			TimeSec   int64      `sql:",auto_updatetime"`
-			TimeMilli int64      `sql:",auto_updatetime=milli"`
-			TimeNano  int64      `sql:",auto_updatetime=nano"`
-			Time      time.Time  `sql:",auto_updatetime"`
-			TimeP     *time.Time `sql:",auto_updatetime"`
-		}
+			type test struct {
+				Name      string     `sql:",where"`
+				TimeSec   int64      `sql:",auto_updatetime"`
+				TimeMilli int64      `sql:",auto_updatetime=milli"`
+				TimeNano  int64      `sql:",auto_updatetime=nano"`
+				Time      time.Time  `sql:",auto_updatetime"`
+				TimeP     *time.Time `sql:",auto_updatetime"`
+			}
 
-		v := test{Name: "test"}
-		err := db.AutoMigrate(&v)
-		require.NoError(t, err)
+			v := test{Name: "test"}
+			err := db.AutoMigrate(&v)
+			require.NoError(t, err)
 
-		err = db.Insert(&v)
-		require.NoError(t, err)
+			err = db.Insert(&v)
+			require.NoError(t, err)
 
-		v = test{}
-		err = db.Get(&v, WithSelector("name=test"))
-		require.NoError(t, err)
-		assert.Equal(t, createdAt.Unix(), v.TimeSec, "time sec")
-		assert.Equal(t, createdAt.UnixMilli(), v.TimeMilli, "time milli")
-		assert.Equal(t, createdAt.UnixNano(), v.TimeNano, "time nano")
-		assert.WithinDuration(t, createdAt, v.Time, time.Second, "time")
-		assert.WithinDuration(t, createdAt, *v.TimeP, time.Second, "time")
+			v = test{}
+			err = db.Get(&v, WithSelector("name=test"))
+			require.NoError(t, err)
+			assert.Equal(t, createdAt.Unix(), v.TimeSec, "time sec")
+			assert.Equal(t, createdAt.UnixMilli(), v.TimeMilli, "time milli")
+			assert.Equal(t, createdAt.UnixNano(), v.TimeNano, "time nano")
+			assert.WithinDuration(t, createdAt, v.Time, time.Second, "time")
+			assert.WithinDuration(t, createdAt, *v.TimeP, time.Second, "time")
 
-		c.SetTime(updatedAt)
-		err = db.Update(&v)
-		require.NoError(t, err)
+			c.SetTime(updatedAt)
+			err = db.Update(&v)
+			require.NoError(t, err)
 
-		v = test{}
-		err = db.Get(&v, WithSelector("name=test"))
-		require.NoError(t, err)
-		assert.Equal(t, updatedAt.Unix(), v.TimeSec, "time sec")
-		assert.Equal(t, updatedAt.UnixMilli(), v.TimeMilli, "time milli")
-		assert.Equal(t, updatedAt.UnixNano(), v.TimeNano, "time nano")
-		assert.WithinDuration(t, updatedAt, v.Time, time.Second, "time")
-		assert.WithinDuration(t, updatedAt, *v.TimeP, time.Second, "time")
-	})
+			v = test{}
+			err = db.Get(&v, WithSelector("name=test"))
+			require.NoError(t, err)
+			assert.Equal(t, updatedAt.Unix(), v.TimeSec, "time sec")
+			assert.Equal(t, updatedAt.UnixMilli(), v.TimeMilli, "time milli")
+			assert.Equal(t, updatedAt.UnixNano(), v.TimeNano, "time nano")
+			assert.WithinDuration(t, updatedAt, v.Time, time.Second, "time")
+			assert.WithinDuration(t, updatedAt, *v.TimeP, time.Second, "time")
+		},
+		func(db DB) {
+			type test struct {
+				Time time.Time
+			}
+
+			t1 := time.Unix(1000, 0).UTC()
+			v := test{Time: t1}
+			err := db.AutoMigrate(&v)
+			require.NoError(t, err)
+
+			err = db.Insert(&v)
+			require.NoError(t, err)
+
+			v = test{}
+			err = db.Query("select * from test where time = ?", t1).Row(&v)
+			require.NoError(t, err)
+			assert.Equal(t, t1, v.Time)
+
+			err = db.Query("select * from test where time > ?", t1.Add(-time.Second)).Row(&v)
+			require.NoError(t, err)
+			assert.Equal(t, t1, v.Time)
+
+			err = db.Query("select * from test where time < ?", t1.Add(time.Second)).Row(&v)
+			require.NoError(t, err)
+			assert.Equal(t, t1, v.Time)
+		},
+	)
 }
