@@ -167,10 +167,10 @@ func WithSelector(selector string) Option {
 	}
 }
 
-func WithLimit(offset, limit int64) Option {
+func WithLimit(offset, limit *int64) Option {
 	return func(o *Options) {
-		o.offset = &offset
-		o.limit = &limit
+		o.offset = offset
+		o.limit = limit
 	}
 }
 
