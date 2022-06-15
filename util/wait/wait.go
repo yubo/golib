@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yubo/golib/api"
 	"github.com/yubo/golib/util/clock"
 	"github.com/yubo/golib/util/runtime"
 )
@@ -214,7 +215,7 @@ func runConditionWithCrashProtection(condition ConditionFunc) (bool, error) {
 // Backoff holds parameters applied to a Backoff function.
 type Backoff struct {
 	// The initial duration.
-	Duration time.Duration `json:"duration"`
+	Duration api.Duration `json:"duration"`
 	// Duration is multiplied by factor each iteration, if factor is not zero
 	// and the limits imposed by Steps and Cap have not been reached.
 	// Should not be negative.
@@ -234,7 +235,7 @@ type Backoff struct {
 	// multiplication by the factor parameter would make the duration
 	// exceed the cap then the duration is set to the cap and the
 	// steps parameter is set to zero.
-	Cap time.Duration `json:"cap"`
+	Cap api.Duration `json:"cap"`
 }
 
 // Step (1) returns an amount of time to sleep determined by the
@@ -243,19 +244,19 @@ type Backoff struct {
 func (b *Backoff) Step() time.Duration {
 	if b.Steps < 1 {
 		if b.Jitter > 0 {
-			return Jitter(b.Duration, b.Jitter)
+			return Jitter(b.Duration.Duration, b.Jitter)
 		}
-		return b.Duration
+		return b.Duration.Duration
 	}
 	b.Steps--
 
-	duration := b.Duration
+	duration := b.Duration.Duration
 
 	// calculate the next step
 	if b.Factor != 0 {
-		b.Duration = time.Duration(float64(b.Duration) * b.Factor)
-		if b.Cap > 0 && b.Duration > b.Cap {
-			b.Duration = b.Cap
+		b.Duration.Duration = time.Duration(float64(b.Duration.Duration) * b.Factor)
+		if b.Cap.Duration > 0 && b.Duration.Duration > b.Cap.Duration {
+			b.Duration.Duration = b.Cap.Duration
 			b.Steps = 0
 		}
 	}
@@ -309,14 +310,14 @@ type exponentialBackoffManagerImpl struct {
 func NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration time.Duration, backoffFactor, jitter float64, c clock.Clock) BackoffManager {
 	return &exponentialBackoffManagerImpl{
 		backoff: &Backoff{
-			Duration: initBackoff,
+			Duration: api.Duration{initBackoff},
 			Factor:   backoffFactor,
 			Jitter:   jitter,
 
 			// the current impl of wait.Backoff returns Backoff.Duration once steps are used up, which is not
 			// what we ideally need here, we set it to max int and assume we will never use up the steps
 			Steps: math.MaxInt32,
-			Cap:   maxBackoff,
+			Cap:   api.Duration{maxBackoff},
 		},
 		backoffTimer:         nil,
 		initialBackoff:       initBackoff,
@@ -329,7 +330,7 @@ func NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration time.Du
 func (b *exponentialBackoffManagerImpl) getNextBackoff() time.Duration {
 	if b.clock.Now().Sub(b.lastBackoffStart) > b.backoffResetDuration {
 		b.backoff.Steps = math.MaxInt32
-		b.backoff.Duration = b.initialBackoff
+		b.backoff.Duration.Duration = b.initialBackoff
 	}
 	b.lastBackoffStart = b.clock.Now()
 	return b.backoff.Step()
