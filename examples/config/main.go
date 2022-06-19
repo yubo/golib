@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/user"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/yubo/golib/configer"
@@ -16,11 +16,15 @@ type config struct {
 	UserName string `json:"userName" flag:"user-name" env:"USER_NAME" description:"user name"`
 	UserAge  int    `json:"userAge" flag:"user-age" env:"USER_AGE" description:"user age"`
 	City     string `json:"city" flag:"city" env:"USER_CITY" default:"beijing" description:"city"`
-	Phone    string `json:"phone" flag:"phone" description:"phone number"`
+	License  string `json:"license" flag:"license" description:"license"`
+}
+
+func newConfig() *config {
+	return &config{UserName: "Anonymous"}
 }
 
 const (
-	moduleName = "golibConfig"
+	moduleName = "example"
 )
 
 var (
@@ -40,23 +44,11 @@ func main() {
 }
 
 func newServerCmd() *cobra.Command {
-	// register hookOps as a module
-	proc.RegisterHooks(hookOps)
-
-	// register config{} to configer.Factory
-	{
-		c := &config{}
-		if u, err := user.Current(); err == nil {
-			c.UserName = u.Username
-		}
-		proc.RegisterFlags(moduleName, "golib examples", c)
-	}
-
 	return proc.NewRootCmd(
 		proc.WithoutLoop(),
 		proc.WithConfigOptions(
-			configer.WithDefaultYaml("golibConfig", "city: wuhan"),
-			configer.WithOverrideYaml("golibConfig", "phone: \"010-12345\""),
+			// override
+			configer.WithOverrideYaml("example", "license: \"Apache-2.0 license\""),
 		),
 	)
 }
@@ -64,13 +56,21 @@ func newServerCmd() *cobra.Command {
 func start(ctx context.Context) error {
 	c := configer.ConfigerMustFrom(ctx)
 
-	cf := &config{}
+	cf := newConfig()
 	if err := c.Read(moduleName, cf); err != nil {
 		return err
 	}
 
 	b, _ := yaml.Marshal(cf)
-	fmt.Printf("%s", string(b))
+	fmt.Printf("%s\n%s\n%s\n", strings.Repeat("=", 37), string(b), strings.Repeat("=", 37))
 
 	return nil
+}
+
+func init() {
+	// register hookOps as a module
+	proc.RegisterHooks(hookOps)
+
+	// register config{} to configer.Factory
+	proc.AddConfig(moduleName, newConfig(), proc.WithConfigGroup("example"))
 }

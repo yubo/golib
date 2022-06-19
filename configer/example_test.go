@@ -7,9 +7,10 @@ import (
 )
 
 type User struct {
-	Name string `flag:"name"`
+	Name string `flag:"name" default:"tom" description:"user name"`
 }
 
+// go test -run ExampleParse
 func ExampleParse() {
 	c, err := configer.NewConfiger().Parse()
 	fmt.Printf("%s", c)

@@ -216,17 +216,7 @@ func (p *Process) Start(fs *pflag.FlagSet) error {
 		return err
 	}
 
-	if p.noloop {
-		return p.stop()
-	}
-
-	if p.report {
-		if err := p.reporterStart(); err != nil {
-			return err
-		}
-	}
-
-	return p.loop()
+	return p.mainLoop()
 }
 
 func (p *Process) Parse(fs *pflag.FlagSet, opts ...configer.ConfigerOption) (configer.ParsedConfiger, error) {
@@ -270,9 +260,12 @@ func (p *Process) Init(cmd *cobra.Command, opts ...ProcessOption) error {
 	if err := p.RegisterHooks(p.hooks); err != nil {
 		return err
 	}
+
+	// check custom configer
 	if c, ok := configer.ConfigerFrom(p.ctx); ok {
 		p.parsedConfiger = c
 	}
+
 	if _, ok := AttrFrom(p.ctx); !ok {
 		p.ctx = WithAttr(p.ctx, make(map[interface{}]interface{}))
 	}
@@ -317,7 +310,17 @@ func (p *Process) start() error {
 	return nil
 }
 
-func (p *Process) loop() error {
+func (p *Process) mainLoop() error {
+	if p.noloop {
+		return p.stop()
+	}
+
+	if p.report {
+		if err := p.reporterStart(); err != nil {
+			return err
+		}
+	}
+
 	signal.Notify(p.sigsCh, append(shutdownSignals, reloadSignals...)...)
 
 	if _, err := daemon.SdNotify(true, "READY=1\n"); err != nil {
@@ -446,7 +449,7 @@ func (p *Process) AddGlobalFlags() {
 	// add klog, logs, help flags
 	globalflag.AddGlobalFlags(gfs)
 
-	// add process flags
+	// add process flags to gfs
 	p.AddFlags(gfs)
 
 	p.configer.AddFlags(gfs)
