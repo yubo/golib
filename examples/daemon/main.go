@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 
-	"github.com/spf13/cobra"
 	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/proc"
 	"k8s.io/klog/v2"
@@ -35,34 +34,19 @@ func main() {
 }
 
 func start(ctx context.Context) error {
-	klog.Infof("entering start()")
-
-	c := configer.ConfigerMustFrom(ctx)
 	cf := &config{}
-
-	if err := c.Read(modulePath, cf); err != nil {
+	if err := configer.ConfigerMustFrom(ctx).Read(modulePath, cf); err != nil {
 		return err
 	}
 
 	klog.Infof("hello %s", cf.UserName)
-
 	klog.Infof("Press ctrl-c to leave the process")
-	return nil
-}
 
-func newHelloCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:          "hello",
-		Short:        "hello",
-		SilenceUsage: true,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			klog.Infof("hello")
-			return nil
-		},
-	}
+	return nil
 }
 
 func init() {
 	proc.RegisterHooks(hookOps)
-	proc.RegisterFlags(modulePath, moduleName, &config{})
+	// register sample config schema
+	proc.AddConfig(modulePath, &config{}, proc.WithConfigGroup(moduleName))
 }

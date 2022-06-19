@@ -14,11 +14,9 @@ import (
 
 const (
 	moduleName = "golib-multi-cmds"
-	modulePath = "hello"
 )
 
 func main() {
-
 	cmd := newRootCmd()
 	cmd.AddCommand(
 		newHelloCmd(),
@@ -38,7 +36,7 @@ func newRootCmd() *cobra.Command {
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	return &cobra.Command{Use: moduleName}
+	return &cobra.Command{}
 }
 
 func newStartCmd() *cobra.Command {
@@ -49,13 +47,12 @@ func newStartCmd() *cobra.Command {
 		Short: "start demo",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			klog.Infof("hello %s", cf.UserName)
-			return proc.Start(cmd.Flags())
+			return nil
 		},
 	}
 
-	proc.RegisterFlags("hello", "server", cf)
+	configer.FlagSet(cmd.Flags(), cf)
 
-	proc.Init(cmd)
 	return cmd
 }
 

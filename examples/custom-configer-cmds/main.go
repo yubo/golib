@@ -25,14 +25,13 @@ func main() {
 }
 
 type config struct {
-	UserName string `json:"userName" flag:"user-name" default:"tom" description:"user name"`
-	Cmd      string `json:"cmd"`
+	User string `json:"user" flag:"user" default:"tom" description:"user name"`
+	Cmd  string `json:"cmd" default:"main" description:"cmd"`
 }
 
 func newRootCmd() *cobra.Command {
 	rand.Seed(time.Now().UnixNano())
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	ctx := context.TODO()
 
 	cmd := &cobra.Command{
 		Use: moduleName,
@@ -55,11 +54,10 @@ func newRootCmd() *cobra.Command {
 		newStartCmd(),
 	)
 
-	proc.Init(cmd, proc.WithContext(ctx))
-
 	return cmd
 }
 
+// start with mainloop
 func newStartCmd() *cobra.Command {
 	cf := &config{}
 
@@ -67,7 +65,11 @@ func newStartCmd() *cobra.Command {
 		Use:   "start",
 		Short: "start demo",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			klog.Infof("[start] hi %s", cf.UserName)
+			if err := proc.ReadConfig(modulePath, cf); err != nil {
+				return err
+			}
+
+			klog.Infof("%s hi %s", cf.Cmd, cf.User)
 
 			klog.Infof("Press ctrl-c to leave the daemon process")
 
@@ -75,18 +77,23 @@ func newStartCmd() *cobra.Command {
 		},
 	}
 
-	proc.RegisterFlags("hello", "server", cf)
+	proc.Init(cmd, proc.WithContext(context.TODO()))
 
 	return cmd
 }
 
+// customize cmd
 func newHelloCmd() *cobra.Command {
+	type config struct {
+		Object string `json:"object" flag:"obj" default:"world" description:"hello,world"`
+	}
 	cf := &config{}
+
 	cmd := &cobra.Command{
 		Use:   "hello",
 		Short: "hello demo",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			klog.Infof("[hello] hi %s", cf.UserName)
+			klog.Infof("hi %s", cf.Object)
 			return nil
 		},
 	}
@@ -97,6 +104,6 @@ func newHelloCmd() *cobra.Command {
 }
 
 func init() {
-	// register global sample config schema
-	proc.RegisterFlags(modulePath, moduleName, &config{})
+	// register sample config schema
+	proc.AddConfig(modulePath, &config{}, proc.WithConfigGroup("start"))
 }

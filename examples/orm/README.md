@@ -4,7 +4,7 @@
 - Auto Migrations
 
 ```shell
-$ go run ./golib-orm.go
+$ go run ./main.go
 I0110 17:23:44.965517   53915 base.go:96] SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=`user`
 I0110 17:23:44.965711   53915 base.go:34] CREATE TABLE `user` (`name` text,`age` integer,`created_at` datetime,`updated_at` datetime,PRIMARY KEY (`name`))
 I0110 17:23:44.965927   53915 base.go:123] INSERT INTO `user` (`name`, `age`, `created_at`, `updated_at`) VALUES (`tom`, `0`, `2022-01-10 17:23:44.965903 +0800 CST m=+0.002683397`, `2022-01-10 17:23:44.965903 +0800 CST m=+0.002683397`)

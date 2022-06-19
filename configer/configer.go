@@ -36,18 +36,26 @@ import (
 )
 
 type Configer interface {
+	// Var: set config fields to yaml configfile reader and pflags.FlagSet from sample
 	Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error
 
 	Parse(opts ...ConfigerOption) (ParsedConfiger, error)
+	// AddFlags: add configer flags to *pflag.FlagSet, like -f, --set, --set-string, --set-file
 	AddFlags(fs *pflag.FlagSet)
+	// ValueFiles: return files list, which set by --set-file
 	ValueFiles() []string
+	// Envs: return envs list from fields, used with flags
 	Envs() []string
+	// Envs: return flags list
 	Flags() []string
 }
 
 type ParsedConfiger interface {
+	// ValueFiles: return files list, which set by --set-file
 	ValueFiles() []string
+	// Envs: return envs list from fields, used with flags
 	Envs() []string
+	// Envs: return flags list
 	Flags() []string
 
 	//FlagSet() *pflag.FlagSet
@@ -70,34 +78,42 @@ type ParsedConfiger interface {
 
 var (
 	DefaultConfiger = NewConfiger()
-	flagConfiger    = NewConfiger()
 )
 
 func NewConfiger() Configer {
 	return newConfiger()
 }
+
 func Parse(opts ...ConfigerOption) (ParsedConfiger, error) {
 	return DefaultConfiger.Parse(opts...)
 }
+
+// AddFlags: add configer flags to *pflag.FlagSet, like -f, --set, --set-string, --set-file
 func AddFlags(fs *pflag.FlagSet) {
 	DefaultConfiger.AddFlags(fs)
 }
+
+// ValueFiles: return files list, which set by --set-file
 func ValueFiles() []string {
 	return DefaultConfiger.ValueFiles()
 }
+
+// Envs: return envs list from fields, used with flags
 func Envs() []string {
 	return DefaultConfiger.Envs()
 }
+
+// Envs: return flags list
 func Flags() []string {
 	return DefaultConfiger.Flags()
 }
 
-// just for cmdcli
+// FalgSet: set config fields to pflags.FlagSet from sample
 func FlagSet(fs *pflag.FlagSet, sample interface{}, opts ...ConfigFieldsOption) error {
-	return flagConfiger.Var(fs, "", sample, opts...)
+	return NewConfiger().Var(fs, "", sample, opts...)
 }
 
-// Var set config fields to yaml configfile reader and pflags.FlagSet from sample
+// Var: set config fields to yaml configfile reader and pflags.FlagSet from sample
 func Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
 	return DefaultConfiger.Var(fs, path, sample, opts...)
 }
@@ -256,6 +272,7 @@ func (p *configer) mergeFlagValues(into map[string]interface{}) map[string]inter
 	return into
 }
 
+// Envs: return envs list from fields, used with flags
 func (p *configer) Envs() (names []string) {
 	if !p.enableEnv {
 		return
@@ -268,6 +285,7 @@ func (p *configer) Envs() (names []string) {
 	return
 }
 
+// Envs: return flags list
 func (p *configer) Flags() (names []string) {
 	for _, f := range p.fields {
 		if f.flag != "" {
@@ -463,6 +481,7 @@ func (p *configer) getEnv(key string) (string, bool) {
 	return val, ok && (p.allowEmptyEnv || val != "")
 }
 
+// AddFlags: add configer flags to *pflag.FlagSet, like -f, --set, --set-string, --set-file
 func (p *configer) AddFlags(f *pflag.FlagSet) {
 	f.StringSliceVarP(&p.valueFiles, "values", "f", p.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
 	f.StringArrayVar(&p.values, "set", p.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
@@ -470,11 +489,12 @@ func (p *configer) AddFlags(f *pflag.FlagSet) {
 	f.StringArrayVar(&p.fileValues, "set-file", p.fileValues, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
 }
 
+// ValueFiles: return files list, which set by --set-file
 func (p *configer) ValueFiles() []string {
 	return append(p.valueFiles, p.filesOverride...)
 }
 
-// var: add flags and env from sample's tags
+// Var: set config fields to yaml configfile reader and pflags.FlagSet from sample
 // defualt priority sample > tagsGetter > tags
 func (p *configer) Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
 	if p == nil {
