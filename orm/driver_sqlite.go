@@ -60,7 +60,7 @@ func (p *sqlite) driverDataTypeOf(f *StructField) string {
 	case Bool:
 		return "numeric"
 	case Int, Uint:
-		if f.AutoIncrement && !f.PrimaryKey {
+		if f.AutoIncrement && f.PrimaryKey {
 			// https://www.sqlite.org/autoinc.html
 			return "integer PRIMARY KEY AUTOINCREMENT"
 		} else {
@@ -138,6 +138,7 @@ func (p *sqlite) AutoMigrate(sample interface{}, opts ...Option) error {
 				return err
 			}
 		}
+
 	}
 
 	return nil
@@ -166,7 +167,7 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 	{
 		primaryKeys := []string{}
 		for _, f := range fields.Fields {
-			if f.PrimaryKey {
+			if f.PrimaryKey && !f.AutoIncrement {
 				primaryKeys = append(primaryKeys, "`"+f.Name+"`")
 			}
 		}
@@ -197,9 +198,12 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 
 	SQL += ")"
 
-	_, err = p.Exec(SQL)
+	if _, err = p.Exec(SQL); err != nil {
+		return err
+	}
 
-	if err == nil && autoIncrementNum > 1 {
+	// UPDATE SQLITE_SEQUENCE SET seq = 1000 WHERE name = ''
+	if autoIncrementNum > 1 {
 		id := autoIncrementNum - 1
 
 		if _, err = p.Exec("INSERT INTO `"+o.Table()+"` (`"+autoIncrementField+"`) VALUES (?)", id); err != nil {
@@ -211,7 +215,7 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 		}
 	}
 
-	return err
+	return nil
 
 }
 

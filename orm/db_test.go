@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/clock"
 
@@ -37,7 +36,7 @@ func init() {
 	}
 
 	testDriver = env("TEST_DB_DRIVER", "sqlite3")
-	testDsn = env("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory")
+	testDsn = env("TEST_DB_DSN", "file:test.db?cache=shared&mode=memory&parseTime=true")
 	if db, err := Open(testDriver, testDsn); err == nil {
 		if err = db.SqlDB().Ping(); err == nil {
 			testAvailable = true
@@ -56,7 +55,7 @@ func runTests(t *testing.T, tests ...func(db DB)) {
 
 func _runTests(t *testing.T, driver, dsn string, tests ...func(db DB)) {
 	db, err := Open(driver, dsn)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	defer db.Close()
 
 	db.Exec("DROP TABLE IF EXISTS test")
@@ -77,24 +76,24 @@ func TestAutoMigrate(t *testing.T) {
 
 			// mysql: CREATE TABLE `test` (`id` bigint AUTO_INCREMENT,`name` varchar(255) UNIQUE,PRIMARY KEY (`id`),INDEX (`name`) ) auto_increment=1000
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		}
 
 		{
 			type test struct {
-				Id          *int `sql:",auto_increment=1000"`
+				Id          *int `sql:",index,auto_increment=1000"`
 				Name        string
 				DisplayName string
 			}
 
 			// mysql: ALTER TABLE `test` ADD `display_name` varchar(255)
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		}
 
 		{
 			type test struct {
-				Id          *int `sql:",auto_increment=1000"`
+				Id          *int `sql:",index,auto_increment=1000"`
 				Name        string
 				DisplayName string
 				CreatedAt   int64 `sql:",auto_createtime"`
@@ -104,7 +103,7 @@ func TestAutoMigrate(t *testing.T) {
 			// mysql: ALTER TABLE `test` ADD `created_at` bigint
 			// mysql: ALTER TABLE `test` ADD `updated_at` bigint
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		}
 
 	})
@@ -115,29 +114,29 @@ func TestInsert(t *testing.T) {
 		func(db DB) {
 			db.Exec("CREATE TABLE test (value int)")
 			_, err := db.Exec("INSERT INTO test VALUES (?)", 1)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			var v int
 			err = db.Query("SELECT value FROM test").Row(&v)
-			require.NoError(t, err)
-			require.Equal(t, 1, v)
+			assert.NoError(t, err)
+			assert.Equal(t, 1, v)
 		},
 		func(db DB) {
 			type test struct {
-				Id    *int `sql:",auto_increment=1000"`
+				Id    *int `sql:",primary_key,auto_increment=1000"`
 				Value int
 			}
 
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			n, err := db.InsertLastId(&test{Value: 1})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, 1000, int(n))
 
 			var got test
 			err = db.Get(&got, WithSelector("value=1"))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, test{util.Int(1000), 1}, got)
 		})
 }
@@ -150,7 +149,7 @@ func TestQueryRows(t *testing.T) {
 
 			var v []int
 			db.Query("SELECT value FROM test").Rows(&v)
-			require.Equal(t, 3, len(v))
+			assert.Equal(t, 3, len(v))
 		},
 		func(db DB) {
 			db.Exec("CREATE TABLE test (value int)")
@@ -158,7 +157,7 @@ func TestQueryRows(t *testing.T) {
 
 			var v []*int
 			db.Query("SELECT value FROM test").Rows(&v)
-			require.Equal(t, 3, len(v))
+			assert.Equal(t, 3, len(v))
 		},
 		func(db DB) {
 			db.Exec("CREATE TABLE test (value int)")
@@ -166,7 +165,7 @@ func TestQueryRows(t *testing.T) {
 
 			var v []*int
 			iter, err := db.Query("SELECT value FROM test").Iterator()
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			defer iter.Close()
 
 			for iter.Next() {
@@ -175,7 +174,7 @@ func TestQueryRows(t *testing.T) {
 				v = append(v, i)
 			}
 
-			require.Equal(t, 3, len(v))
+			assert.Equal(t, 3, len(v))
 		},
 	)
 }
@@ -187,15 +186,15 @@ func TestDelRows(t *testing.T) {
 			db.Exec("INSERT INTO test VALUES (?)", 1)
 
 			n, err := db.ExecNum("DELETE FROM test WHERE value = ?", 1)
-			require.NoError(t, err)
-			require.Equal(t, 1, int(n))
+			assert.NoError(t, err)
+			assert.Equal(t, 1, int(n))
 
 			n, err = db.ExecNum("DELETE FROM test WHERE value = ?", 1)
-			require.NoError(t, err)
-			require.Equal(t, 0, int(n))
+			assert.NoError(t, err)
+			assert.Equal(t, 0, int(n))
 
 			err = db.ExecNumErr("DELETE FROM test WHERE value = ?", 1)
-			require.Error(t, err)
+			assert.Error(t, err)
 		},
 	)
 }
@@ -206,16 +205,16 @@ func TestExecNum(t *testing.T) {
 			db.Exec("CREATE TABLE test (value int)")
 
 			n, err := db.ExecNum("INSERT INTO test VALUES (?)", 1)
-			require.NoError(t, err)
-			require.Equal(t, 1, int(n))
+			assert.NoError(t, err)
+			assert.Equal(t, 1, int(n))
 
 			_, err = db.ExecNum("UPDATE test SET value=? WHERE value=?", 2, 1)
-			require.NoError(t, err)
-			require.Equal(t, 1, int(n))
+			assert.NoError(t, err)
+			assert.Equal(t, 1, int(n))
 
 			_, err = db.ExecNum("DELETE FROM test  WHERE value=?", 2)
-			require.NoError(t, err)
-			require.Equal(t, 1, int(n))
+			assert.NoError(t, err)
+			assert.Equal(t, 1, int(n))
 		},
 	)
 }
@@ -231,37 +230,37 @@ func TestQueryRowStruct(t *testing.T) {
 			}
 
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			err = db.Insert(&test{X: 1, Y: 2})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			{
 				v := test{}
 				err := db.Query("SELECT * FROM test").Row(&v)
-				require.NoError(t, err)
-				require.Equal(t, test{1, 2, 0, 0}, v)
+				assert.NoError(t, err)
+				assert.Equal(t, test{1, 2, 0, 0}, v)
 			}
 
 			{
 				v := test{0, 0, 3, 0}
 				err := db.Query("SELECT * FROM test").Row(&v)
-				require.NoError(t, err)
-				require.Equal(t, test{1, 2, 0, 0}, v)
+				assert.NoError(t, err)
+				assert.Equal(t, test{1, 2, 0, 0}, v)
 			}
 
 			{
 				var v *test
 				err := db.Query("SELECT * FROM test").Row(&v)
-				require.NoError(t, err)
-				require.Equal(t, test{1, 2, 0, 0}, *v)
+				assert.NoError(t, err)
+				assert.Equal(t, test{1, 2, 0, 0}, *v)
 			}
 
 			{
 				var v *int
 				err := db.Query("SELECT point_y FROM test").Row(&v)
-				require.NoError(t, err)
-				require.Equal(t, 2, *v)
+				assert.NoError(t, err)
+				assert.Equal(t, 2, *v)
 			}
 		},
 		func(db DB) {
@@ -273,30 +272,30 @@ func TestQueryRowStruct(t *testing.T) {
 			}
 
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			err = db.Insert(&test{util.Int64(1), util.Int64(2), nil, nil})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			{
 				var v test
 				err := db.Query("SELECT * FROM test").Row(&v)
-				require.NoError(t, err)
-				require.Equal(t, test{util.Int64(1), util.Int64(2), nil, nil}, v)
+				assert.NoError(t, err)
+				assert.Equal(t, test{util.Int64(1), util.Int64(2), nil, nil}, v)
 			}
 
 			{
 				var v *test
 				err := db.Query("SELECT * FROM test").Row(&v)
-				require.NoError(t, err)
-				require.Equal(t, test{util.Int64(1), util.Int64(2), nil, nil}, *v)
+				assert.NoError(t, err)
+				assert.Equal(t, test{util.Int64(1), util.Int64(2), nil, nil}, *v)
 			}
 
 			{
 				var v *test
 				err := db.Query("SELECT * FROM test where 1 = 2").Row(&v)
-				require.Error(t, err)
-				require.Nil(t, v)
+				assert.Error(t, err)
+				assert.Nil(t, v)
 			}
 		},
 		func(db DB) {
@@ -317,7 +316,7 @@ func TestQueryRowStruct(t *testing.T) {
 
 			// CREATE TABLE `test` (`a` blob,`b` blob,`c` blob,`d` blob,`e` blob,`f` ,`g` text,`n` integer)
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			v := util.String("string")
 			cases := []test{{
@@ -342,11 +341,11 @@ func TestQueryRowStruct(t *testing.T) {
 
 			for _, c := range cases {
 				err := db.Insert(c, WithTable("test"))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 
 				got := test{}
 				db.Query("SELECT * FROM test WHERE n = ?", c.N).Row(&got)
-				require.Equal(t, c, got)
+				assert.Equal(t, c, got)
 			}
 		},
 		func(db DB) {
@@ -358,15 +357,15 @@ func TestQueryRowStruct(t *testing.T) {
 
 			// CREATE TABLE `test` (`x` integer,`point_y` integer)
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			_, err = db.Exec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			var v []test
 			err = db.Query("SELECT * FROM test").Rows(&v)
-			require.NoError(t, err)
-			require.Equal(t, 3, len(v))
+			assert.NoError(t, err)
+			assert.Equal(t, 3, len(v))
 		},
 		func(db DB) {
 			type test struct {
@@ -377,15 +376,15 @@ func TestQueryRowStruct(t *testing.T) {
 
 			// CREATE TABLE `test` (`x` integer,`point_y` integer)
 			err := db.AutoMigrate(&test{})
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			_, err = db.Exec("INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			var v []*test
 			err = db.Query("SELECT * FROM test").Rows(&v)
-			require.NoError(t, err)
-			require.Equal(t, 3, len(v))
+			assert.NoError(t, err)
+			assert.Equal(t, 3, len(v))
 		},
 	)
 }
@@ -393,7 +392,7 @@ func TestQueryRowStruct(t *testing.T) {
 func TestPing(t *testing.T) {
 	runTests(t, func(db DB) {
 		err := db.SqlDB().Ping()
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	})
 }
 
@@ -404,7 +403,7 @@ func TestSqlArg(t *testing.T) {
 
 		var v int
 		db.Query("SELECT value FROM test WHERE value=?;", 1).Row(&v)
-		require.Equal(t, 1, v)
+		assert.Equal(t, 1, v)
 	})
 
 	runTests(t, func(db DB) {
@@ -414,7 +413,7 @@ func TestSqlArg(t *testing.T) {
 
 		var v int
 		db.Query("SELECT value FROM test WHERE value=?;", &a).Row(&v)
-		require.Equal(t, 1, v)
+		assert.Equal(t, 1, v)
 	})
 
 	runTests(t, func(db DB) {
@@ -431,7 +430,7 @@ func TestSqlArg(t *testing.T) {
 
 		v := foo{}
 		db.Query("SELECT * FROM test;").Row(&v)
-		require.Equal(t, v, foo{&x, nil, nil, nil})
+		assert.Equal(t, v, foo{&x, nil, nil, nil})
 	})
 
 }
@@ -442,31 +441,31 @@ func TestTx(t *testing.T) {
 			db.Exec("CREATE TABLE test (value int)")
 
 			tx, err := db.Begin()
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			a := 1
 			_, err = tx.Exec("INSERT INTO test VALUES (?);", &a)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			err = tx.Commit()
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			var v int
 			db.Query("SELECT value FROM test WHERE value=?;", &a).Row(&v)
-			require.Equal(t, 1, v)
+			assert.Equal(t, 1, v)
 		},
 		func(db DB) {
 			db.Exec("CREATE TABLE test (value int)")
 
 			tx, err := db.Begin()
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			a := 1
 			_, err = tx.Exec("INSERT INTO test VALUES (?);", &a)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			err = tx.Rollback()
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			var v int
 			db.Query("SELECT value FROM test WHERE value=?;", &a).Row(&v)
@@ -482,8 +481,8 @@ func TestList(t *testing.T) {
 
 		var v []int
 		err := db.Query("SELECT value FROM test WHERE value in (1, 2, 3)").Rows(&v)
-		require.NoError(t, err)
-		require.Equal(t, 3, len(v))
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(v))
 	})
 
 	runTests(t, func(db DB) {
@@ -492,8 +491,8 @@ func TestList(t *testing.T) {
 
 		var v []int
 		err := db.Query("SELECT value FROM test WHERE value IN ('1', '2', '3')").Rows(&v)
-		require.NoError(t, err)
-		require.Equal(t, 3, len(v))
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(v))
 	})
 }
 
@@ -517,12 +516,12 @@ func TestStructCRUD(t *testing.T) {
 
 		// mysql: CREATE TABLE `test` (`name` varchar(255),`age` bigint,`address` varchar(255),`nick_name` varchar(1024),`created_at` datetime NULL,`updated_at` datetime NULL)
 		err := db.AutoMigrate(&test{})
-		require.NoError(t, err)
+		assert.NoError(t, err)
 
 		// create
 		user := test{Name: "tom", Age: 14}
 		err = db.Insert(&user)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 
 		user.CreatedAt = createdAt
 		user.UpdatedAt = createdAt
@@ -530,26 +529,26 @@ func TestStructCRUD(t *testing.T) {
 		// read
 		var got test
 		err = db.Get(&got, WithSelector("name=tom"))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		assert.Equalf(t, user, got, "user get")
 
 		// update
 		c.SetTime(updatedAt)
 		user = test{Name: "tom", Age: 14, Address: "beijing", NickName: util.String("t")}
 		err = db.Update(&user)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		user.CreatedAt = createdAt
 		user.UpdatedAt = updatedAt
 
 		got = test{}
 		err = db.Get(&got, WithSelector("name=tom"))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		assert.Equalf(t, util.JsonStr(user), util.JsonStr(got), "user get")
 
 		// delete
 		user = test{Name: "tom"}
 		err = db.Delete(&user, WithSelector("name=tom"))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 	})
 }
 
@@ -579,14 +578,14 @@ func TestStruct(t *testing.T) {
 		v := test{Name: "test", User: User{1, "user-name"}, Group: Group{2, "group-name"}, Role: Role{3, "role-name"}}
 
 		err := db.AutoMigrate(&v)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 
 		err = db.Insert(&v)
-		require.NoError(t, err)
+		assert.NoError(t, err)
 
 		var got test
 		err = db.Get(&got, WithSelector("name=test"))
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, v, got, "test struct")
 	})
 }
@@ -611,14 +610,14 @@ func TestTime(t *testing.T) {
 
 			v := test{Name: "test"}
 			err := db.AutoMigrate(&v)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			err = db.Insert(&v)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			v = test{}
 			err = db.Get(&v, WithSelector("name=test"))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, createdAt.Unix(), v.TimeSec, "time sec")
 			assert.Equal(t, createdAt.UnixMilli(), v.TimeMilli, "time milli")
 			assert.Equal(t, createdAt.UnixNano(), v.TimeNano, "time nano")
@@ -627,11 +626,11 @@ func TestTime(t *testing.T) {
 
 			c.SetTime(updatedAt)
 			err = db.Update(&v)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			v = test{}
 			err = db.Get(&v, WithSelector("name=test"))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, updatedAt.Unix(), v.TimeSec, "time sec")
 			assert.Equal(t, updatedAt.UnixMilli(), v.TimeMilli, "time milli")
 			assert.Equal(t, updatedAt.UnixNano(), v.TimeNano, "time nano")
@@ -646,22 +645,22 @@ func TestTime(t *testing.T) {
 			t1 := time.Unix(1000, 0).UTC()
 			v := test{Time: t1}
 			err := db.AutoMigrate(&v)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			err = db.Insert(&v)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 
 			v = test{}
 			err = db.Query("select * from test where time = ?", t1).Row(&v)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, t1, v.Time)
 
 			err = db.Query("select * from test where time > ?", t1.Add(-time.Second)).Row(&v)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, t1, v.Time)
 
 			err = db.Query("select * from test where time < ?", t1.Add(time.Second)).Row(&v)
-			require.NoError(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, t1, v.Time)
 		},
 	)

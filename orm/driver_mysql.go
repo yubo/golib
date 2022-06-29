@@ -9,7 +9,12 @@ import (
 	"github.com/yubo/golib/util"
 )
 
-var _ Driver = &mysql{}
+var (
+	_                        Driver = &mysql{}
+	DefaultMysqlTableOptions        = []Option{
+		WithTableOptions("ENGINE=InnoDB DEFAULT CHARACTER SET=utf8 COLLATE=utf8_unicode_ci"),
+	}
+)
 
 func RegisterMysql() {
 	Register("mysql", func(db Execer, opts *DBOptions) Driver {
@@ -181,6 +186,9 @@ func (p mysql) FullDataTypeOf(field *StructField) string {
 
 // AutoMigrate
 func (p *mysql) AutoMigrate(sample interface{}, opts ...Option) error {
+	if len(opts) == 0 {
+		opts = DefaultMysqlTableOptions
+	}
 	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return err
@@ -295,13 +303,17 @@ func (p *mysql) CreateTable(o *Options) (err error) {
 		SQL += " " + v
 	}
 
-	if autoIncrementNum > 0 {
-		SQL += fmt.Sprintf(" auto_increment=%d", autoIncrementNum)
+	if _, err = p.Exec(SQL); err != nil {
+		return err
 	}
 
-	_, err = p.Exec(SQL)
+	if autoIncrementNum > 0 {
+		if _, err = p.Exec(fmt.Sprintf("ALTER TABLE `%s` AUTO_INCREMENT = %d", o.Table(), autoIncrementNum)); err != nil {
+			return err
+		}
+	}
 
-	return err
+	return nil
 }
 
 func (p *mysql) DropTable(o *Options) error {

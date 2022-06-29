@@ -319,6 +319,11 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 		t = t.Elem()
 	}
 
+	// used for **string
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+
 	var err error
 	switch t.Kind() {
 	case reflect.Bool:

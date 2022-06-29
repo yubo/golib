@@ -1,6 +1,7 @@
 #!/bin/bash
+#set -x
 TEST_DB_DRIVER=mysql TEST_DB_DSN='root:1234@tcp(localhost:3306)/test?parseTime=true&timeout=30s' go test -v $*
-TEST_DB_DRIVER='sqlite3' TEST_DB_DSN='file:test.db?cache=shared&mode=memory' go test -v $*
+TEST_DB_DRIVER='sqlite3' TEST_DB_DSN='file:test.db?cache=shared&mode=memory&parseTime=true' go test -v $*
 
 #TEST_DB_DRIVER='sqlite3' TEST_DB_DSN='file:/tmp/test1.db' go test -v
 #TEST_DB_DRIVER='sqlite3' TEST_DB_DSN='file:test.db?cache=shared&mode=memory' go test -v -test.run TestQueryRowsStructPtr -args -v 10 -logtostderr true
