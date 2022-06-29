@@ -212,6 +212,9 @@ func TestSnakeCasedName(t *testing.T) {
 		{"FooBAR", "foo_bar"},
 		{"fooBAR", "foo_bar"},
 		{"fooBar", "foo_bar"},
+		{"APIServer", "api_server"},
+		{"UserID", "user_id"},
+		{"ID", "id"},
 	}
 
 	for _, c := range cases {

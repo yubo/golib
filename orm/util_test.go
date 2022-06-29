@@ -201,5 +201,4 @@ func TestGenDeleteSql(t *testing.T) {
 		assert.Equal(t, c.isErr, err != nil, "case-%d", i)
 
 	}
-
 }

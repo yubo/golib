@@ -70,7 +70,7 @@ func TestAutoMigrate(t *testing.T) {
 	runTests(t, func(db DB) {
 		{
 			type test struct {
-				Id   *int   `sql:",primary_key,auto_increment=1000"`
+				ID   *int   `sql:",primary_key,auto_increment=1000"`
 				Name string `sql:",index,unique"`
 			}
 
@@ -81,7 +81,7 @@ func TestAutoMigrate(t *testing.T) {
 
 		{
 			type test struct {
-				Id          *int `sql:",index,auto_increment=1000"`
+				ID          *int `sql:",index,auto_increment=1000"`
 				Name        string
 				DisplayName string
 			}
@@ -93,7 +93,7 @@ func TestAutoMigrate(t *testing.T) {
 
 		{
 			type test struct {
-				Id          *int `sql:",index,auto_increment=1000"`
+				ID          *int `sql:",index,auto_increment=1000"`
 				Name        string
 				DisplayName string
 				CreatedAt   int64 `sql:",auto_createtime"`
@@ -123,7 +123,7 @@ func TestInsert(t *testing.T) {
 		},
 		func(db DB) {
 			type test struct {
-				Id    *int `sql:",primary_key,auto_increment=1000"`
+				ID    *int `sql:",primary_key,auto_increment=1000"`
 				Value int
 			}
 

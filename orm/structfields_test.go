@@ -12,13 +12,13 @@ func TestGetfields(t *testing.T) {
 	driver := &mysql{DBOptions: NewDefaultDBOptions()}
 
 	type test struct {
-		Id int
+		ID int
 	}
 	field := GetFields(&test{}, driver)
 	assert.Equal(t, StructFields{
 		Fields: []*StructField{{
 			Set:            map[string]string{},
-			FieldName:      "Id",
+			FieldName:      "ID",
 			Name:           "id",
 			DataType:       "int",
 			DriverDataType: "bigint",
