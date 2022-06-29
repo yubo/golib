@@ -982,3 +982,25 @@ func TestConfigDefault(t *testing.T) {
 	})
 
 }
+
+func TestConfigString(t *testing.T) {
+	t.Run("str", func(t *testing.T) {
+		type Foo struct {
+			A int `json:"a" default:"1" description:"a comment"`
+		}
+
+		sample := Foo{A: 0}
+		want := "a: 0\n"
+
+		cff := NewConfiger()
+		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
+
+		err := cff.Var(fs, "", &sample)
+		assert.NoError(t, err)
+
+		cf, err := cff.Parse()
+		assert.NoError(t, err)
+
+		assert.Equalf(t, want, cf.String(), "")
+	})
+}

@@ -476,6 +476,14 @@ func (p *configer) String() string {
 	return string(buf)
 }
 
+func (p *configer) Document() string {
+	buf, err := yaml.Marshal(p.data)
+	if err != nil {
+		return err.Error()
+	}
+	return string(buf)
+}
+
 func (p *configer) getEnv(key string) (string, bool) {
 	val, ok := os.LookupEnv(key)
 	return val, ok && (p.allowEmptyEnv || val != "")
@@ -654,4 +662,12 @@ func (p *configer) getFlagValue(f *configField) interface{} {
 	}
 
 	return nil
+}
+
+func (p *configer) GetDefault(path string) (interface{}, bool) {
+	return "", false
+}
+
+func (p *configer) GetDescription(path string) (string, bool) {
+	return "", false
 }

@@ -192,17 +192,29 @@ func WithSample(sample interface{}) Option {
 	}
 }
 
+type Namer interface {
+	Name() string
+}
+
 func (p *Options) Table() string {
 	if p.table != "" {
 		return p.table
 	}
 
-	rt := reflect.TypeOf(p.sample)
-	if rt.Kind() == reflect.Ptr {
-		rt = rt.Elem()
+	var tableName string
+	if n, ok := p.sample.(Namer); ok {
+		tableName = n.Name()
+	} else {
+		rt := reflect.TypeOf(p.sample)
+		if rt.Kind() == reflect.Ptr {
+			rt = rt.Elem()
+		}
+
+		tableName = rt.Name()
 	}
 
-	p.table = util.SnakeCasedName(rt.Name())
+	p.table = util.SnakeCasedName(tableName)
+
 	return p.table
 }
 

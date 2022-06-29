@@ -33,6 +33,7 @@ func (p *Process) BindRegisteredFlags(fs *pflag.FlagSet) error {
 	return nil
 }
 
+// ConfigVar: set config fields to yaml configfile reader and pflags.FlagSet from sample
 func (p *Process) ConfigVar(fs *pflag.FlagSet, path string, sample interface{}, opts ...configer.ConfigFieldsOption) error {
 	return p.configer.Var(fs, path, sample, opts...)
 }
