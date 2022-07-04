@@ -1,7 +1,6 @@
 package util
 
 import (
-	"fmt"
 	"os/user"
 	"testing"
 )
@@ -11,6 +10,6 @@ func TestGetUGroups(t *testing.T) {
 	if gs, err := GetUGroups(u.Username); err != nil {
 		t.Fatalf("GetUGroups: %v", err)
 	} else {
-		fmt.Printf("username:%s groups:%v\n", u.Username, gs)
+		t.Logf("username:%s groups:%v\n", u.Username, gs)
 	}
 }

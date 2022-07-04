@@ -11,6 +11,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -99,4 +100,24 @@ func StructMd5(in interface{}) (string, error) {
 		return "", err
 	}
 	return Md5sum(buf.Bytes()), nil
+}
+
+func HashPath(filePath string, level int) string {
+	filePath = strings.Trim(filePath, "/")
+	m := md5.Sum([]byte(filePath))
+
+	if level < 0 {
+		level = 0
+	}
+	if level > md5.Size {
+		level = md5.Size
+	}
+
+	var buf bytes.Buffer
+	for i := 0; i < level; i++ {
+		fmt.Fprintf(&buf, "%02x/", m[i])
+	}
+	fmt.Fprintf(&buf, filePath)
+
+	return buf.String()
 }
