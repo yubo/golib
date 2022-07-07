@@ -161,6 +161,13 @@ func WithTotal(total *int64) Option {
 	}
 }
 
+// WithSelector: use selector generate sql
+// examples:
+//   "user_name != tom, id < 10" --> "`user_name` != ? and `id` < ?"
+//   "user_name in (tom, jerry)" --> "user_name in (?, ?)"
+//   "user_name notin (tom, jerry)" --> "user_name not in (?, ?)"
+// operator:
+//   =, ==, in, !=, notin, >, <
 func WithSelector(selector string) Option {
 	return func(o *Options) {
 		o.selector, o.err = queries.Parse(selector)
