@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yubo/golib/util"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -373,17 +374,14 @@ func (p *mysql) MigrateColumn(expect, actual *StructField, o *Options) error {
 
 	// check size
 	if actual.Size != nil && util.Int64Value(expect.Size) != util.Int64Value(actual.Size) {
-		fmt.Printf("%s.size %v != %v\n",
-			expect.Name,
-			util.Int64Value(expect.Size),
-			util.Int64Value(actual.Size),
-		)
+		klog.V(3).InfoS("migrate", "column", expect.Name, "expect", util.Int64Value(expect.Size), "actiual", util.Int64Value(actual.Size))
 		alterColumn = true
 	}
 
 	// check nullable
 	if expect.NotNull != nil && util.BoolValue(expect.NotNull) != util.BoolValue(actual.NotNull) {
-		fmt.Printf("%s.notnull %v != %v\n", expect.Name, expect.NotNull, actual.NotNull)
+		klog.V(3).InfoS("migrate.nullable", "column", expect.Name,
+			"expect", util.BoolValue(expect.NotNull), "actiual", util.BoolValue(actual.NotNull))
 		alterColumn = true
 	}
 
