@@ -189,9 +189,10 @@ fooo:
 	}
 }
 
-func TestReadEnv(t *testing.T) {
+// https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/
+func TestEnv(t *testing.T) {
 	dir := createTestDir([]templateFile{
-		{"conf.yml", `foo: "$FOO"`},
+		{"conf.yml", `foo: "$(FOO)"`},
 	})
 	// Clean up after the test; another quirk of running as an example.
 	defer os.RemoveAll(dir)

@@ -63,6 +63,8 @@ func TestFuncs(t *testing.T) {
 		`{{if env "FOO" | eq "bar"}}1{{end}}`:                        "1",
 		`{{repeat 3 "FOO" | join ","}}`:                              `FOO,FOO,FOO`,
 		`{{$s := list 1 2 3 }}{{ if last 2 $s}}1{{end}}`:             "1",
+		`{{env "FOO" | default "foo" }}`:                             "bar",
+		`{{env "FOOO" | default "foo" }}`:                            "foo",
 	}
 	for tpl, want := range cases {
 		if err := runt(tpl, want); err != nil {

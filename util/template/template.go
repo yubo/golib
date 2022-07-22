@@ -72,6 +72,7 @@ var (
 		"sizeOf":     sizeOf, // bytesize to byte
 		"last":       last,
 		"repeat":     repeat,
+		"default":    def,
 	}
 )
 
@@ -247,6 +248,24 @@ func repeat(n int, str string) []string {
 		res[i] = str
 	}
 	return res
+}
+
+func def(arg interface{}, value interface{}) interface{} {
+	v := reflect.ValueOf(value)
+	switch v.Kind() {
+	case reflect.String, reflect.Slice, reflect.Array, reflect.Map:
+		if v.Len() == 0 {
+			return arg
+		}
+	case reflect.Bool:
+		if !v.Bool() {
+			return arg
+		}
+	default:
+		return value
+	}
+
+	return value
 }
 
 func strslice(v interface{}) []string {
