@@ -63,6 +63,35 @@ fooo:
 	assert.NoError(t, err)
 }
 
+func TestConfigWithInclude(t *testing.T) {
+	dir := createTestDir([]templateFile{
+		{"conf.yml", `
+foo1: b_bar1
+foo2: v_bar2
+foo3: b_bar3
+fooo:
+  include ./config-with-include.yaml`},
+		{"config-with-include.yaml", `
+foo: bar
+foos: ["1", "2"]`}})
+	// Clean up after the test; another quirk of running as an example.
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	c, err := NewConfiger().Parse(WithValueFile("conf.yml"))
+	assert.NoError(t, err)
+
+	assert.Equal(t, `foo1: b_bar1
+foo2: v_bar2
+foo3: b_bar3
+fooo:
+  foo: bar
+  foos:
+  - "1"
+  - "2"
+`, c.String())
+}
+
 func TestConfigWithConfig(t *testing.T) {
 	type Foo struct {
 		A int `json:"a"`
@@ -158,6 +187,26 @@ fooo:
 	for _, c := range cases {
 		assert.Equalf(t, c.want, config.GetRaw(c.path), "configer.GetRaw(%s)", c.path)
 	}
+}
+
+func TestReadEnv(t *testing.T) {
+	dir := createTestDir([]templateFile{
+		{"conf.yml", `foo: "$FOO"`},
+	})
+	// Clean up after the test; another quirk of running as an example.
+	defer os.RemoveAll(dir)
+	os.Chdir(dir)
+
+	t.Setenv("FOO", "1")
+
+	config, _ := Parse(WithValueFile("conf.yml"))
+
+	var got string
+	if err := config.Read("foo", &got); err != nil {
+		t.Error(err)
+	}
+
+	assert.Equalf(t, "1", got, "configer read env[FOO]")
 }
 
 func TestRead(t *testing.T) {

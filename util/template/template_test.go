@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 	"text/template"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFuncs(t *testing.T) {
@@ -142,5 +144,27 @@ func TestReadFileWithInclude(t *testing.T) {
 	if expect != string(b) {
 		t.Errorf("readFileWithInclude Expected '%s', got '%s'",
 			expect, string(b))
+	}
+}
+
+func TestEnv(t *testing.T) {
+	cases := []struct {
+		txt  string
+		want string
+	}{
+		{"$(NAME)", "tom"},
+		{"$(NAME)y", "tomy"},
+		{"$$(NAME)", "$tom"},
+		{"$NAME", "$NAME"},
+		{"name: $(NAME)", "name: tom"},
+		{"name: $(NAME)\nage: $AGE", "name: tom\nage: $AGE"},
+		{"name: $(NAME)\nage: $(AGE)", "name: tom\nage: 16"},
+	}
+
+	t.Setenv("NAME", "tom")
+	t.Setenv("AGE", "16")
+
+	for _, c := range cases {
+		assert.Equal(t, c.want, expandEnv(c.txt))
 	}
 }

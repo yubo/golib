@@ -19,7 +19,6 @@ package configer
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"reflect"
@@ -241,7 +240,7 @@ func (p *configer) parse() (err error) {
 	// User specified a value via --set-file
 	for _, value := range p.fileValues {
 		reader := func(rs []rune) (interface{}, error) {
-			bytes, err := ioutil.ReadFile(string(rs))
+			bytes, err := template.ParseTemplateFile(nil, string(rs))
 			return string(bytes), err
 		}
 		if err := strvals.ParseIntoFile(value, base, reader); err != nil {
