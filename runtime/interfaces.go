@@ -47,7 +47,7 @@ type Validator interface {
 // Identifier represents an identifier.
 // Identitier of two different objects should be equal if and only if for every
 // input the output they produce is exactly the same.
-type Identifier string
+//type Identifier string
 
 // Encoder writes objects to a serialized form
 type Encoder interface {
@@ -67,7 +67,25 @@ type Encoder interface {
 	//     }
 	//     return e.doEncode(obj, w)
 	//   }
-	Identifier() Identifier
+	//Identifier() Identifier
+}
+
+// MemoryAllocator is responsible for allocating memory.
+// By encapsulating memory allocation into its own interface, we can reuse the memory
+// across many operations in places we know it can significantly improve the performance.
+type MemoryAllocator interface {
+	// Allocate reserves memory for n bytes.
+	// Note that implementations of this method are not required to zero the returned array.
+	// It is the caller's responsibility to clean the memory if needed.
+	Allocate(n uint64) []byte
+}
+
+// EncoderWithAllocator  serializes objects in a way that allows callers to manage any additional memory allocations.
+type EncoderWithAllocator interface {
+	Encoder
+	// EncodeWithAllocator writes an object to a stream as Encode does.
+	// In addition, it allows for providing a memory allocator for efficient memory usage during object serialization
+	EncodeWithAllocator(obj Object, w io.Writer, memAlloc MemoryAllocator) error
 }
 
 // Decoder attempts to load an object from data.
@@ -303,24 +321,24 @@ type Object interface{}
 
 // CacheableObject allows an object to cache its different serializations
 // to avoid performing the same serialization multiple times.
-type CacheableObject interface {
-	// CacheEncode writes an object to a stream. The <encode> function will
-	// be used in case of cache miss. The <encode> function takes ownership
-	// of the object.
-	// If CacheableObject is a wrapper, then deep-copy of the wrapped object
-	// should be passed to <encode> function.
-	// CacheEncode assumes that for two different calls with the same <id>,
-	// <encode> function will also be the same.
-	CacheEncode(id Identifier, encode func(Object, io.Writer) error, w io.Writer) error
-	// GetObject returns a deep-copy of an object to be encoded - the caller of
-	// GetObject() is the owner of returned object. The reason for making a copy
-	// is to avoid bugs, where caller modifies the object and forgets to copy it,
-	// thus modifying the object for everyone.
-	// The object returned by GetObject should be the same as the one that is supposed
-	// to be passed to <encode> function in CacheEncode method.
-	// If CacheableObject is a wrapper, the copy of wrapped object should be returned.
-	GetObject() Object
-}
+//type CacheableObject interface {
+//	// CacheEncode writes an object to a stream. The <encode> function will
+//	// be used in case of cache miss. The <encode> function takes ownership
+//	// of the object.
+//	// If CacheableObject is a wrapper, then deep-copy of the wrapped object
+//	// should be passed to <encode> function.
+//	// CacheEncode assumes that for two different calls with the same <id>,
+//	// <encode> function will also be the same.
+//	CacheEncode(id Identifier, encode func(Object, io.Writer) error, w io.Writer) error
+//	// GetObject returns a deep-copy of an object to be encoded - the caller of
+//	// GetObject() is the owner of returned object. The reason for making a copy
+//	// is to avoid bugs, where caller modifies the object and forgets to copy it,
+//	// thus modifying the object for everyone.
+//	// The object returned by GetObject should be the same as the one that is supposed
+//	// to be passed to <encode> function in CacheEncode method.
+//	// If CacheableObject is a wrapper, the copy of wrapped object should be returned.
+//	GetObject() Object
+//}
 
 // Unstructured objects store values as map[string]interface{}, with only values that can be serialized
 // to JSON allowed.

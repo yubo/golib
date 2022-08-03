@@ -279,9 +279,7 @@ type WithoutConversionCodecFactory struct {
 // when serialized.
 func (f WithoutConversionCodecFactory) EncoderForVersion(serializer runtime.Encoder) runtime.Encoder {
 	return runtime.WithVersionEncoder{
-		//Version: version,
 		Encoder: serializer,
-		//ObjectTyper: f.CodecFactory.scheme,
 	}
 }
 

@@ -32,7 +32,6 @@ import (
 	"github.com/yubo/golib/runtime/serializer/recognizer"
 	"github.com/yubo/golib/util/framer"
 	utilyaml "github.com/yubo/golib/util/yaml"
-	"k8s.io/klog/v2"
 )
 
 // NewSerializer creates a JSON serializer that handles encoding versioned objects into the proper JSON form. If typer
@@ -54,27 +53,7 @@ func NewYAMLSerializer() *Serializer {
 // form. If typer is not nil, the object has the group, version, and kind fields set. Options are copied into the Serializer
 // and are immutable.
 func NewSerializerWithOptions(options SerializerOptions) *Serializer {
-	return &Serializer{
-		//meta: meta,
-		//creater:    creater,
-		//typer:      typer,
-		options:    options,
-		identifier: identifier(options),
-	}
-}
-
-// identifier computes Identifier of Encoder based on the given options.
-func identifier(options SerializerOptions) runtime.Identifier {
-	result := map[string]string{
-		"name":   "json",
-		"yaml":   strconv.FormatBool(options.Yaml),
-		"pretty": strconv.FormatBool(options.Pretty),
-	}
-	identifier, err := json.Marshal(result)
-	if err != nil {
-		klog.Fatalf("Failed marshaling identifier for json Serializer: %v", err)
-	}
-	return runtime.Identifier(identifier)
+	return &Serializer{options: options}
 }
 
 // SerializerOptions holds the options which are used to configure a JSON/YAML serializer.
@@ -99,12 +78,7 @@ type SerializerOptions struct {
 
 // Serializer handles encoding versioned objects into the proper JSON form
 type Serializer struct {
-	//meta    MetaFactory
 	options SerializerOptions
-	//creater runtime.ObjectCreater
-	//typer   runtime.ObjectTyper
-
-	identifier runtime.Identifier
 }
 
 // Serializer implements Serializer
@@ -184,21 +158,6 @@ func StrictCaseSensitiveJSONIterator() jsoniter.API {
 var caseSensitiveJSONIterator = CaseSensitiveJSONIterator()
 var strictCaseSensitiveJSONIterator = StrictCaseSensitiveJSONIterator()
 
-// gvkWithDefaults returns group kind and version defaulting from provided default
-//func gvkWithDefaults(actual, defaultGVK schema.GroupVersionKind) schema.GroupVersionKind {
-//	if len(actual.Kind) == 0 {
-//		actual.Kind = defaultGVK.Kind
-//	}
-//	if len(actual.Version) == 0 && len(actual.Group) == 0 {
-//		actual.Group = defaultGVK.Group
-//		actual.Version = defaultGVK.Version
-//	}
-//	if len(actual.Version) == 0 && actual.Group == defaultGVK.Group {
-//		actual.Version = defaultGVK.Version
-//	}
-//	return actual
-//}
-
 // Decode attempts to convert the provided data into YAML or JSON, extract the stored schema kind, apply the provided default gvk, and then
 // load that data into an object matching the desired schema kind or the provided into.
 // If into is *runtime.Unknown, the raw data will be extracted and no decoding will be performed.
@@ -225,13 +184,6 @@ func (s *Serializer) Decode(originalData []byte, into runtime.Object) (runtime.O
 
 // Encode serializes the provided object to the given writer.
 func (s *Serializer) Encode(obj runtime.Object, w io.Writer) error {
-	if co, ok := obj.(runtime.CacheableObject); ok {
-		return co.CacheEncode(s.Identifier(), s.doEncode, w)
-	}
-	return s.doEncode(obj, w)
-}
-
-func (s *Serializer) doEncode(obj runtime.Object, w io.Writer) error {
 	if s.options.Yaml {
 		json, err := caseSensitiveJSONIterator.Marshal(obj)
 		if err != nil {
@@ -255,11 +207,7 @@ func (s *Serializer) doEncode(obj runtime.Object, w io.Writer) error {
 	}
 	encoder := json.NewEncoder(w)
 	return encoder.Encode(obj)
-}
 
-// Identifier implements runtime.Encoder interface.
-func (s *Serializer) Identifier() runtime.Identifier {
-	return s.identifier
 }
 
 // RecognizesData implements the RecognizingDecoder interface.

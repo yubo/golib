@@ -36,7 +36,6 @@ func (e NegotiateError) Error() string {
 
 type clientNegotiator struct {
 	serializer NegotiatedSerializer
-	//encode, decode GroupVersioner
 }
 
 func (n *clientNegotiator) Encoder(contentType string, params map[string]string) (Encoder, error) {
@@ -86,7 +85,6 @@ func (n *clientNegotiator) StreamDecoder(contentType string, params map[string]s
 func NewClientNegotiator(serializer NegotiatedSerializer) ClientNegotiator {
 	return &clientNegotiator{
 		serializer: serializer,
-		//encode:     gv,
 	}
 }
 

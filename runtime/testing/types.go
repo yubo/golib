@@ -16,8 +16,6 @@ limitations under the License.
 
 package testing
 
-/*
-
 import (
 	"fmt"
 
@@ -264,9 +262,6 @@ func (obj *Unstructured) EachListItem(fn func(runtime.Object) error) error {
 
 func (obj *Unstructured) NewEmptyInstance() runtime.Unstructured {
 	out := new(Unstructured)
-	if obj != nil {
-		out.SetGroupVersionKind(obj.GroupVersionKind())
-	}
 	return out
 }
 
@@ -306,28 +301,3 @@ func (in *Unstructured) DeepCopy() *Unstructured {
 	out.Object = runtime.DeepCopyJSON(in.Object)
 	return out
 }
-
-//func (u *Unstructured) GroupVersionKind() schema.GroupVersionKind {
-//	apiVersion, ok := u.Object["apiVersion"].(string)
-//	if !ok {
-//		return schema.GroupVersionKind{}
-//	}
-//	gv, err := schema.ParseGroupVersion(apiVersion)
-//	if err != nil {
-//		return schema.GroupVersionKind{}
-//	}
-//	kind, ok := u.Object["kind"].(string)
-//	if ok {
-//		return gv.WithKind(kind)
-//	}
-//	return schema.GroupVersionKind{}
-//}
-//
-//func (u *Unstructured) SetGroupVersionKind(gvk schema.GroupVersionKind) {
-//	if u.Object == nil {
-//		u.Object = make(map[string]interface{})
-//	}
-//	u.Object["apiVersion"] = gvk.GroupVersion().String()
-//	u.Object["kind"] = gvk.Kind
-//}
-*/

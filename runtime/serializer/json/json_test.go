@@ -17,13 +17,11 @@ limitations under the License.
 package json_test
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/runtime"
 	"github.com/yubo/golib/runtime/serializer/json"
-	runtimetesting "github.com/yubo/golib/runtime/testing"
-	"github.com/yubo/golib/util/diff"
 )
 
 type testDecodable struct {
@@ -31,7 +29,6 @@ type testDecodable struct {
 	Value     int           `json:"value"`
 	Spec      DecodableSpec `json:"spec"`
 	Interface interface{}   `json:"interface"`
-	//gvk       schema.GroupVersionKind
 }
 
 // DecodableSpec has 15 fields. json-iterator treats struct with more than 10
@@ -54,50 +51,22 @@ type DecodableSpec struct {
 	O int `json:"o"`
 }
 
-//func (d *testDecodable) GetObjectKind() schema.ObjectKind                { return d }
-//func (d *testDecodable) SetGroupVersionKind(gvk schema.GroupVersionKind) { d.gvk = gvk }
-//func (d *testDecodable) GroupVersionKind() schema.GroupVersionKind       { return d.gvk }
-//func (d *testDecodable) DeepCopyObject() runtime.Object {
-//	if d == nil {
-//		return nil
-//	}
-//	out := new(testDecodable)
-//	d.DeepCopyInto(out)
-//	return out
-//}
-func (d *testDecodable) DeepCopyInto(out *testDecodable) {
-	*out = *d
-	out.Other = d.Other
-	out.Value = d.Value
-	out.Spec = d.Spec
-	out.Interface = d.Interface
-	//out.gvk = d.gvk
-	return
-}
-
 func TestDecode(t *testing.T) {
 	testCases := []struct {
-		//creater runtime.ObjectCreater
-		//typer   runtime.ObjectTyper
 		yaml   bool
 		pretty bool
 		strict bool
 
 		data []byte
-		//defaultGVK *schema.GroupVersionKind
 		into runtime.Object
 
 		errFn          func(error) bool
 		expectedObject runtime.Object
-		//expectedGVK    *schema.GroupVersionKind
 	}{
 		{
-			data: []byte(`{"kind":"Test","apiVersion":"other/blah"}`),
-			into: &testDecodable{},
-			//defaultGVK:     &schema.GroupVersionKind{Kind: "Test1", Group: "other1", Version: "blah1"},
-			//creater:        &mockCreater{obj: &testDecodable{}},
+			data:           []byte(`{"kind":"Test","apiVersion":"other/blah"}`),
+			into:           &testDecodable{},
 			expectedObject: &testDecodable{},
-			//expectedGVK:    &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 		},
 		// accept runtime.Unknown as into and bypass creator
 		{
@@ -114,7 +83,6 @@ func TestDecode(t *testing.T) {
 			data: []byte(`{"test":"object"}`),
 			into: &runtime.Unknown{},
 
-			//expectedGVK: &schema.GroupVersionKind{},
 			expectedObject: &runtime.Unknown{
 				Raw:         []byte(`{"test":"object"}`),
 				ContentType: runtime.ContentTypeJSON,
@@ -123,10 +91,7 @@ func TestDecode(t *testing.T) {
 		{
 			data: []byte(`{"test":"object"}`),
 			into: &runtime.Unknown{},
-			//defaultGVK:  &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &runtime.Unknown{
-				//TypeMeta:    runtime.TypeMeta{APIVersion: "other/blah", Kind: "Test"},
 				Raw:         []byte(`{"test":"object"}`),
 				ContentType: runtime.ContentTypeJSON,
 			},
@@ -136,8 +101,6 @@ func TestDecode(t *testing.T) {
 		{
 			data: []byte(`{"kind":"Test","apiVersion":"other/blah","value":1,"Other":"test"}`),
 			into: &testDecodable{},
-			//typer:       &mockTyper{err: runtime.NewNotRegisteredErrForKind("mock", schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"})},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &testDecodable{
 				Other: "test",
 				Value: 1,
@@ -147,8 +110,6 @@ func TestDecode(t *testing.T) {
 		{
 			data: []byte(`{"value":1,"Other":"test"}`),
 			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &testDecodable{
 				Other: "test",
 				Value: 1,
@@ -159,8 +120,6 @@ func TestDecode(t *testing.T) {
 			// "VaLue" should have been "value"
 			data: []byte(`{"kind":"Test","apiVersion":"other/blah","VaLue":1,"Other":"test"}`),
 			into: &testDecodable{},
-			//typer:       &mockTyper{err: runtime.NewNotRegisteredErrForKind("mock", schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"})},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &testDecodable{
 				Other: "test",
 			},
@@ -170,8 +129,6 @@ func TestDecode(t *testing.T) {
 			// "b" should have been "B", "I" should have been "i"
 			data: []byte(`{"kind":"Test","apiVersion":"other/blah","spec": {"A": 1, "b": 2, "h": 3, "I": 4}}`),
 			into: &testDecodable{},
-			//typer:       &mockTyper{err: runtime.NewNotRegisteredErrForKind("mock", schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"})},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &testDecodable{
 				Spec: DecodableSpec{A: 1, H: 3},
 			},
@@ -180,8 +137,6 @@ func TestDecode(t *testing.T) {
 		{
 			data: []byte(`{"kind":"Test","apiVersion":"other/blah","value":1,"Other":"test"}`),
 			into: &testDecodable{},
-			//typer:       &mockTyper{err: runtime.NewNotRegisteredErrForKind("mock", schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"})},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &testDecodable{
 				Other: "test",
 				Value: 1,
@@ -195,8 +150,6 @@ func TestDecode(t *testing.T) {
 				"value: 1\n" +
 				"Other: test\n"),
 			into: &testDecodable{},
-			//typer:       &mockTyper{err: runtime.NewNotRegisteredErrForKind("mock", schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"})},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &testDecodable{
 				Other: "test",
 				Value: 1,
@@ -208,19 +161,14 @@ func TestDecode(t *testing.T) {
 		{
 			data: []byte(`{"value":1234}`),
 			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &testDecodable{
 				Value: 1234,
 			},
 			strict: true,
 		},
-		// Valid strict YAML decode without GVK.
 		{
 			data: []byte("value: 1234\n"),
 			into: &testDecodable{},
-			//typer:       &mockTyper{gvk: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"}},
-			//expectedGVK: &schema.GroupVersionKind{Kind: "Test", Group: "other", Version: "blah"},
 			expectedObject: &testDecodable{
 				Value: 1234,
 			},
@@ -260,16 +208,8 @@ func TestDecode(t *testing.T) {
 			continue
 		}
 
-		if !reflect.DeepEqual(test.expectedObject, obj) {
-			t.Errorf("%d: unexpected object:\n%s", i, diff.ObjectGoPrintSideBySide(test.expectedObject, obj))
-		}
+		assert.Equal(t, test.expectedObject, obj)
 	}
-}
-
-func TestCacheableObject(t *testing.T) {
-	serializer := json.NewSerializer(false)
-
-	runtimetesting.CacheableObjectTest(t, serializer)
 }
 
 type mockCreater struct {
@@ -284,12 +224,7 @@ func (c *mockCreater) New() (runtime.Object, error) {
 }
 
 type mockTyper struct {
-	//gvk *schema.GroupVersionKind
 	err error
-}
-
-func (t *mockTyper) ObjectKinds(obj runtime.Object) (bool, error) {
-	return false, t.err
 }
 
 func (t *mockTyper) Recognizes() bool {

@@ -103,37 +103,6 @@ func TestTypes(t *testing.T) {
 	}
 }
 
-func TestVersionedEncoding(t *testing.T) {
-	s, _ := GetTestScheme()
-	cf := newCodecFactory(s, newSerializersForScheme(s, testMetaFactory{}, CodecFactoryOptions{Pretty: true, Strict: true}))
-	info, _ := runtime.SerializerInfoForMediaType(cf.SupportedMediaTypes(), runtime.ContentTypeJSON)
-	encoder := info.Serializer
-
-	codec := cf.EncoderForVersion(encoder, schema.GroupVersion{Version: "v2"})
-	out, err := runtime.Encode(codec, &runtimetesting.TestType1{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(out) != `{"myVersionKey":"v2","myKindKey":"TestType1"}`+"\n" {
-		t.Fatal(string(out))
-	}
-
-	codec = cf.EncoderForVersion(encoder, schema.GroupVersion{Version: "v3"})
-	_, err = runtime.Encode(codec, &runtimetesting.TestType1{})
-	if err == nil {
-		t.Fatal(err)
-	}
-
-	// unversioned encode with no versions is written directly to wire
-	codec = cf.EncoderForVersion(encoder, runtime.InternalGroupVersioner)
-	out, err = runtime.Encode(codec, &runtimetesting.TestType1{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(out) != `{}`+"\n" {
-		t.Fatal(string(out))
-	}
-}
 
 func TestMultipleNames(t *testing.T) {
 	_, codec := GetTestScheme()

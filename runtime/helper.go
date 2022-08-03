@@ -24,26 +24,6 @@ import (
 	"github.com/yubo/golib/util/errors"
 )
 
-//// unsafeObjectConvertor implements ObjectConvertor using the unsafe conversion path.
-//type unsafeObjectConvertor struct {
-//	*Scheme
-//}
-//
-//var _ ObjectConvertor = unsafeObjectConvertor{}
-//
-//// ConvertToVersion converts in to the provided outVersion without copying the input first, which
-//// is only safe if the output object is not mutated or reused.
-//func (c unsafeObjectConvertor) ConvertToVersion(in Object, outVersion GroupVersioner) (Object, error) {
-//	return c.Scheme.UnsafeConvertToVersion(in, outVersion)
-//}
-//
-//// UnsafeObjectConvertor performs object conversion without copying the object structure,
-//// for use when the converted object will not be reused or mutated. Primarily for use within
-//// versioned codecs, which use the external object for serialization but do not return it.
-//func UnsafeObjectConvertor(scheme *Scheme) ObjectConvertor {
-//	return unsafeObjectConvertor{scheme}
-//}
-
 // SetField puts the value of src, into fieldName, which must be a member of v.
 // The value of src must be assignable to the field.
 func SetField(src interface{}, v reflect.Value, fieldName string) error {
@@ -153,31 +133,6 @@ func DecodeList(objects []Object, decoders ...Decoder) []error {
 	return errs
 }
 
-// MultiObjectTyper returns the types of objects across multiple schemes in order.
-//type MultiObjectTyper []ObjectTyper
-//
-//var _ ObjectTyper = MultiObjectTyper{}
-
-//
-//func (m MultiObjectTyper) ObjectKinds(obj Object) (unversionedType bool, err error) {
-//	for _, t := range m {
-//		gvks, unversionedType, err = t.ObjectKinds(obj)
-//		if err == nil {
-//			return
-//		}
-//	}
-//	return
-//}
-//
-//func (m MultiObjectTyper) Recognizes(gvk schema.GroupVersionKind) bool {
-//	for _, t := range m {
-//		if t.Recognizes(gvk) {
-//			return true
-//		}
-//	}
-//	return false
-//}
-
 // SetZeroValue would set the object of objPtr to zero value of its type.
 func SetZeroValue(objPtr Object) error {
 	v, err := EnforcePtr(objPtr)
@@ -199,33 +154,12 @@ func (defaultFramer) NewFrameWriter(w io.Writer) io.Writer         { return w }
 
 // WithVersionEncoder serializes an object and ensures the GVK is set.
 type WithVersionEncoder struct {
-	//Version GroupVersioner
 	Encoder
-	//ObjectTyper
 }
 
 // Encode does not do conversion. It sets the gvk during serialization.
 func (e WithVersionEncoder) Encode(obj Object, stream io.Writer) error {
-	//gvks, _, err := e.ObjectTyper.ObjectKinds(obj)
-	//if err != nil {
-	//	if IsNotRegisteredError(err) {
-	//		return e.Encoder.Encode(obj, stream)
-	//	}
-	//	return err
-	//}
-	//kind := obj.GetObjectKind()
-	//oldGVK := kind.GroupVersionKind()
-	//gvk := gvks[0]
-	//if e.Version != nil {
-	//	preferredGVK, ok := e.Version.KindForGroupVersionKinds(gvks)
-	//	if ok {
-	//		gvk = preferredGVK
-	//	}
-	//}
-	//kind.SetGroupVersionKind(gvk)
 	return e.Encoder.Encode(obj, stream)
-	//kind.SetGroupVersionKind(oldGVK)
-	//return err
 }
 
 // WithoutVersionDecoder clears the group version kind of a deserialized object.
