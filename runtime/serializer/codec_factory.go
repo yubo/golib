@@ -27,9 +27,9 @@ import (
 )
 
 // serializerExtensions are for serializers that are conditionally compiled in
-var serializerExtensions = []func() (serializerType, bool){}
+var serializerExtensions = []func() (SerializerType, bool){}
 
-type serializerType struct {
+type SerializerType struct {
 	AcceptContentTypes []string
 	ContentType        string
 	FileExtensions     []string
@@ -46,11 +46,11 @@ type serializerType struct {
 	StreamSerializer runtime.Serializer
 }
 
-func newSerializersForScheme(options CodecFactoryOptions) []serializerType {
+func newSerializersForScheme(options CodecFactoryOptions) []SerializerType {
 	jsonSerializer := json.NewSerializerWithOptions(
 		json.SerializerOptions{Yaml: false, Pretty: false, Strict: options.Strict},
 	)
-	jsonSerializerType := serializerType{
+	jsonSerializerType := SerializerType{
 		AcceptContentTypes: []string{runtime.ContentTypeJSON},
 		ContentType:        runtime.ContentTypeJSON,
 		FileExtensions:     []string{"json"},
@@ -70,7 +70,7 @@ func newSerializersForScheme(options CodecFactoryOptions) []serializerType {
 		json.SerializerOptions{Yaml: true, Pretty: false, Strict: options.Strict},
 	)
 
-	serializers := []serializerType{
+	serializers := []SerializerType{
 		jsonSerializerType,
 		{
 			AcceptContentTypes: []string{runtime.ContentTypeYAML},
@@ -86,7 +86,8 @@ func newSerializersForScheme(options CodecFactoryOptions) []serializerType {
 			serializers = append(serializers, serializer)
 		}
 	}
-	return serializers
+
+	return append(serializers, options.Serializers...)
 }
 
 // CodecFactory provides methods for retrieving codecs and serializers for specific
@@ -105,6 +106,8 @@ type CodecFactoryOptions struct {
 	Strict bool
 	// Pretty includes a pretty serializer along with the non-pretty one
 	Pretty bool
+
+	Serializers []SerializerType
 }
 
 // CodecFactoryOptionsMutator takes a pointer to an options struct and then modifies it.
@@ -153,7 +156,7 @@ func NewCodecFactory(mutators ...CodecFactoryOptionsMutator) CodecFactory {
 }
 
 // newCodecFactory is a helper for testing that allows a different metafactory to be specified.
-func newCodecFactory(serializers []serializerType) CodecFactory {
+func newCodecFactory(serializers []SerializerType) CodecFactory {
 	decoders := make([]runtime.Decoder, 0, len(serializers))
 	var accepts []runtime.SerializerInfo
 	alreadyAccepted := make(map[string]struct{})
