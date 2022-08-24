@@ -1,4 +1,4 @@
-module github.com/yubo/golib/examples/orm
+module examples/orm
 
 go 1.16
 

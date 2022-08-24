@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/yubo/golib/util"
-	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
 )
 
 // ErrNoTable indicates that a chart does not have a matching table.

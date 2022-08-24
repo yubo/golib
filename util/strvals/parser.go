@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/yubo/golib/util/errors"
-	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
 )
 
 // ErrNotList indicates that a non-list was treated as a list.

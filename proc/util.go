@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/yubo/golib/cli/flag"
-	"github.com/yubo/golib/util/term"
+	"github.com/yubo/golib/term"
 )
 
 func PrintErrln(err error) int {

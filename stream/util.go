@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/yubo/golib/util/term/moby/term"
+	"github.com/yubo/golib/term/moby/term"
 	"k8s.io/klog/v2"
 )
 
@@ -42,7 +42,7 @@ func CopyPtyStreams(tty TtyStreams, pty PtyStreams) chan error {
 func CopyToPty(tty Tty, pty Pty) <-chan error {
 	ch := CopyPtyStreams(tty.Streams(), pty.Streams())
 
-	klog.Infof("bind tty %v pty %v", tty.IsTerminal(), pty.IsTerminal())
+	debug().Infof("bind tty %v pty %v", tty.IsTerminal(), pty.IsTerminal())
 	if tty.IsTerminal() && pty.IsTerminal() {
 		if sizeQueue := tty.MonitorSize(tty.GetSize()); sizeQueue != nil {
 			go func() {

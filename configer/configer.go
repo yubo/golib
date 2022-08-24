@@ -30,7 +30,7 @@ import (
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	"k8s.io/klog/v2"
-	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
 )
 
 type Configer interface {

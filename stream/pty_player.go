@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/yubo/golib/util/clock"
-	"github.com/yubo/golib/util/term"
+	"github.com/yubo/golib/term"
 	"k8s.io/klog/v2"
 )
 

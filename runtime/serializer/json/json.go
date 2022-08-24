@@ -26,12 +26,12 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/modern-go/reflect2"
-	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
 
 	"github.com/yubo/golib/runtime"
 	"github.com/yubo/golib/runtime/serializer/recognizer"
 	"github.com/yubo/golib/util/framer"
-	utilyaml "github.com/yubo/golib/util/yaml"
+	utilyaml "github.com/yubo/golib/yaml"
 )
 
 // NewSerializer creates a JSON serializer that handles encoding versioned objects into the proper JSON form. If typer

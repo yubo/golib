@@ -10,9 +10,9 @@ import (
 	"sync"
 	"unsafe"
 
-	mobyterm "github.com/yubo/golib/util/term/moby/term"
+	mobyterm "github.com/yubo/golib/term/moby/term"
 	"github.com/yubo/golib/util/list"
-	"github.com/yubo/golib/util/term"
+	"github.com/yubo/golib/term"
 )
 
 type ProxyTty struct {

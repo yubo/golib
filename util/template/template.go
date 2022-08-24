@@ -19,7 +19,7 @@ import (
 	"text/template"
 
 	"github.com/yubo/golib/util"
-	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
 )
 
 var (

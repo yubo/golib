@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/yubo/golib/util/term/creack/pty"
-	"github.com/yubo/golib/util/term"
+	"github.com/yubo/golib/term/creack/pty"
+	"github.com/yubo/golib/term"
 )
 
 // server

@@ -18,7 +18,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/types"
+	"github.com/yubo/golib/util/uuid"
+	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
 )
 
 const (
@@ -793,3 +795,8 @@ func PrepareValue(rv reflect.Value, rt reflect.Type) {
 //	ip, _, err := net.SplitHostPort(pr.Addr.String())
 //	return ip, err
 //}
+//
+
+func NewUUID() types.UID {
+	return types.UID(uuid.New().String())
+}

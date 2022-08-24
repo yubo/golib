@@ -9,8 +9,8 @@ import (
 	"io"
 	"sync"
 
-	mobyterm "github.com/yubo/golib/util/term/moby/term"
-	"github.com/yubo/golib/util/term"
+	mobyterm "github.com/yubo/golib/term/moby/term"
+	"github.com/yubo/golib/term"
 )
 
 type NativeTty struct {

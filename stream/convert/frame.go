@@ -11,9 +11,9 @@ type Frame struct {
 	Data  []byte
 }
 
-func (f *Frame) MarshalJSON() ([]byte, error) {
+func (f Frame) MarshalJSON() ([]byte, error) {
 	s, _ := json.Marshal(string(f.Data))
-	json := fmt.Sprintf(`[%.6f, %s]`, f.Delay, s)
+	json := fmt.Sprintf(`[%.6f, "o", %s]`, f.Delay, s)
 	return []byte(json), nil
 }
 
@@ -27,7 +27,7 @@ func (f *Frame) UnmarshalJSON(data []byte) error {
 
 	f.Delay = x.([]interface{})[0].(float64)
 
-	s := []byte(x.([]interface{})[1].(string))
+	s := []byte(x.([]interface{})[2].(string))
 	b := make([]byte, len(s))
 	copy(b, s)
 	f.Data = b

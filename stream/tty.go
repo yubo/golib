@@ -6,7 +6,7 @@ package stream
 import (
 	"io"
 
-	"github.com/yubo/golib/util/term"
+	"github.com/yubo/golib/term"
 )
 
 // TtyStreams provides the standard names for iostreams.  This is useful for embedding and for unit testing.

@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"github.com/yubo/golib/util/term"
+	"github.com/yubo/golib/term"
 )
 
 type RecorderStreams struct {
