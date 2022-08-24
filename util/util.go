@@ -2,7 +2,6 @@ package util
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -19,8 +18,7 @@ import (
 	"time"
 	"unicode"
 
-	"google.golang.org/grpc/peer"
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 const (
@@ -271,35 +269,6 @@ func Backtraces() {
 			break
 		}
 	}
-}
-
-// ToScope transport strings fields into map[string]bool format
-func ToScope(scope *string) (ret map[string]bool) {
-	ret = map[string]bool{}
-
-	if scope == nil {
-		return
-	}
-
-	for _, v := range strings.Fields(*scope) {
-		ret[v] = true
-	}
-	return
-}
-
-func ToScopeStr(scope map[string]bool) *string {
-	if len(scope) == 0 {
-		return nil
-	}
-
-	var ret string
-	for k, v := range scope {
-		if v {
-			ret += k + " "
-		}
-	}
-	ret = ret[:len(ret)-1]
-	return &ret
 }
 
 func Strings2MapBool(ss []string) map[string]bool {
@@ -813,14 +782,14 @@ func PrepareValue(rv reflect.Value, rt reflect.Type) {
 }
 
 // GetPeerAddrFromCtx try to return peer address from grpc context
-func GetPeerAddrFromCtx(ctx context.Context) (string, error) {
-	pr, ok := peer.FromContext(ctx)
-	if !ok {
-		return "", fmt.Errorf("[getClinetIP] invoke FromContext() failed")
-	}
-	if pr.Addr == net.Addr(nil) {
-		return "", fmt.Errorf("[getClientIP] peer.Addr is nil")
-	}
-	ip, _, err := net.SplitHostPort(pr.Addr.String())
-	return ip, err
-}
+//func GetPeerAddrFromCtx(ctx context.Context) (string, error) {
+//	pr, ok := peer.FromContext(ctx)
+//	if !ok {
+//		return "", fmt.Errorf("[getClinetIP] invoke FromContext() failed")
+//	}
+//	if pr.Addr == net.Addr(nil) {
+//		return "", fmt.Errorf("[getClientIP] peer.Addr is nil")
+//	}
+//	ip, _, err := net.SplitHostPort(pr.Addr.String())
+//	return ip, err
+//}

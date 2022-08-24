@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/golang-lru"
+	"github.com/yubo/golib/util/lru"
 )
 
 // Clock defines an interface for obtaining the current time

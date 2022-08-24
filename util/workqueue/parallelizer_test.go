@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
 )
 
 type testCase struct {
@@ -71,9 +72,7 @@ func TestParallelizeUntil(t *testing.T) {
 			for i := 0; i < tc.pieces; i++ {
 				wantSeen[i] = 1
 			}
-			if diff := cmp.Diff(wantSeen, seen); diff != "" {
-				t.Errorf("bad number of visits (-want,+got):\n%s", diff)
-			}
+			assert.Equal(t, wantSeen, seen)
 		})
 	}
 }

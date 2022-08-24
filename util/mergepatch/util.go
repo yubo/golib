@@ -20,8 +20,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/davecgh/go-spew/spew"
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 // PreconditionFunc asserts that an incompatible change is not present within a patch.
@@ -76,7 +75,7 @@ func ToYAMLOrError(v interface{}) string {
 func toYAML(v interface{}) (string, error) {
 	y, err := yaml.Marshal(v)
 	if err != nil {
-		return "", fmt.Errorf("yaml marshal failed:%v\n%v\n", err, spew.Sdump(v))
+		return "", fmt.Errorf("yaml marshal failed:%v", err)
 	}
 
 	return string(y), nil

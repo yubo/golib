@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yubo/golib/configer"
 	"github.com/yubo/golib/proc"
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 type config struct {

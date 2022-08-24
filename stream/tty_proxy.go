@@ -5,12 +5,12 @@ package stream
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"unsafe"
 
-	mobyterm "github.com/moby/term"
-	"github.com/pkg/errors"
+	mobyterm "github.com/yubo/golib/util/term/moby/term"
 	"github.com/yubo/golib/util/list"
 	"github.com/yubo/golib/util/term"
 )
@@ -255,7 +255,7 @@ func (p *ProxyTty) addTtyEntry(entry *ttyEntry) error {
 		if err != nil {
 			debug().Infof("error on attach stdin")
 			p.Lock()
-			p.err = errors.Wrap(err, "error on attach stdin")
+			p.err = fmt.Errorf("error on attach stdin: [%w]", err)
 			p.Unlock()
 		}
 		entry.tty.Close()

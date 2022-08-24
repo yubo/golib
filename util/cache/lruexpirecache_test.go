@@ -21,18 +21,16 @@ import (
 	"time"
 
 	"github.com/yubo/golib/util/clock"
-
-	"github.com/golang/groupcache/lru"
 )
 
-func expectEntry(t *testing.T, c *LRUExpireCache, key lru.Key, value interface{}) {
+func expectEntry(t *testing.T, c *LRUExpireCache, key interface{}, value interface{}) {
 	result, ok := c.Get(key)
 	if !ok || result != value {
 		t.Errorf("Expected cache[%v]: %v, got %v", key, value, result)
 	}
 }
 
-func expectNotEntry(t *testing.T, c *LRUExpireCache, key lru.Key) {
+func expectNotEntry(t *testing.T, c *LRUExpireCache, key interface{}) {
 	if result, ok := c.Get(key); ok {
 		t.Errorf("Expected cache[%v] to be empty, got %v", key, result)
 	}

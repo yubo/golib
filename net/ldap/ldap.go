@@ -1,66 +1,48 @@
 package ldap
 
 import (
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/go-ldap/ldap"
 	liberrors "github.com/yubo/golib/api/errors"
-	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/config/configtls"
 )
 
-type LdapConfig struct {
-	Addr               string `json:"addr"`
-	BaseDN             string `json:"baseDn"`
-	BindDN             string `json:"bindDn"`
-	BindPwd            string `json:"bindPwd"`
-	Filter             string `json:"filter"`
-	SSL                bool   `json:"ssl"`
-	TLS                bool   `json:"tls"`
-	InsecureSkipVerify bool   `json:"insecureSkipVerify"`
-}
-
-func (p *LdapConfig) Validate() error {
-	l, err := NewLdap(p, nil)
-	if err != nil {
-		return err
-	}
-
-	conn, err := l.connection()
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	if p.BindDN != "" {
-		err = conn.Bind(p.BindDN, p.BindPwd)
-		if err != nil {
-			return fmt.Errorf("ldap: bind ldap: %s", err.Error())
-		}
-	}
-
-	return nil
-}
-
-func (p LdapConfig) String() string {
-	return util.Prettify(p)
+type Config struct {
+	Addr    string                     `json:"addr"`
+	BaseDN  string                     `json:"baseDn"`
+	BindDN  string                     `json:"bindDn"`
+	BindPwd string                     `json:"bindPwd"`
+	Filter  string                     `json:"filter"`
+	DialTLS bool                       `json:"dialTLS"` // true: DailTLS(), false: StartTLS()
+	TLS     configtls.TLSClientSetting `json:"tls"`
 }
 
 type Ldap struct {
-	*LdapConfig
-	certificates []tls.Certificate
+	*Config
 }
 
-func NewLdap(conf *LdapConfig, certificates []tls.Certificate) (*Ldap, error) {
-	if l, err := ldap.Dial("tcp", conf.Addr); err != nil {
+func New(conf *Config) (*Ldap, error) {
+	if conf == nil {
+		return nil, nil
+	}
+	cli := &Ldap{Config: conf}
+
+	conn, err := cli.connection()
+	if err != nil {
 		return nil, err
-	} else {
-		l.Close()
+	}
+	defer conn.Close()
+
+	if cli.BindDN != "" {
+		err = conn.Bind(cli.BindDN, cli.BindPwd)
+		if err != nil {
+			return cli, fmt.Errorf("ldap: bind ldap: %s", err.Error())
+		}
 	}
 
-	return &Ldap{LdapConfig: conf, certificates: certificates}, nil
+	return cli, nil
 }
 
 func getAtrributes(e *ldap.Entry) map[string]string {
@@ -109,19 +91,13 @@ func (p *Ldap) GetUserRaw(username string, attributes ...string) (map[string][][
 }
 
 func (p *Ldap) connection() (conn *ldap.Conn, err error) {
-	if p.SSL {
-		// ldaps
-		conf := &tls.Config{
-			InsecureSkipVerify: p.InsecureSkipVerify,
-			ServerName:         p.Addr[:strings.Index(p.Addr, ":")],
-		}
+	tlsconfig, err := p.TLS.LoadTLSConfig()
+	if err != nil {
+		return nil, err
+	}
 
-		if p.certificates != nil {
-			conf.Certificates = p.certificates
-		}
-
-		conn, err = ldap.DialTLS("tcp", p.Addr, conf)
-
+	if p.DialTLS && tlsconfig != nil {
+		conn, err = ldap.DialTLS("tcp", p.Addr, tlsconfig)
 		if err != nil {
 			return nil, fmt.Errorf("dial ldaps://%s: %s", p.Addr, err.Error())
 		}
@@ -135,9 +111,9 @@ func (p *Ldap) connection() (conn *ldap.Conn, err error) {
 		return nil, fmt.Errorf("dial ldap://%s: %s", p.Addr, err.Error())
 	}
 
-	if p.TLS {
+	if tlsconfig != nil {
 		// with tls
-		if err = conn.StartTLS(&tls.Config{InsecureSkipVerify: true}); err != nil {
+		if err = conn.StartTLS(tlsconfig); err != nil {
 			return nil, fmt.Errorf("start tls: %s", err.Error())
 		}
 	}

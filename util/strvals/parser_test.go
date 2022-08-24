@@ -18,7 +18,7 @@ package strvals
 import (
 	"testing"
 
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 func TestSetIndex(t *testing.T) {

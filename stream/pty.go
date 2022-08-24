@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/creack/pty"
+	"github.com/yubo/golib/util/term/creack/pty"
 	"github.com/yubo/golib/util/term"
 )
 

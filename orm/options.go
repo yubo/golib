@@ -102,7 +102,9 @@ func WithConnMaxIdletime(d time.Duration) DBOption {
 func NewOptions(opts ...Option) (*Options, error) {
 	o := &Options{}
 	for _, opt := range opts {
-		opt(o)
+		if opt != nil {
+			opt(o)
+		}
 	}
 
 	return o, o.err
@@ -170,7 +172,24 @@ func WithTotal(total *int64) Option {
 //   =, ==, in, !=, notin, >, <
 func WithSelector(selector string) Option {
 	return func(o *Options) {
-		o.selector, o.err = queries.Parse(selector)
+		if selector == "" {
+			return
+		}
+		if o.err != nil {
+			return
+		}
+		if o.selector == nil {
+			o.selector, o.err = queries.Parse(selector)
+			return
+		}
+		s, err := queries.Parse(selector)
+		if err != nil {
+			o.err = err
+			return
+		}
+		if r, ok := s.Requirements(); ok {
+			o.selector.Add(r...)
+		}
 	}
 }
 

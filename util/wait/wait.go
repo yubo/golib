@@ -310,14 +310,14 @@ type exponentialBackoffManagerImpl struct {
 func NewExponentialBackoffManager(initBackoff, maxBackoff, resetDuration time.Duration, backoffFactor, jitter float64, c clock.Clock) BackoffManager {
 	return &exponentialBackoffManagerImpl{
 		backoff: &Backoff{
-			Duration: api.Duration{initBackoff},
+			Duration: api.Duration{Duration: initBackoff},
 			Factor:   backoffFactor,
 			Jitter:   jitter,
 
 			// the current impl of wait.Backoff returns Backoff.Duration once steps are used up, which is not
 			// what we ideally need here, we set it to max int and assume we will never use up the steps
 			Steps: math.MaxInt32,
-			Cap:   api.Duration{maxBackoff},
+			Cap:   api.Duration{Duration: maxBackoff},
 		},
 		backoffTimer:         nil,
 		initialBackoff:       initBackoff,

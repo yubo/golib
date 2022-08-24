@@ -1,696 +1,658 @@
-/*
-Copyright 2017 The Kubernetes Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package jsonmergepatch
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/davecgh/go-spew/spew"
-	"github.com/evanphx/json-patch"
-	"github.com/yubo/golib/util/json"
-	"sigs.k8s.io/yaml"
 )
 
-type FilterNullTestCases struct {
-	TestCases []FilterNullTestCase
+func reformatJSON(j string) string {
+	buf := new(bytes.Buffer)
+
+	json.Indent(buf, []byte(j), "", "  ")
+
+	return buf.String()
 }
 
-type FilterNullTestCase struct {
-	Description         string
-	OriginalObj         map[string]interface{}
-	ExpectedWithNull    map[string]interface{}
-	ExpectedWithoutNull map[string]interface{}
+func compareJSON(a, b string) bool {
+	// return Equal([]byte(a), []byte(b))
+
+	var objA, objB map[string]interface{}
+	json.Unmarshal([]byte(a), &objA)
+	json.Unmarshal([]byte(b), &objB)
+
+	// fmt.Printf("Comparing %#v\nagainst %#v\n", objA, objB)
+	return reflect.DeepEqual(objA, objB)
 }
 
-var filterNullTestCaseData = []byte(`
-testCases:
-  - description: nil original
-    originalObj: {}
-    expectedWithNull: {}
-    expectedWithoutNull: {}
-  - description: simple map
-    originalObj:
-      nilKey: null
-      nonNilKey: foo
-    expectedWithNull:
-      nilKey: null
-    expectedWithoutNull:
-      nonNilKey: foo
-  - description: simple map with all nil values
-    originalObj:
-      nilKey1: null
-      nilKey2: null
-    expectedWithNull:
-      nilKey1: null
-      nilKey2: null
-    expectedWithoutNull: {}
-  - description: simple map with all non-nil values
-    originalObj:
-      nonNilKey1: foo
-      nonNilKey2: bar
-    expectedWithNull: {}
-    expectedWithoutNull:
-      nonNilKey1: foo
-      nonNilKey2: bar
-  - description: nested map
-    originalObj:
-      mapKey:
-        nilKey: null
-        nonNilKey: foo
-    expectedWithNull:
-      mapKey:
-        nilKey: null
-    expectedWithoutNull:
-      mapKey:
-        nonNilKey: foo
-  - description: nested map that all subkeys are nil
-    originalObj:
-      mapKey:
-        nilKey1: null
-        nilKey2: null
-    expectedWithNull:
-      mapKey:
-        nilKey1: null
-        nilKey2: null
-    expectedWithoutNull: {}
-  - description: nested map that all subkeys are non-nil
-    originalObj:
-      mapKey:
-        nonNilKey1: foo
-        nonNilKey2: bar
-    expectedWithNull: {}
-    expectedWithoutNull:
-      mapKey:
-        nonNilKey1: foo
-        nonNilKey2: bar
-  - description: explicitly empty map as value
-    originalObj:
-      mapKey: {}
-    expectedWithNull: {}
-    expectedWithoutNull:
-      mapKey: {}
-  - description: explicitly empty nested map
-    originalObj:
-      mapKey:
-        nonNilKey: {}
-    expectedWithNull: {}
-    expectedWithoutNull:
-      mapKey:
-        nonNilKey: {}
-  - description: multiple expliclty empty nested maps
-    originalObj:
-      mapKey:
-        nonNilKey1: {}
-        nonNilKey2: {}
-    expectedWithNull: {}
-    expectedWithoutNull:
-      mapKey:
-        nonNilKey1: {}
-        nonNilKey2: {}
-  - description: nested map with non-null value as empty map
-    originalObj:
-      mapKey:
-        nonNilKey: {}
-        nilKey: null
-    expectedWithNull:
-      mapKey:
-        nilKey: null
-    expectedWithoutNull:
-      mapKey:
-        nonNilKey: {}
-  - description: empty list
-    originalObj:
-      listKey: []
-    expectedWithNull: {}
-    expectedWithoutNull:
-      listKey: []
-  - description: list of primitives
-    originalObj:
-      listKey:
-      - 1
-      - 2
-    expectedWithNull: {}
-    expectedWithoutNull:
-      listKey:
-      - 1
-      - 2
-  - description: list of maps
-    originalObj:
-      listKey:
-      - k1: v1
-      - k2: null
-      - k3: v3
-        k4: null
-    expectedWithNull: {}
-    expectedWithoutNull:
-      listKey:
-      - k1: v1
-      - k2: null
-      - k3: v3
-        k4: null
-  - description: list of different types
-    originalObj:
-      listKey:
-      - k1: v1
-      - k2: null
-      - v3
-    expectedWithNull: {}
-    expectedWithoutNull:
-      listKey:
-      - k1: v1
-      - k2: null
-      - v3
-`)
+func applyPatch(doc, patch string) (string, error) {
+	obj, err := DecodePatch([]byte(patch))
 
-func TestKeepOrDeleteNullInObj(t *testing.T) {
-	tc := FilterNullTestCases{}
-	err := yaml.Unmarshal(filterNullTestCaseData, &tc)
 	if err != nil {
-		t.Fatalf("can't unmarshal test cases: %s\n", err)
+		panic(err)
 	}
 
-	for _, test := range tc.TestCases {
-		resultWithNull, err := keepOrDeleteNullInObj(test.OriginalObj, true)
+	out, err := obj.Apply([]byte(doc))
+
+	if err != nil {
+		return "", err
+	}
+
+	return string(out), nil
+}
+
+type Case struct {
+	doc, patch, result string
+}
+
+func repeatedA(r int) string {
+	var s string
+	for i := 0; i < r; i++ {
+		s += "A"
+	}
+	return s
+}
+
+var Cases = []Case{
+	{
+		``,
+		`[
+         { "op": "add", "path": "/baz", "value": "qux" }
+     ]`,
+		``,
+	},
+	{
+		`{ "foo": "bar"}`,
+		`[
+         { "op": "add", "path": "/baz", "value": "qux" }
+     ]`,
+		`{
+       "baz": "qux",
+       "foo": "bar"
+     }`,
+	},
+	{
+		`{ "foo": [ "bar", "baz" ] }`,
+		`[
+     { "op": "add", "path": "/foo/1", "value": "qux" }
+    ]`,
+		`{ "foo": [ "bar", "qux", "baz" ] }`,
+	},
+	{
+		`{ "foo": [ "bar", "baz" ] }`,
+		`[
+     { "op": "add", "path": "/foo/-1", "value": "qux" }
+    ]`,
+		`{ "foo": [ "bar", "baz", "qux" ] }`,
+	},
+	{
+		`{ "baz": "qux", "foo": "bar" }`,
+		`[ { "op": "remove", "path": "/baz" } ]`,
+		`{ "foo": "bar" }`,
+	},
+	{
+		`{ "foo": [ "bar", "qux", "baz" ] }`,
+		`[ { "op": "remove", "path": "/foo/1" } ]`,
+		`{ "foo": [ "bar", "baz" ] }`,
+	},
+	{
+		`{ "baz": "qux", "foo": "bar" }`,
+		`[ { "op": "replace", "path": "/baz", "value": "boo" } ]`,
+		`{ "baz": "boo", "foo": "bar" }`,
+	},
+	{
+		`{
+     "foo": {
+       "bar": "baz",
+       "waldo": "fred"
+     },
+     "qux": {
+       "corge": "grault"
+     }
+   }`,
+		`[ { "op": "move", "from": "/foo/waldo", "path": "/qux/thud" } ]`,
+		`{
+     "foo": {
+       "bar": "baz"
+     },
+     "qux": {
+       "corge": "grault",
+       "thud": "fred"
+     }
+   }`,
+	},
+	{
+		`{ "foo": [ "all", "grass", "cows", "eat" ] }`,
+		`[ { "op": "move", "from": "/foo/1", "path": "/foo/3" } ]`,
+		`{ "foo": [ "all", "cows", "eat", "grass" ] }`,
+	},
+	{
+		`{ "foo": [ "all", "grass", "cows", "eat" ] }`,
+		`[ { "op": "move", "from": "/foo/1", "path": "/foo/2" } ]`,
+		`{ "foo": [ "all", "cows", "grass", "eat" ] }`,
+	},
+	{
+		`{ "foo": "bar" }`,
+		`[ { "op": "add", "path": "/child", "value": { "grandchild": { } } } ]`,
+		`{ "foo": "bar", "child": { "grandchild": { } } }`,
+	},
+	{
+		`{ "foo": ["bar"] }`,
+		`[ { "op": "add", "path": "/foo/-", "value": ["abc", "def"] } ]`,
+		`{ "foo": ["bar", ["abc", "def"]] }`,
+	},
+	{
+		`{ "foo": "bar", "qux": { "baz": 1, "bar": null } }`,
+		`[ { "op": "remove", "path": "/qux/bar" } ]`,
+		`{ "foo": "bar", "qux": { "baz": 1 } }`,
+	},
+	{
+		`{ "foo": "bar" }`,
+		`[ { "op": "add", "path": "/baz", "value": null } ]`,
+		`{ "baz": null, "foo": "bar" }`,
+	},
+	{
+		`{ "foo": ["bar"]}`,
+		`[ { "op": "replace", "path": "/foo/0", "value": "baz"}]`,
+		`{ "foo": ["baz"]}`,
+	},
+	{
+		`{ "foo": ["bar","baz"]}`,
+		`[ { "op": "replace", "path": "/foo/0", "value": "bum"}]`,
+		`{ "foo": ["bum","baz"]}`,
+	},
+	{
+		`{ "foo": ["bar","qux","baz"]}`,
+		`[ { "op": "replace", "path": "/foo/1", "value": "bum"}]`,
+		`{ "foo": ["bar", "bum","baz"]}`,
+	},
+	{
+		`[ {"foo": ["bar","qux","baz"]}]`,
+		`[ { "op": "replace", "path": "/0/foo/0", "value": "bum"}]`,
+		`[ {"foo": ["bum","qux","baz"]}]`,
+	},
+	{
+		`[ {"foo": ["bar","qux","baz"], "bar": ["qux","baz"]}]`,
+		`[ { "op": "copy", "from": "/0/foo/0", "path": "/0/bar/0"}]`,
+		`[ {"foo": ["bar","qux","baz"], "bar": ["bar", "baz"]}]`,
+	},
+	{
+		`[ {"foo": ["bar","qux","baz"], "bar": ["qux","baz"]}]`,
+		`[ { "op": "copy", "from": "/0/foo/0", "path": "/0/bar"}]`,
+		`[ {"foo": ["bar","qux","baz"], "bar": ["bar", "qux", "baz"]}]`,
+	},
+	{
+		`[ { "foo": {"bar": ["qux","baz"]}, "baz": {"qux": "bum"}}]`,
+		`[ { "op": "copy", "from": "/0/foo/bar", "path": "/0/baz/bar"}]`,
+		`[ { "baz": {"bar": ["qux","baz"], "qux":"bum"}, "foo": {"bar": ["qux","baz"]}}]`,
+	},
+	{
+		`{ "foo": ["bar"]}`,
+		`[{"op": "copy", "path": "/foo/0", "from": "/foo"}]`,
+		`{ "foo": [["bar"], "bar"]}`,
+	},
+	{
+		`{ "foo": ["bar","qux","baz"]}`,
+		`[ { "op": "remove", "path": "/foo/-2"}]`,
+		`{ "foo": ["bar", "baz"]}`,
+	},
+	{
+		`{ "foo": []}`,
+		`[ { "op": "add", "path": "/foo/-1", "value": "qux"}]`,
+		`{ "foo": ["qux"]}`,
+	},
+	{
+		`{ "bar": [{"baz": null}]}`,
+		`[ { "op": "replace", "path": "/bar/0/baz", "value": 1 } ]`,
+		`{ "bar": [{"baz": 1}]}`,
+	},
+	{
+		`{ "bar": [{"baz": 1}]}`,
+		`[ { "op": "replace", "path": "/bar/0/baz", "value": null } ]`,
+		`{ "bar": [{"baz": null}]}`,
+	},
+	{
+		`{ "bar": [null]}`,
+		`[ { "op": "replace", "path": "/bar/0", "value": 1 } ]`,
+		`{ "bar": [1]}`,
+	},
+	{
+		`{ "bar": [1]}`,
+		`[ { "op": "replace", "path": "/bar/0", "value": null } ]`,
+		`{ "bar": [null]}`,
+	},
+	{
+		fmt.Sprintf(`{ "foo": ["A", %q] }`, repeatedA(48)),
+		// The wrapping quotes around 'A's are included in the copy
+		// size, so each copy operation increases the size by 50 bytes.
+		`[ { "op": "copy", "path": "/foo/-", "from": "/foo/1" },
+		   { "op": "copy", "path": "/foo/-", "from": "/foo/1" }]`,
+		fmt.Sprintf(`{ "foo": ["A", %q, %q, %q] }`, repeatedA(48), repeatedA(48), repeatedA(48)),
+	},
+}
+
+type BadCase struct {
+	doc, patch string
+}
+
+var MutationTestCases = []BadCase{
+	{
+		`{ "foo": "bar", "qux": { "baz": 1, "bar": null } }`,
+		`[ { "op": "remove", "path": "/qux/bar" } ]`,
+	},
+	{
+		`{ "foo": "bar", "qux": { "baz": 1, "bar": null } }`,
+		`[ { "op": "replace", "path": "/qux/baz", "value": null } ]`,
+	},
+}
+
+var BadCases = []BadCase{
+	{
+		`{ "foo": "bar" }`,
+		`[ { "op": "add", "path": "/baz/bat", "value": "qux" } ]`,
+	},
+	{
+		`{ "a": { "b": { "d": 1 } } }`,
+		`[ { "op": "remove", "path": "/a/b/c" } ]`,
+	},
+	{
+		`{ "a": { "b": { "d": 1 } } }`,
+		`[ { "op": "move", "from": "/a/b/c", "path": "/a/b/e" } ]`,
+	},
+	{
+		`{ "a": { "b": [1] } }`,
+		`[ { "op": "remove", "path": "/a/b/1" } ]`,
+	},
+	{
+		`{ "a": { "b": [1] } }`,
+		`[ { "op": "move", "from": "/a/b/1", "path": "/a/b/2" } ]`,
+	},
+	{
+		`{ "foo": "bar" }`,
+		`[ { "op": "add", "pathz": "/baz", "value": "qux" } ]`,
+	},
+	{
+		`{ "foo": "bar" }`,
+		`[ { "op": "add", "path": "", "value": "qux" } ]`,
+	},
+	{
+		`{ "foo": ["bar","baz"]}`,
+		`[ { "op": "replace", "path": "/foo/2", "value": "bum"}]`,
+	},
+	{
+		`{ "foo": ["bar","baz"]}`,
+		`[ { "op": "add", "path": "/foo/-4", "value": "bum"}]`,
+	},
+	{
+		`{ "name":{ "foo": "bat", "qux": "bum"}}`,
+		`[ { "op": "replace", "path": "/foo/bar", "value":"baz"}]`,
+	},
+	{
+		`{ "foo": ["bar"]}`,
+		`[ {"op": "add", "path": "/foo/2", "value": "bum"}]`,
+	},
+	{
+		`{ "foo": []}`,
+		`[ {"op": "remove", "path": "/foo/-"}]`,
+	},
+	{
+		`{ "foo": []}`,
+		`[ {"op": "remove", "path": "/foo/-1"}]`,
+	},
+	{
+		`{ "foo": ["bar"]}`,
+		`[ {"op": "remove", "path": "/foo/-2"}]`,
+	},
+	{
+		`{}`,
+		`[ {"op":null,"path":""} ]`,
+	},
+	{
+		`{}`,
+		`[ {"op":"add","path":null} ]`,
+	},
+	{
+		`{}`,
+		`[ { "op": "copy", "from": null }]`,
+	},
+	{
+		`{ "foo": ["bar"]}`,
+		`[{"op": "copy", "path": "/foo/6666666666", "from": "/"}]`,
+	},
+	// Can't copy into an index greater than the size of the array
+	{
+		`{ "foo": ["bar"]}`,
+		`[{"op": "copy", "path": "/foo/2", "from": "/foo/0"}]`,
+	},
+	// Accumulated copy size cannot exceed AccumulatedCopySizeLimit.
+	{
+		fmt.Sprintf(`{ "foo": ["A", %q] }`, repeatedA(49)),
+		// The wrapping quotes around 'A's are included in the copy
+		// size, so each copy operation increases the size by 51 bytes.
+		`[ { "op": "copy", "path": "/foo/-", "from": "/foo/1" },
+		   { "op": "copy", "path": "/foo/-", "from": "/foo/1" }]`,
+	},
+	// Can't move into an index greater than or equal to the size of the array
+	{
+		`{ "foo": [ "all", "grass", "cows", "eat" ] }`,
+		`[ { "op": "move", "from": "/foo/1", "path": "/foo/4" } ]`,
+	},
+}
+
+// This is not thread safe, so we cannot run patch tests in parallel.
+func configureGlobals(accumulatedCopySizeLimit int64) func() {
+	oldAccumulatedCopySizeLimit := AccumulatedCopySizeLimit
+	AccumulatedCopySizeLimit = accumulatedCopySizeLimit
+	return func() {
+		AccumulatedCopySizeLimit = oldAccumulatedCopySizeLimit
+	}
+}
+
+func TestAllCases(t *testing.T) {
+	defer configureGlobals(int64(100))()
+	for _, c := range Cases {
+		out, err := applyPatch(c.doc, c.patch)
+
 		if err != nil {
-			t.Errorf("Failed in test case %q when trying to keep null values: %s", test.Description, err)
-		}
-		if !reflect.DeepEqual(test.ExpectedWithNull, resultWithNull) {
-			t.Errorf("Failed in test case %q when trying to keep null values:\nexpected expectedWithNull:\n%+v\nbut got:\n%+v\n", test.Description, test.ExpectedWithNull, resultWithNull)
+			t.Errorf("Unable to apply patch: %s", err)
 		}
 
-		resultWithoutNull, err := keepOrDeleteNullInObj(test.OriginalObj, false)
+		if !compareJSON(out, c.result) {
+			t.Errorf("Patch did not apply. Expected:\n%s\n\nActual:\n%s",
+				reformatJSON(c.result), reformatJSON(out))
+		}
+	}
+
+	for _, c := range MutationTestCases {
+		out, err := applyPatch(c.doc, c.patch)
+
 		if err != nil {
-			t.Errorf("Failed in test case %q when trying to keep non-null values: %s", test.Description, err)
+			t.Errorf("Unable to apply patch: %s", err)
 		}
-		if !reflect.DeepEqual(test.ExpectedWithoutNull, resultWithoutNull) {
-			t.Errorf("Failed in test case %q when trying to keep non-null values:\n expected expectedWithoutNull:\n%+v\nbut got:\n%+v\n", test.Description, test.ExpectedWithoutNull, resultWithoutNull)
+
+		if compareJSON(out, c.doc) {
+			t.Errorf("Patch did not apply. Original:\n%s\n\nPatched:\n%s",
+				reformatJSON(c.doc), reformatJSON(out))
+		}
+	}
+
+	for _, c := range BadCases {
+		_, err := applyPatch(c.doc, c.patch)
+
+		if err == nil {
+			t.Errorf("Patch %q should have failed to apply but it did not", c.patch)
 		}
 	}
 }
 
-type JSONMergePatchTestCases struct {
-	TestCases []JSONMergePatchTestCase
+type TestCase struct {
+	doc, patch string
+	result     bool
+	failedPath string
 }
 
-type JSONMergePatchTestCase struct {
-	Description string
-	JSONMergePatchTestCaseData
+var TestCases = []TestCase{
+	{
+		`{
+      "baz": "qux",
+      "foo": [ "a", 2, "c" ]
+    }`,
+		`[
+      { "op": "test", "path": "/baz", "value": "qux" },
+      { "op": "test", "path": "/foo/1", "value": 2 }
+    ]`,
+		true,
+		"",
+	},
+	{
+		`{ "baz": "qux" }`,
+		`[ { "op": "test", "path": "/baz", "value": "bar" } ]`,
+		false,
+		"/baz",
+	},
+	{
+		`{
+      "baz": "qux",
+      "foo": ["a", 2, "c"]
+    }`,
+		`[
+      { "op": "test", "path": "/baz", "value": "qux" },
+      { "op": "test", "path": "/foo/1", "value": "c" }
+    ]`,
+		false,
+		"/foo/1",
+	},
+	{
+		`{ "baz": "qux" }`,
+		`[ { "op": "test", "path": "/foo", "value": 42 } ]`,
+		false,
+		"/foo",
+	},
+	{
+		`{ "baz": "qux" }`,
+		`[ { "op": "test", "path": "/foo", "value": null } ]`,
+		true,
+		"",
+	},
+	{
+		`{ "foo": null }`,
+		`[ { "op": "test", "path": "/foo", "value": null } ]`,
+		true,
+		"",
+	},
+	{
+		`{ "foo": {} }`,
+		`[ { "op": "test", "path": "/foo", "value": null } ]`,
+		false,
+		"/foo",
+	},
+	{
+		`{ "foo": [] }`,
+		`[ { "op": "test", "path": "/foo", "value": null } ]`,
+		false,
+		"/foo",
+	},
+	{
+		`{ "baz/foo": "qux" }`,
+		`[ { "op": "test", "path": "/baz~1foo", "value": "qux"} ]`,
+		true,
+		"",
+	},
+	{
+		`{ "foo": [] }`,
+		`[ { "op": "test", "path": "/foo"} ]`,
+		false,
+		"/foo",
+	},
 }
 
-type JSONMergePatchTestCaseData struct {
-	// Original is the original object (last-applied config in annotation)
-	Original map[string]interface{}
-	// Modified is the modified object (new config we want)
-	Modified map[string]interface{}
-	// Current is the current object (live config in the server)
-	Current map[string]interface{}
-	// ThreeWay is the expected three-way merge patch
-	ThreeWay map[string]interface{}
-	// Result is the expected object after applying the three-way patch on current object.
-	Result map[string]interface{}
-}
+func TestAllTest(t *testing.T) {
+	for _, c := range TestCases {
+		_, err := applyPatch(c.doc, c.patch)
 
-var createJSONMergePatchTestCaseData = []byte(`
-testCases:
-  - description: nil original
-    modified:
-      name: 1
-      value: 1
-    current:
-      name: 1
-      other: a
-    threeWay:
-      value: 1
-    result:
-      name: 1
-      value: 1
-      other: a
-  - description: nil patch
-    original:
-      name: 1
-    modified:
-      name: 1
-    current:
-      name: 1
-    threeWay:
-      {}
-    result:
-      name: 1
-  - description: add field to map
-    original:
-      name: 1
-    modified:
-      name: 1
-      value: 1
-    current:
-      name: 1
-      other: a
-    threeWay:
-      value: 1
-    result:
-      name: 1
-      value: 1
-      other: a
-  - description: add field to map with conflict
-    original:
-      name: 1
-    modified:
-      name: 1
-      value: 1
-    current:
-      name: a
-      other: a
-    threeWay:
-      name: 1
-      value: 1
-    result:
-      name: 1
-      value: 1
-      other: a
-  - description: add field and delete field from map
-    original:
-      name: 1
-    modified:
-      value: 1
-    current:
-      name: 1
-      other: a
-    threeWay:
-      name: null
-      value: 1
-    result:
-      value: 1
-      other: a
-  - description: add field and delete field from map with conflict
-    original:
-      name: 1
-    modified:
-      value: 1
-    current:
-      name: a
-      other: a
-    threeWay:
-      name: null
-      value: 1
-    result:
-      value: 1
-      other: a
-  - description: delete field from nested map
-    original:
-      simpleMap:
-        key1: 1
-        key2: 1
-    modified:
-      simpleMap:
-        key1: 1
-    current:
-      simpleMap:
-        key1: 1
-        key2: 1
-        other: a
-    threeWay:
-      simpleMap:
-        key2: null
-    result:
-      simpleMap:
-        key1: 1
-        other: a
-  - description: delete field from nested map with conflict
-    original:
-      simpleMap:
-        key1: 1
-        key2: 1
-    modified:
-      simpleMap:
-        key1: 1
-    current:
-      simpleMap:
-        key1: a
-        key2: 1
-        other: a
-    threeWay:
-      simpleMap:
-        key1: 1
-        key2: null
-    result:
-      simpleMap:
-        key1: 1
-        other: a
-  - description: delete all fields from map
-    original:
-      name: 1
-      value: 1
-    modified: {}
-    current:
-      name: 1
-      value: 1
-      other: a
-    threeWay:
-      name: null
-      value: null
-    result:
-      other: a
-  - description: delete all fields from map with conflict
-    original:
-      name: 1
-      value: 1
-    modified: {}
-    current:
-      name: 1
-      value: a
-      other: a
-    threeWay:
-      name: null
-      value: null
-    result:
-      other: a
-  - description: add field and delete all fields from map
-    original:
-      name: 1
-      value: 1
-    modified:
-      other: a
-    current:
-      name: 1
-      value: 1
-      other: a
-    threeWay:
-      name: null
-      value: null
-    result:
-      other: a
-  - description: add field and delete all fields from map with conflict
-    original:
-      name: 1
-      value: 1
-    modified:
-      other: a
-    current:
-      name: 1
-      value: 1
-      other: b
-    threeWay:
-      name: null
-      value: null
-      other: a
-    result:
-      other: a
-  - description: replace list of scalars
-    original:
-      intList:
-        - 1
-        - 2
-    modified:
-      intList:
-        - 2
-        - 3
-    current:
-      intList:
-        - 1
-        - 2
-    threeWay:
-      intList:
-        - 2
-        - 3
-    result:
-      intList:
-        - 2
-        - 3
-  - description: replace list of scalars with conflict
-    original:
-      intList:
-        - 1
-        - 2
-    modified:
-      intList:
-        - 2
-        - 3
-    current:
-      intList:
-        - 1
-        - 4
-    threeWay:
-      intList:
-        - 2
-        - 3
-    result:
-      intList:
-        - 2
-        - 3
-  - description: patch with different scalar type
-    original:
-      foo: 1
-    modified:
-      foo: true
-    current:
-      foo: 1
-      bar: 2
-    threeWay:
-      foo: true
-    result:
-      foo: true
-      bar: 2
-  - description: patch from scalar to list
-    original:
-      foo: 0
-    modified:
-      foo:
-      - 1
-      - 2
-    current:
-      foo: 0
-      bar: 2
-    threeWay:
-      foo:
-      - 1
-      - 2
-    result:
-      foo:
-      - 1
-      - 2
-      bar: 2
-  - description: patch from list to scalar
-    original:
-      foo:
-      - 1
-      - 2
-    modified:
-      foo: 0
-    current:
-      foo:
-      - 1
-      - 2
-      bar: 2
-    threeWay:
-      foo: 0
-    result:
-      foo: 0
-      bar: 2
-  - description: patch from scalar to map
-    original:
-      foo: 0
-    modified:
-      foo:
-        baz: 1
-    current:
-      foo: 0
-      bar: 2
-    threeWay:
-      foo:
-        baz: 1
-    result:
-      foo:
-        baz: 1
-      bar: 2
-  - description: patch from map to scalar
-    original:
-      foo:
-        baz: 1
-    modified:
-      foo: 0
-    current:
-      foo:
-        baz: 1
-      bar: 2
-    threeWay:
-      foo: 0
-    result:
-      foo: 0
-      bar: 2
-  - description: patch from map to list
-    original:
-      foo:
-        baz: 1
-    modified:
-      foo:
-      - 1
-      - 2
-    current:
-      foo:
-        baz: 1
-      bar: 2
-    threeWay:
-      foo:
-      - 1
-      - 2
-    result:
-      foo:
-      - 1
-      - 2
-      bar: 2
-  - description: patch from list to map
-    original:
-      foo:
-      - 1
-      - 2
-    modified:
-      foo:
-        baz: 0
-    current:
-      foo:
-      - 1
-      - 2
-      bar: 2
-    threeWay:
-      foo:
-        baz: 0
-    result:
-      foo:
-        baz: 0
-      bar: 2
-  - description: patch with different nested types
-    original:
-      foo:
-      - a: true
-      - 2
-      - false
-    modified:
-      foo:
-      - 1
-      - false
-      - b: 1
-    current:
-      foo:
-      - a: true
-      - 2
-      - false
-      bar: 0
-    threeWay:
-      foo:
-      - 1
-      - false
-      - b: 1
-    result:
-      foo:
-      - 1
-      - false
-      - b: 1
-      bar: 0
-`)
-
-func TestCreateThreeWayJSONMergePatch(t *testing.T) {
-	tc := JSONMergePatchTestCases{}
-	err := yaml.Unmarshal(createJSONMergePatchTestCaseData, &tc)
-	if err != nil {
-		t.Errorf("can't unmarshal test cases: %s\n", err)
-		return
-	}
-
-	for _, c := range tc.TestCases {
-		testThreeWayPatch(t, c)
+		if c.result && err != nil {
+			t.Errorf("Testing failed when it should have passed: %s", err)
+		} else if !c.result && err == nil {
+			t.Errorf("Testing passed when it should have faild: %s", err)
+		} else if !c.result {
+			expected := fmt.Sprintf("testing value %s failed: test failed", c.failedPath)
+			if err.Error() != expected {
+				t.Errorf("Testing failed as expected but invalid message: expected [%s], got [%s]", expected, err)
+			}
+		}
 	}
 }
 
-func testThreeWayPatch(t *testing.T, c JSONMergePatchTestCase) {
-	original, modified, current, expected, result := threeWayTestCaseToJSONOrFail(t, c)
-	actual, err := CreateThreeWayJSONMergePatch(original, modified, current)
-	if err != nil {
-		t.Fatalf("error: %s", err)
+func TestAdd(t *testing.T) {
+	testCases := []struct {
+		name                   string
+		key                    string
+		val                    lazyNode
+		arr                    partialArray
+		rejectNegativeIndicies bool
+		err                    string
+	}{
+		{
+			name: "should work",
+			key:  "0",
+			val:  lazyNode{},
+			arr:  partialArray{},
+		},
+		{
+			name: "index too large",
+			key:  "1",
+			val:  lazyNode{},
+			arr:  partialArray{},
+			err:  "Unable to access invalid index: 1: invalid index referenced",
+		},
+		{
+			name: "negative should work",
+			key:  "-1",
+			val:  lazyNode{},
+			arr:  partialArray{},
+		},
+		{
+			name: "negative too small",
+			key:  "-2",
+			val:  lazyNode{},
+			arr:  partialArray{},
+			err:  "Unable to access invalid index: -2: invalid index referenced",
+		},
+		{
+			name: "negative but negative disabled",
+			key:  "-1",
+			val:  lazyNode{},
+			arr:  partialArray{},
+			err:  "Unable to access invalid index: -1: invalid index referenced",
+
+			rejectNegativeIndicies: true,
+		},
 	}
-	testPatchCreation(t, expected, actual, c.Description)
-	testPatchApplication(t, current, actual, result, c.Description)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			SupportNegativeIndices = !tc.rejectNegativeIndicies
+			key := tc.key
+			arr := &tc.arr
+			val := &tc.val
+			err := arr.add(key, val)
+			if err == nil && tc.err != "" {
+				t.Errorf("Expected error but got none! %v", tc.err)
+			} else if err != nil && tc.err == "" {
+				t.Errorf("Did not expect error but go: %v", err)
+			} else if err != nil && err.Error() != tc.err {
+				t.Errorf("Expected error %v but got error %v", tc.err, err)
+			}
+		})
+	}
 }
 
-func testPatchCreation(t *testing.T, expected, actual []byte, description string) {
-	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("error in test case: %s\nexpected patch:\n%s\ngot:\n%s\n",
-			description, jsonToYAMLOrError(expected), jsonToYAMLOrError(actual))
-		return
-	}
+type EqualityCase struct {
+	name  string
+	a, b  string
+	equal bool
 }
 
-func testPatchApplication(t *testing.T, original, patch, expected []byte, description string) {
-	result, err := jsonpatch.MergePatch(original, patch)
-	if err != nil {
-		t.Errorf("error: %s\nin test case: %s\ncannot apply patch:\n%s\nto original:\n%s\n",
-			err, description, jsonToYAMLOrError(patch), jsonToYAMLOrError(original))
-		return
-	}
-
-	if !reflect.DeepEqual(result, expected) {
-		format := "error in test case: %s\npatch application failed:\noriginal:\n%s\npatch:\n%s\nexpected:\n%s\ngot:\n%s\n"
-		t.Errorf(format, description,
-			jsonToYAMLOrError(original), jsonToYAMLOrError(patch),
-			jsonToYAMLOrError(expected), jsonToYAMLOrError(result))
-		return
-	}
+var EqualityCases = []EqualityCase{
+	{
+		"ExtraKeyFalse",
+		`{"foo": "bar"}`,
+		`{"foo": "bar", "baz": "qux"}`,
+		false,
+	},
+	{
+		"StripWhitespaceTrue",
+		`{
+			"foo": "bar",
+			"baz": "qux"
+		}`,
+		`{"foo": "bar", "baz": "qux"}`,
+		true,
+	},
+	{
+		"KeysOutOfOrderTrue",
+		`{
+			"baz": "qux",
+			"foo": "bar"
+		}`,
+		`{"foo": "bar", "baz": "qux"}`,
+		true,
+	},
+	{
+		"ComparingNullFalse",
+		`{"foo": null}`,
+		`{"foo": "bar"}`,
+		false,
+	},
+	{
+		"ComparingNullTrue",
+		`{"foo": null}`,
+		`{"foo": null}`,
+		true,
+	},
+	{
+		"ArrayOutOfOrderFalse",
+		`["foo", "bar", "baz"]`,
+		`["bar", "baz", "foo"]`,
+		false,
+	},
+	{
+		"ArrayTrue",
+		`["foo", "bar", "baz"]`,
+		`["foo", "bar", "baz"]`,
+		true,
+	},
+	{
+		"NonStringTypesTrue",
+		`{"int": 6, "bool": true, "float": 7.0, "string": "the_string", "null": null}`,
+		`{"int": 6, "bool": true, "float": 7.0, "string": "the_string", "null": null}`,
+		true,
+	},
+	{
+		"NestedNullFalse",
+		`{"foo": ["an", "array"], "bar": {"an": "object"}}`,
+		`{"foo": null, "bar": null}`,
+		false,
+	},
+	{
+		"NullCompareStringFalse",
+		`"foo"`,
+		`null`,
+		false,
+	},
+	{
+		"NullCompareIntFalse",
+		`6`,
+		`null`,
+		false,
+	},
+	{
+		"NullCompareFloatFalse",
+		`6.01`,
+		`null`,
+		false,
+	},
+	{
+		"NullCompareBoolFalse",
+		`false`,
+		`null`,
+		false,
+	},
 }
 
-func threeWayTestCaseToJSONOrFail(t *testing.T, c JSONMergePatchTestCase) ([]byte, []byte, []byte, []byte, []byte) {
-	return testObjectToJSONOrFail(t, c.Original),
-		testObjectToJSONOrFail(t, c.Modified),
-		testObjectToJSONOrFail(t, c.Current),
-		testObjectToJSONOrFail(t, c.ThreeWay),
-		testObjectToJSONOrFail(t, c.Result)
-}
+func TestEquality(t *testing.T) {
+	for _, tc := range EqualityCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Equal([]byte(tc.a), []byte(tc.b))
+			if got != tc.equal {
+				t.Errorf("Expected Equal(%s, %s) to return %t, but got %t", tc.a, tc.b, tc.equal, got)
+			}
 
-func testObjectToJSONOrFail(t *testing.T, o map[string]interface{}) []byte {
-	if o == nil {
-		return nil
+			got = Equal([]byte(tc.b), []byte(tc.a))
+			if got != tc.equal {
+				t.Errorf("Expected Equal(%s, %s) to return %t, but got %t", tc.b, tc.a, tc.equal, got)
+			}
+		})
 	}
-	j, err := toJSON(o)
-	if err != nil {
-		t.Error(err)
-	}
-	return j
-}
-
-func jsonToYAMLOrError(j []byte) string {
-	y, err := jsonToYAML(j)
-	if err != nil {
-		return err.Error()
-	}
-	return string(y)
-}
-
-func toJSON(v interface{}) ([]byte, error) {
-	j, err := json.Marshal(v)
-	if err != nil {
-		return nil, fmt.Errorf("json marshal failed: %v\n%v\n", err, spew.Sdump(v))
-	}
-	return j, nil
-}
-
-func jsonToYAML(j []byte) ([]byte, error) {
-	y, err := yaml.JSONToYAML(j)
-	if err != nil {
-		return nil, fmt.Errorf("json to yaml failed: %v\n%v\n", err, j)
-	}
-	return y, nil
 }

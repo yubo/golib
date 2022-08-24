@@ -22,7 +22,6 @@ import (
 
 	"github.com/yubo/golib/runtime"
 	"github.com/yubo/golib/runtime/serializer"
-	runtimetesting "github.com/yubo/golib/runtime/testing"
 )
 
 type mockEncoder struct{}
@@ -32,14 +31,14 @@ func (m *mockEncoder) Encode(obj runtime.Object, w io.Writer) error {
 	return err
 }
 
-func (m *mockEncoder) Identifier() runtime.Identifier {
-	return runtime.Identifier("mock-identifier")
-}
+//func (m *mockEncoder) Identifier() runtime.Identifier {
+//	return runtime.Identifier("mock-identifier")
+//}
 
-func TestCacheableObject(t *testing.T) {
-	serializer := runtime.NewBase64Serializer(&mockEncoder{}, nil)
-	runtimetesting.CacheableObjectTest(t, serializer)
-}
+//func TestCacheableObject(t *testing.T) {
+//	serializer := runtime.NewBase64Serializer(&mockEncoder{}, nil)
+//	runtimetesting.CacheableObjectTest(t, serializer)
+//}
 
 func TestCodecs(t *testing.T) {
 	test := struct {

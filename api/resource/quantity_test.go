@@ -25,8 +25,6 @@ import (
 	"testing"
 	"unicode"
 
-	fuzz "github.com/google/gofuzz"
-
 	inf "gopkg.in/inf.v0"
 )
 
@@ -776,45 +774,6 @@ func TestQuantityParseEmit(t *testing.T) {
 	}
 }
 
-var fuzzer = fuzz.New().Funcs(
-	func(q *Quantity, c fuzz.Continue) {
-		q.i = Zero
-		if c.RandBool() {
-			q.Format = BinarySI
-			if c.RandBool() {
-				dec := &inf.Dec{}
-				q.d = infDecAmount{Dec: dec}
-				dec.SetScale(0)
-				dec.SetUnscaled(c.Int63())
-				return
-			}
-			// Be sure to test cases like 1Mi
-			dec := &inf.Dec{}
-			q.d = infDecAmount{Dec: dec}
-			dec.SetScale(0)
-			dec.SetUnscaled(c.Int63n(1024) << uint(10*c.Intn(5)))
-			return
-		}
-		if c.RandBool() {
-			q.Format = DecimalSI
-		} else {
-			q.Format = DecimalExponent
-		}
-		if c.RandBool() {
-			dec := &inf.Dec{}
-			q.d = infDecAmount{Dec: dec}
-			dec.SetScale(inf.Scale(c.Intn(4)))
-			dec.SetUnscaled(c.Int63())
-			return
-		}
-		// Be sure to test cases like 1M
-		dec := &inf.Dec{}
-		q.d = infDecAmount{Dec: dec}
-		dec.SetScale(inf.Scale(3 - c.Intn(15)))
-		dec.SetUnscaled(c.Int63n(1000))
-	},
-)
-
 func TestQuantityDeepCopy(t *testing.T) {
 	// Test when d is nil
 	slice := []string{"0", "100m", "50m", "10000T"}
@@ -839,27 +798,6 @@ func TestQuantityDeepCopy(t *testing.T) {
 		result = Quantity{d: infDecAmount{dec(2, 0).Dec}, Format: DecimalSI}
 		if q.d.Cmp(result.AsDec()) == 0 {
 			t.Errorf("Modifying result has affected q")
-		}
-	}
-}
-
-func TestJSON(t *testing.T) {
-	for i := 0; i < 500; i++ {
-		q := &Quantity{}
-		fuzzer.Fuzz(q)
-		b, err := json.Marshal(q)
-		if err != nil {
-			t.Errorf("error encoding %v: %v", q, err)
-			continue
-		}
-		q2 := &Quantity{}
-		err = json.Unmarshal(b, q2)
-		if err != nil {
-			t.Logf("%d: %s", i, string(b))
-			t.Errorf("%v: error decoding %v: %v", q, string(b), err)
-		}
-		if q2.Cmp(*q) != 0 {
-			t.Errorf("Expected equal: %v, %v (json was '%v')", q, q2, string(b))
 		}
 	}
 }

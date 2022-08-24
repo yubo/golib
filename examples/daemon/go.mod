@@ -1,4 +1,4 @@
-module github.com/yubo/golib/examples/singal-cmd
+module github.com/yubo/golib/examples/daemon
 
 go 1.16
 

@@ -23,9 +23,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
 	utilclock "github.com/yubo/golib/util/clock"
+	"github.com/yubo/golib/util/uuid"
 )
 
 func TestExpiringCache(t *testing.T) {

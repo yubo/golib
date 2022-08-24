@@ -19,8 +19,8 @@ package term
 import (
 	"fmt"
 
-	"github.com/moby/term"
 	"github.com/yubo/golib/util/runtime"
+	"github.com/yubo/golib/util/term/moby/term"
 )
 
 // TerminalSize represents the width and height of a terminal.

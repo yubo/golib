@@ -22,7 +22,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/moby/term"
+	"github.com/yubo/golib/util/term/moby/term"
 
 	"github.com/yubo/golib/util/interrupt"
 )

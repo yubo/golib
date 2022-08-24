@@ -19,7 +19,7 @@ import (
 	"text/template"
 
 	"github.com/yubo/golib/util"
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 var (
@@ -121,6 +121,10 @@ func readFileWithInclude(w io.Writer, path string, prefixs ...string) error {
 	files, err := filepath.Glob(path)
 	if err != nil {
 		return err
+	}
+
+	if len(files) == 0 {
+		return fmt.Errorf("%s does not exists", path)
 	}
 
 	re := regexp.MustCompile(`^(\s*)include\s+([^\s]+)\s*$`)

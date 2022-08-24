@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	"github.com/yubo/golib/util/yaml"
-	sigsyaml "sigs.k8s.io/yaml"
+	sigsyaml "github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 type testcase struct {

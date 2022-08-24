@@ -6,9 +6,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/spf13/cast"
 	"github.com/spf13/pflag"
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 // ErrNoTable indicates that a chart does not have a matching table.
@@ -249,14 +249,14 @@ func ToString(v interface{}) string {
 		b, _ := yaml.Marshal(v)
 		return string(b)
 	default:
-		return cast.ToString(v)
+		return util.ToString(v)
 	}
 }
 
 func ToStringMapString(str string) map[string]string {
 	v := map[string]string{}
 	if err := yaml.Unmarshal([]byte(str), &v); err != nil {
-		v = cast.ToStringMapString(str)
+		v = util.ToStringMapString(str)
 	}
 
 	return v
@@ -265,7 +265,7 @@ func ToStringMapString(str string) map[string]string {
 func ToStringArrayVar(str string) []string {
 	v := []string{}
 	if err := yaml.Unmarshal([]byte(str), &v); err != nil {
-		v = cast.ToStringSlice(str)
+		v = util.ToStringSlice(str)
 	}
 
 	return v
@@ -274,7 +274,7 @@ func ToStringArrayVar(str string) []string {
 func ToIntSlice(str string) []int {
 	v := []int{}
 	if err := yaml.Unmarshal([]byte(str), &v); err != nil {
-		v = cast.ToIntSlice(str)
+		v = util.ToIntSlice(str)
 	}
 
 	return v
@@ -306,7 +306,7 @@ func ToFloat64SliceE(i interface{}) ([]float64, error) {
 		s := reflect.ValueOf(i)
 		a := make([]float64, s.Len())
 		for j := 0; j < s.Len(); j++ {
-			val, err := cast.ToFloat64E(s.Index(j).Interface())
+			val, err := util.ToFloat64E(s.Index(j).Interface())
 			if err != nil {
 				return []float64{}, fmt.Errorf("unable to cast %#v of type %T to []float64", i, i)
 			}

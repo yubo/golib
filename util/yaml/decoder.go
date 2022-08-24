@@ -27,7 +27,7 @@ import (
 
 	jsonutil "github.com/yubo/golib/util/json"
 
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 // Unmarshal unmarshals the given data

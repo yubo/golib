@@ -11,8 +11,7 @@ import (
 	"net"
 
 	"golang.org/x/net/ipv4"
-
-	"github.com/golang/glog"
+	"k8s.io/klog/v2"
 )
 
 func pkt(ip [4]byte) []byte {
@@ -44,7 +43,7 @@ func pkt(ip [4]byte) []byte {
 
 	out, err := h.Marshal()
 	if err != nil {
-		glog.Error(err)
+		klog.Error(err)
 	}
 	return append(out, icmp...)
 }

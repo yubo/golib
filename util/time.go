@@ -115,14 +115,6 @@ func Now() int64 {
 	return time.Now().Unix()
 }
 
-func NowPtr(delta ...int64) *int64 {
-	n := time.Now().Unix()
-	for _, i := range delta {
-		n += i
-	}
-	return &n
-}
-
 func TimeOf(v string) int64 {
 	var n int64
 

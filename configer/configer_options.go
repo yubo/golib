@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/spf13/cast"
+	"github.com/yubo/golib/util"
 	"k8s.io/klog/v2"
 )
 
@@ -132,7 +132,7 @@ func (p *configFieldsOptions) getTagOpts(sf reflect.StructField, paths []string)
 func (p *configFieldsOptions) getDefaultValue(path string, tag *FieldTag, opts *ConfigerOptions) string {
 	// overrideValues
 	if v, err := Values(opts.overrideValues).PathValue(path); err == nil {
-		if def := cast.ToString(v); len(def) > 0 {
+		if def := util.ToString(v); len(def) > 0 {
 			tag.Default = def
 			tag.Description += " (override)"
 			return def

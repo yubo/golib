@@ -111,7 +111,7 @@ type User struct {
         ID    int64   `sql:"<sqltag>"`
 }
 
-sqltag: [name=]<name>,<key>[=<value>],...
+sqltag: <key>[=<value>],...
 ```
 
 sql tags:

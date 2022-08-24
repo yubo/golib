@@ -9,7 +9,7 @@ import (
 	"io"
 	"sync"
 
-	mobyterm "github.com/moby/term"
+	mobyterm "github.com/yubo/golib/util/term/moby/term"
 	"github.com/yubo/golib/util/term"
 )
 

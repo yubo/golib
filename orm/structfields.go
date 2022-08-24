@@ -202,7 +202,7 @@ func parseTypeFields(t reflect.Type, driver Driver) StructFields {
 	nameIndex := make(map[string]int, len(fields))
 	for i, field := range fields {
 		if _, ok := nameIndex[field.Name]; ok {
-			panicType(field.Type, fmt.Sprintf("duplicate field %s", field.Name))
+			panic(fmt.Sprintf("%s.%s duplicate", t.Name(), field.Name))
 		}
 		nameIndex[field.Name] = i
 	}
@@ -449,14 +449,14 @@ func isValidTag(s string) bool {
 	return true
 }
 
-func panicType(ft reflect.Type, args ...interface{}) {
-	msg := fmt.Sprintf("type field %s %s", ft.PkgPath(), ft.Name())
-
-	if len(args) > 0 {
-		panic(fmt.Sprint(args...) + " " + msg)
-	}
-	panic(msg)
-}
+//func panicType(ft reflect.Type, args ...interface{}) {
+//	msg := fmt.Sprintf("type field %s %s", ft.PkgPath(), ft.Name())
+//
+//	if len(args) > 0 {
+//		panic(fmt.Sprint(args...) + " " + msg)
+//	}
+//	panic(msg)
+//}
 
 func prepareTag(tag string) string {
 	if tag == "" {

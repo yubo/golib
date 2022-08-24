@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/yubo/golib/selection"
 	"github.com/yubo/golib/util/sets"
 	"github.com/yubo/golib/util/validation"
@@ -285,7 +284,17 @@ func (r Requirement) Equal(x Requirement) bool {
 	if r.operator != x.operator {
 		return false
 	}
-	return cmp.Equal(r.strValues, x.strValues)
+
+	if len(r.strValues) != len(x.strValues) {
+		return false
+	}
+
+	for i := 0; i < len(r.strValues); i++ {
+		if r.strValues[i] != x.strValues[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // Empty returns true if the internalSelector doesn't restrict selection space

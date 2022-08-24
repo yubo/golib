@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yubo/golib/api"
 	"github.com/yubo/golib/util/clock"
 	"github.com/yubo/golib/util/runtime"
 )
@@ -424,7 +425,7 @@ func TestPollForever(t *testing.T) {
 		})
 
 		if err := PollInfinite(time.Microsecond, f); err != nil {
-			t.Fatalf("unexpected error %v", err)
+			t.Errorf("unexpected error %v", err)
 		}
 
 		close(ch)
@@ -455,7 +456,7 @@ func TestPollForever(t *testing.T) {
 				return
 			}
 		}
-		t.Fatalf("expected closed channel after two iterations")
+		t.Errorf("expected closed channel after two iterations")
 	}()
 	<-complete
 }
@@ -627,13 +628,13 @@ func TestBackoff_Step(t *testing.T) {
 		initial *Backoff
 		want    []time.Duration
 	}{
-		{initial: &Backoff{Duration: time.Second, Steps: 0}, want: []time.Duration{time.Second, time.Second, time.Second}},
-		{initial: &Backoff{Duration: time.Second, Steps: 1}, want: []time.Duration{time.Second, time.Second, time.Second}},
-		{initial: &Backoff{Duration: time.Second, Factor: 1.0, Steps: 1}, want: []time.Duration{time.Second, time.Second, time.Second}},
-		{initial: &Backoff{Duration: time.Second, Factor: 2, Steps: 3}, want: []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}},
-		{initial: &Backoff{Duration: time.Second, Factor: 2, Steps: 3, Cap: 3 * time.Second}, want: []time.Duration{1 * time.Second, 2 * time.Second, 3 * time.Second}},
-		{initial: &Backoff{Duration: time.Second, Factor: 2, Steps: 2, Cap: 3 * time.Second, Jitter: 0.5}, want: []time.Duration{2 * time.Second, 3 * time.Second, 3 * time.Second}},
-		{initial: &Backoff{Duration: time.Second, Factor: 2, Steps: 6, Jitter: 4}, want: []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 32 * time.Second}},
+		{initial: &Backoff{Duration: api.Duration{Duration: time.Second}, Steps: 0}, want: []time.Duration{time.Second, time.Second, time.Second}},
+		{initial: &Backoff{Duration: api.Duration{Duration: time.Second}, Steps: 1}, want: []time.Duration{time.Second, time.Second, time.Second}},
+		{initial: &Backoff{Duration: api.Duration{Duration: time.Second}, Factor: 1.0, Steps: 1}, want: []time.Duration{time.Second, time.Second, time.Second}},
+		{initial: &Backoff{Duration: api.Duration{Duration: time.Second}, Factor: 2, Steps: 3}, want: []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second}},
+		{initial: &Backoff{Duration: api.Duration{Duration: time.Second}, Factor: 2, Steps: 3, Cap: api.Duration{Duration: 3 * time.Second}}, want: []time.Duration{1 * time.Second, 2 * time.Second, 3 * time.Second}},
+		{initial: &Backoff{Duration: api.Duration{Duration: time.Second}, Factor: 2, Steps: 2, Cap: api.Duration{Duration: 3 * time.Second}, Jitter: 0.5}, want: []time.Duration{2 * time.Second, 3 * time.Second, 3 * time.Second}},
+		{initial: &Backoff{Duration: api.Duration{Duration: time.Second}, Factor: 2, Steps: 6, Jitter: 4}, want: []time.Duration{1 * time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 16 * time.Second, 32 * time.Second}},
 	}
 	for seed := int64(0); seed < 5; seed++ {
 		for _, tt := range tests {
@@ -852,7 +853,7 @@ func TestExponentialBackoffWithContext(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			backoff := Backoff{
-				Duration: 1 * time.Millisecond,
+				Duration: api.Duration{Duration: 1 * time.Millisecond},
 				Factor:   1.0,
 				Steps:    test.steps,
 			}

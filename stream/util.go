@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/moby/term"
+	"github.com/yubo/golib/util/term/moby/term"
 	"k8s.io/klog/v2"
 )
 

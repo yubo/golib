@@ -25,13 +25,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-	"github.com/spf13/cast"
 	"github.com/spf13/pflag"
+	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
 	"k8s.io/klog/v2"
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 type Configer interface {
@@ -351,7 +350,7 @@ func (p *configer) GetString(path string) string {
 		return ""
 	}
 
-	return cast.ToString(v)
+	return util.ToString(v)
 }
 
 func (p *configer) GetBool(path string) (bool, error) {
@@ -360,7 +359,7 @@ func (p *configer) GetBool(path string) (bool, error) {
 		return false, err
 	}
 
-	return cast.ToBool(v), nil
+	return util.ToBool(v), nil
 }
 
 func (p *configer) GetBoolDef(path string, def bool) bool {
@@ -377,7 +376,7 @@ func (p *configer) GetFloat64(path string) (float64, error) {
 		return 0, err
 	}
 
-	return cast.ToFloat64(v), nil
+	return util.ToFloat64(v), nil
 }
 
 func (p *configer) GetFloat64Def(path string, def float64) float64 {
@@ -395,7 +394,7 @@ func (p *configer) GetInt64(path string) (int64, error) {
 		return 0, err
 	}
 
-	return cast.ToInt64(v), nil
+	return util.ToInt64(v), nil
 }
 
 func (p *configer) GetInt64Def(path string, def int64) int64 {
@@ -412,7 +411,7 @@ func (p *configer) GetInt(path string) (int, error) {
 		return 0, err
 	}
 
-	return cast.ToInt(v), nil
+	return util.ToInt(v), nil
 }
 
 func (p *configer) GetIntDef(path string, def int) int {
@@ -505,7 +504,7 @@ func (p *configer) ValueFiles() []string {
 // defualt priority sample > tagsGetter > tags
 func (p *configer) Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
 	if p == nil {
-		return errors.New("configer pointer is nil")
+		return fmt.Errorf("configer pointer is nil")
 	}
 
 	o := newConfigFieldsOptions(p)
@@ -597,35 +596,35 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 			}
 			field = newConfigField(value, fs, ps, tag, fs.IPVar, fs.IPVarP, df)
 		case *bool:
-			field = newConfigField(value, fs, ps, tag, fs.BoolVar, fs.BoolVarP, cast.ToBool(def))
+			field = newConfigField(value, fs, ps, tag, fs.BoolVar, fs.BoolVarP, util.ToBool(def))
 		case *string:
-			field = newConfigField(value, fs, ps, tag, fs.StringVar, fs.StringVarP, cast.ToString(def))
+			field = newConfigField(value, fs, ps, tag, fs.StringVar, fs.StringVarP, util.ToString(def))
 		case *int:
-			field = newConfigField(value, fs, ps, tag, fs.IntVar, fs.IntVarP, cast.ToInt(def))
+			field = newConfigField(value, fs, ps, tag, fs.IntVar, fs.IntVarP, util.ToInt(def))
 		case *int8:
-			field = newConfigField(value, fs, ps, tag, fs.Int8Var, fs.Int8VarP, cast.ToInt8(def))
+			field = newConfigField(value, fs, ps, tag, fs.Int8Var, fs.Int8VarP, util.ToInt8(def))
 		case *int16:
-			field = newConfigField(value, fs, ps, tag, fs.Int16Var, fs.Int16VarP, cast.ToInt16(def))
+			field = newConfigField(value, fs, ps, tag, fs.Int16Var, fs.Int16VarP, util.ToInt16(def))
 		case *int32:
-			field = newConfigField(value, fs, ps, tag, fs.Int32Var, fs.Int32VarP, cast.ToInt32(def))
+			field = newConfigField(value, fs, ps, tag, fs.Int32Var, fs.Int32VarP, util.ToInt32(def))
 		case *int64:
-			field = newConfigField(value, fs, ps, tag, fs.Int64Var, fs.Int64VarP, cast.ToInt64(def))
+			field = newConfigField(value, fs, ps, tag, fs.Int64Var, fs.Int64VarP, util.ToInt64(def))
 		case *uint:
-			field = newConfigField(value, fs, ps, tag, fs.UintVar, fs.UintVarP, cast.ToUint(def))
+			field = newConfigField(value, fs, ps, tag, fs.UintVar, fs.UintVarP, util.ToUint(def))
 		case *uint8:
-			field = newConfigField(value, fs, ps, tag, fs.Uint8Var, fs.Uint8VarP, cast.ToUint8(def))
+			field = newConfigField(value, fs, ps, tag, fs.Uint8Var, fs.Uint8VarP, util.ToUint8(def))
 		case *uint16:
-			field = newConfigField(value, fs, ps, tag, fs.Uint16Var, fs.Uint16VarP, cast.ToUint16(def))
+			field = newConfigField(value, fs, ps, tag, fs.Uint16Var, fs.Uint16VarP, util.ToUint16(def))
 		case *uint32:
-			field = newConfigField(value, fs, ps, tag, fs.Uint32Var, fs.Uint32VarP, cast.ToUint32(def))
+			field = newConfigField(value, fs, ps, tag, fs.Uint32Var, fs.Uint32VarP, util.ToUint32(def))
 		case *uint64:
-			field = newConfigField(value, fs, ps, tag, fs.Uint64Var, fs.Uint64VarP, cast.ToUint64(def))
+			field = newConfigField(value, fs, ps, tag, fs.Uint64Var, fs.Uint64VarP, util.ToUint64(def))
 		case *float32:
-			field = newConfigField(value, fs, ps, tag, fs.Float32Var, fs.Float32VarP, cast.ToFloat32(def))
+			field = newConfigField(value, fs, ps, tag, fs.Float32Var, fs.Float32VarP, util.ToFloat32(def))
 		case *float64:
-			field = newConfigField(value, fs, ps, tag, fs.Float64Var, fs.Float64VarP, cast.ToFloat64(def))
+			field = newConfigField(value, fs, ps, tag, fs.Float64Var, fs.Float64VarP, util.ToFloat64(def))
 		case *time.Duration:
-			field = newConfigField(value, fs, ps, tag, fs.DurationVar, fs.DurationVarP, cast.ToDuration(def))
+			field = newConfigField(value, fs, ps, tag, fs.DurationVar, fs.DurationVarP, util.ToDuration(def))
 		case *[]string:
 			field = newConfigField(value, fs, ps, tag, fs.StringArrayVar, fs.StringArrayVarP, ToStringArrayVar(def))
 		case *[]int:
@@ -648,7 +647,7 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 			}
 
 			// set field.default
-			field = newConfigField(value, fs, ps, tag, nil, nil, cast.ToStringMapString(def))
+			field = newConfigField(value, fs, ps, tag, nil, nil, util.ToStringMapString(def))
 		}
 		p.fields = append(p.fields, field)
 	}

@@ -2,6 +2,7 @@ package proc
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"reflect"
 	"runtime"
@@ -71,4 +72,42 @@ func setGroupCommandFunc(cmd *cobra.Command, nfs flag.NamedFlagSets) {
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\n\n"+usageFmt, cmd.Long, cmd.UseLine())
 		flag.PrintSections(cmd.OutOrStdout(), nfs, cols)
 	})
+}
+
+// SdNotify sends a message to the init daemon. It is common to ignore the error.
+// If `unsetEnvironment` is true, the environment variable `NOTIFY_SOCKET`
+// will be unconditionally unset.
+//
+// It returns one of the following:
+// (false, nil) - notification not supported (i.e. NOTIFY_SOCKET is unset)
+// (false, err) - notification supported, but failure happened (e.g. error connecting to NOTIFY_SOCKET or while sending data)
+// (true, nil) - notification supported, data has been sent
+func SdNotify(unsetEnvironment bool, state string) (bool, error) {
+	socketAddr := &net.UnixAddr{
+		Name: os.Getenv("NOTIFY_SOCKET"),
+		Net:  "unixgram",
+	}
+
+	// NOTIFY_SOCKET not set
+	if socketAddr.Name == "" {
+		return false, nil
+	}
+
+	if unsetEnvironment {
+		if err := os.Unsetenv("NOTIFY_SOCKET"); err != nil {
+			return false, err
+		}
+	}
+
+	conn, err := net.DialUnix(socketAddr.Net, nil, socketAddr)
+	// Error connecting to NOTIFY_SOCKET
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+
+	if _, err = conn.Write([]byte(state)); err != nil {
+		return false, err
+	}
+	return true, nil
 }

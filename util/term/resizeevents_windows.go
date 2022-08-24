@@ -18,8 +18,7 @@ package term
 
 import (
 	"time"
-
-	"github.com/yubo/golib/runtime"
+	//"github.com/yubo/golib/runtime"
 )
 
 // monitorResizeEvents spawns a goroutine that periodically gets the terminal size and tries to send
@@ -27,7 +26,7 @@ import (
 // is closed.
 func monitorResizeEvents(fd uintptr, resizeEvents chan<- TerminalSize, stop chan struct{}) {
 	go func() {
-		defer runtime.HandleCrash()
+		//defer runtime.HandleCrash()
 
 		size := GetSize(fd)
 		if size == nil {

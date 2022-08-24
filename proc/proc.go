@@ -12,7 +12,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/coreos/go-systemd/daemon"
 	"github.com/go-openapi/spec"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -323,7 +322,7 @@ func (p *Process) mainLoop() error {
 
 	signal.Notify(p.sigsCh, append(shutdownSignals, reloadSignals...)...)
 
-	if _, err := daemon.SdNotify(true, "READY=1\n"); err != nil {
+	if _, err := SdNotify(true, "READY=1\n"); err != nil {
 		klog.Errorf("Unable to send systemd daemon successful start message: %v\n", err)
 	}
 

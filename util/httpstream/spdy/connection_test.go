@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/docker/spdystream"
+	"github.com/yubo/golib/util/httpstream/docker/spdystream"
 	"github.com/yubo/golib/util/httpstream"
 )
 

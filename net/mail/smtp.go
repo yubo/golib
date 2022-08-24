@@ -9,7 +9,6 @@ import (
 
 	ht "html/template"
 
-	"github.com/yubo/golib/util"
 	gomail "gopkg.in/gomail.v2"
 )
 
@@ -23,11 +22,20 @@ type Config struct {
 	TmpDir   string   `json:"tmpDir"`
 }
 
-func (p Config) String() string {
-	return util.Prettify(p)
+func NewConfig() *Config {
+	return &Config{
+		TmpDir: os.TempDir(),
+	}
 }
 
 func (p *Config) Validate() error {
+	if p.TmpDir == "" {
+		p.TmpDir = os.TempDir()
+	}
+	if !isDir(p.TmpDir) {
+		return fmt.Errorf("mail.tmpdir %s not exist", p.TmpDir)
+	}
+
 	return nil
 }
 
@@ -123,3 +131,11 @@ func (p *MailContext) SetHeader(field string, value ...string) {
 	m.SetBody("text/html", `<img src="cid:otp.png" alt="otp" />`)
 	d := gomail.NewDialer("mail.yubo.org", 25, "", "")
 */
+
+func isDir(file string) bool {
+	f, e := os.Stat(file)
+	if e != nil {
+		return false
+	}
+	return f.IsDir()
+}

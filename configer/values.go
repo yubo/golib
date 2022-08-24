@@ -17,12 +17,12 @@ limitations under the License.
 package configer
 
 import (
+	"errors"
 	"io"
 	"io/ioutil"
 	"strings"
 
-	"github.com/pkg/errors"
-	"sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 // GlobalKey is the name of the Values key that is used for storing global vars.
