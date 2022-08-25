@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -97,17 +98,17 @@ func (p *sqlite) FullDataTypeOf(field *StructField) string {
 }
 
 // AutoMigrate
-func (p *sqlite) AutoMigrate(sample interface{}, opts ...Option) error {
+func (p *sqlite) AutoMigrate(ctx context.Context, sample interface{}, opts ...Option) error {
 	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return err
 	}
 
-	if !p.HasTable(o.Table()) {
-		return p.CreateTable(o)
+	if !p.HasTable(ctx, o.Table()) {
+		return p.CreateTable(ctx, o)
 	}
 
-	actualFields, _ := p.ColumnTypes(o)
+	actualFields, _ := p.ColumnTypes(ctx, o)
 	expectFields := GetFields(o.Sample(), p)
 
 	for _, expectField := range expectFields.Fields {
@@ -122,10 +123,10 @@ func (p *sqlite) AutoMigrate(sample interface{}, opts ...Option) error {
 
 		if foundField == nil {
 			// not found, add column
-			if err := p.AddColumn(expectField.Name, o); err != nil {
+			if err := p.AddColumn(ctx, expectField.Name, o); err != nil {
 				return err
 			}
-		} else if err := p.MigrateColumn(expectField, foundField, o); err != nil {
+		} else if err := p.MigrateColumn(ctx, expectField, foundField, o); err != nil {
 			// found, smart migrate
 			return err
 		}
@@ -133,8 +134,8 @@ func (p *sqlite) AutoMigrate(sample interface{}, opts ...Option) error {
 
 	// index
 	for _, f := range expectFields.Fields {
-		if f.IndexKey && !p.HasIndex(f.Name, o) {
-			if err := p.CreateIndex(f.Name, o); err != nil {
+		if f.IndexKey && !p.HasIndex(ctx, f.Name, o) {
+			if err := p.CreateIndex(ctx, f.Name, o); err != nil {
 				return err
 			}
 		}
@@ -144,12 +145,12 @@ func (p *sqlite) AutoMigrate(sample interface{}, opts ...Option) error {
 	return nil
 }
 
-func (p *sqlite) GetTables() (tableList []string, err error) {
-	err = p.Query("SELECT name FROM sqlite_master WHERE type=?", "table").Rows(&tableList)
+func (p *sqlite) GetTables(ctx context.Context) (tableList []string, err error) {
+	err = p.Query(ctx, "SELECT name FROM sqlite_master WHERE type=?", "table").Rows(&tableList)
 	return
 }
 
-func (p *sqlite) CreateTable(o *Options) (err error) {
+func (p *sqlite) CreateTable(ctx context.Context, o *Options) (err error) {
 	var (
 		SQL                     = "CREATE TABLE `" + o.Table() + "` ("
 		hasPrimaryKeyInDataType bool
@@ -189,7 +190,7 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 
 		defer func(f *StructField) {
 			if err == nil {
-				err = p.CreateIndex(f.Name, o)
+				err = p.CreateIndex(ctx, f.Name, o)
 			}
 		}(f)
 	}
@@ -198,7 +199,7 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 
 	SQL += ")"
 
-	if _, err = p.Exec(SQL); err != nil {
+	if _, err = p.Exec(ctx, SQL); err != nil {
 		return err
 	}
 
@@ -206,11 +207,11 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 	if autoIncrementNum > 1 {
 		id := autoIncrementNum - 1
 
-		if _, err = p.Exec("INSERT INTO `"+o.Table()+"` (`"+autoIncrementField+"`) VALUES (?)", id); err != nil {
+		if _, err = p.Exec(ctx, "INSERT INTO `"+o.Table()+"` (`"+autoIncrementField+"`) VALUES (?)", id); err != nil {
 			return err
 		}
 
-		if _, err = p.Exec("DELETE FROM `"+o.Table()+"` WHERE `"+autoIncrementField+"` = ?", id); err != nil {
+		if _, err = p.Exec(ctx, "DELETE FROM `"+o.Table()+"` WHERE `"+autoIncrementField+"` = ?", id); err != nil {
 			return err
 		}
 	}
@@ -219,32 +220,32 @@ func (p *sqlite) CreateTable(o *Options) (err error) {
 
 }
 
-func (p *sqlite) DropTable(o *Options) error {
-	_, err := p.Exec("DROP TABLE IF EXISTS `" + o.Table() + "`")
+func (p *sqlite) DropTable(ctx context.Context, o *Options) error {
+	_, err := p.Exec(ctx, "DROP TABLE IF EXISTS `"+o.Table()+"`")
 	return err
 }
 
-func (p *sqlite) HasTable(tableName string) bool {
+func (p *sqlite) HasTable(ctx context.Context, tableName string) bool {
 	var count int64
-	p.Query("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Row(&count)
+	p.Query(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?", tableName).Row(&count)
 	//dlog(1, "count %d err %v", count, err)
 	return count > 0
 }
 
-func (p *sqlite) AddColumn(field string, o *Options) error {
+func (p *sqlite) AddColumn(ctx context.Context, field string, o *Options) error {
 	// avoid using the same name field
 	f := GetField(o.Sample(), field, p)
 	if f == nil {
 		return fmt.Errorf("failed to look up field with name: %s", field)
 	}
 
-	_, err := p.Exec("ALTER TABLE `" + o.Table() + "` ADD `" + f.Name + "` " + p.FullDataTypeOf(f))
+	_, err := p.Exec(ctx, "ALTER TABLE `"+o.Table()+"` ADD `"+f.Name+"` "+p.FullDataTypeOf(f))
 
 	return err
 }
 
-func (p *sqlite) DropColumn(field string, o *Options) error {
-	return p.recreateTable(o, func(rawDDL string) (sql string, sqlArgs []interface{}, err error) {
+func (p *sqlite) DropColumn(ctx context.Context, field string, o *Options) error {
+	return p.recreateTable(ctx, o, func(rawDDL string) (sql string, sqlArgs []interface{}, err error) {
 		name := field
 
 		reg, err := regexp.Compile("(`|'|\"| |\\[)" + name + "(`|'|\"| |\\]) .*?,")
@@ -258,8 +259,8 @@ func (p *sqlite) DropColumn(field string, o *Options) error {
 	})
 }
 
-func (p *sqlite) AlterColumn(field string, o *Options) error {
-	return p.recreateTable(o, func(rawDDL string) (sql string, sqlArgs []interface{}, err error) {
+func (p *sqlite) AlterColumn(ctx context.Context, field string, o *Options) error {
+	return p.recreateTable(ctx, o, func(rawDDL string) (sql string, sqlArgs []interface{}, err error) {
 		f := GetField(o.Sample(), field, p)
 		if f == nil {
 			err = fmt.Errorf("failed to look up field with name: %s", field)
@@ -282,9 +283,9 @@ func (p *sqlite) AlterColumn(field string, o *Options) error {
 	})
 }
 
-func (p *sqlite) HasColumn(name string, o *Options) bool {
+func (p *sqlite) HasColumn(ctx context.Context, name string, o *Options) bool {
 	var count int64
-	p.Query("SELECT count(*) FROM sqlite_master WHERE type = ? AND tbl_name = ? AND (sql LIKE ? OR sql LIKE ? OR sql LIKE ? OR sql LIKE ? OR sql LIKE ?)",
+	p.Query(ctx, "SELECT count(*) FROM sqlite_master WHERE type = ? AND tbl_name = ? AND (sql LIKE ? OR sql LIKE ? OR sql LIKE ? OR sql LIKE ? OR sql LIKE ?)",
 		"table", o.Table(), `%"`+name+`" %`, `%`+name+` %`, "%`"+name+"`%", "%["+name+"]%", "%\t"+name+"\t%",
 	).Row(&count)
 
@@ -293,7 +294,7 @@ func (p *sqlite) HasColumn(name string, o *Options) bool {
 
 // field: 1 - expect
 // columntype: 2 - actual
-func (p *sqlite) MigrateColumn(expect, actual *StructField, o *Options) error {
+func (p *sqlite) MigrateColumn(ctx context.Context, expect, actual *StructField, o *Options) error {
 	alterColumn := false
 
 	// check size
@@ -307,16 +308,15 @@ func (p *sqlite) MigrateColumn(expect, actual *StructField, o *Options) error {
 	}
 
 	if alterColumn {
-		return p.AlterColumn(expect.Name, o)
+		return p.AlterColumn(ctx, expect.Name, o)
 	}
 
 	return nil
 }
 
 // ColumnTypes return columnTypes []gColumnType and execErr error
-func (p *sqlite) ColumnTypes(o *Options) ([]StructField, error) {
-
-	rows, err := p.RawDB().Query("SELECT * FROM `" + o.Table() + "` LIMIT 1")
+func (p *sqlite) ColumnTypes(ctx context.Context, o *Options) ([]StructField, error) {
+	rows, err := p.RawDB().QueryContext(ctx, "SELECT * FROM `"+o.Table()+"` LIMIT 1")
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +356,7 @@ func (p *sqlite) convertFieldOptions(c *sql.ColumnType) StructField {
 	return ret
 }
 
-func (p *sqlite) CreateIndex(name string, o *Options) error {
+func (p *sqlite) CreateIndex(ctx context.Context, name string, o *Options) error {
 	f := GetField(o.Sample(), name, p)
 	if f == nil {
 		return fmt.Errorf("failed to create index with name %s", name)
@@ -368,41 +368,43 @@ func (p *sqlite) CreateIndex(name string, o *Options) error {
 	}
 	createIndexSQL += fmt.Sprintf("INDEX `%s` ON %s(%s)", f.Name, o.Table(), f.Name)
 
-	_, err := p.Exec(createIndexSQL)
+	_, err := p.Exec(ctx, createIndexSQL)
 	return err
 
 }
 
-func (p *sqlite) DropIndex(name string, o *Options) error {
-	_, err := p.Exec("DROP INDEX `" + name + "`")
+func (p *sqlite) DropIndex(ctx context.Context, name string, o *Options) error {
+	_, err := p.Exec(ctx, "DROP INDEX `"+name+"`")
 	return err
 }
 
-func (p *sqlite) HasIndex(name string, o *Options) bool {
+func (p *sqlite) HasIndex(ctx context.Context, name string, o *Options) bool {
 	var count int64
-	p.Query("SELECT count(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?",
+	p.Query(ctx, "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND name = ?",
 		o.Table(), name).Row(&count)
 
 	return count > 0
 }
 
-func (p *sqlite) CurrentDatabase() (name string) {
+func (p *sqlite) CurrentDatabase(ctx context.Context) (name string) {
 	var null interface{}
-	p.Query("PRAGMA database_list").Row(&null, &name, &null)
+	p.Query(ctx, "PRAGMA database_list").Row(&null, &name, &null)
 	return
 }
 
-func (p *sqlite) getRawDDL(table string) (createSQL string, err error) {
-	err = p.Query("SELECT sql FROM sqlite_master WHERE type = 'table' AND tbl_name = ? AND name = ?", table, table).Row(&createSQL)
+func (p *sqlite) getRawDDL(ctx context.Context, table string) (createSQL string, err error) {
+	err = p.Query(ctx, "SELECT sql FROM sqlite_master WHERE type = 'table' AND tbl_name = ? AND name = ?", table, table).Row(&createSQL)
 	return
 }
 
-func (p *sqlite) recreateTable(o *Options,
+func (p *sqlite) recreateTable(
+	ctx context.Context,
+	o *Options,
 	getCreateSQL func(rawDDL string) (sql string, sqlArgs []interface{}, err error),
 ) error {
 	table := o.Table()
 
-	rawDDL, err := p.getRawDDL(table)
+	rawDDL, err := p.getRawDDL(ctx, table)
 	if err != nil {
 		return err
 	}
@@ -429,7 +431,7 @@ func (p *sqlite) recreateTable(o *Options,
 	}
 	columns := createDDL.getColumns()
 
-	if _, err := p.Exec(createSQL, sqlArgs...); err != nil {
+	if _, err := p.Exec(ctx, createSQL, sqlArgs...); err != nil {
 		return err
 	}
 
@@ -439,7 +441,7 @@ func (p *sqlite) recreateTable(o *Options,
 		fmt.Sprintf("ALTER TABLE `%v` RENAME TO `%v`", newTableName, table),
 	}
 	for _, query := range queries {
-		if _, err := p.Exec(query); err != nil {
+		if _, err := p.Exec(ctx, query); err != nil {
 			return err
 		}
 	}

@@ -19,21 +19,12 @@ var (
 	LogDepthOffset = 0
 )
 
-type DBFactory func(db Execer, opts *DBOptions) Driver
-
 func Register(name string, d DBFactory) {
 	if _, ok := dbFactories[name]; ok {
 		panic(fmt.Sprintf("db factory %s has been set", name))
 	}
 	dbFactories[name] = d
 	klog.V(3).InfoS("db factory register", "name", name)
-}
-
-type ormDB struct {
-	*DBOptions
-	db *sql.DB // DB
-
-	Interface
 }
 
 func Open(driverName, dataSourceName string, opts ...DBOption) (DB, error) {
@@ -94,105 +85,6 @@ func open(opts *DBOptions) (DB, error) {
 	}
 
 	return db, nil
-}
-
-func (p *ormDB) SqlDB() *sql.DB {
-	return p.db
-}
-
-func (p *ormDB) Close() error {
-	return p.db.Close()
-}
-
-func (p *ormDB) Begin() (Tx, error) {
-	return p.BeginTx(context.Background(), nil)
-}
-
-func (p *ormDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
-	tx, err := p.db.BeginTx(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return &ormTx{
-		tx:        tx,
-		Interface: p.WithRawDB(tx),
-	}, nil
-}
-
-func (p *ormDB) ExecRows(bytes []byte) (err error) {
-	var cmds []string
-	var tx *sql.Tx
-
-	if tx, err = p.db.Begin(); err != nil {
-		return fmt.Errorf("Begin() err: %s", err)
-	}
-
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		} else {
-			tx.Commit()
-		}
-	}()
-
-	lines := strings.Split(string(bytes), "\n")
-	for cmd, in, i := "", false, 0; i < len(lines); i++ {
-		line := lines[i]
-		if len(line) == 0 || strings.HasPrefix(line, "-- ") {
-			continue
-		}
-
-		if in {
-			cmd += " " + strings.TrimSpace(line)
-			if cmd[len(cmd)-1] == ';' {
-				cmds = append(cmds, cmd)
-				in = false
-			}
-		} else {
-			n := strings.Index(line, " ")
-			if n <= 0 {
-				continue
-			}
-
-			switch line[:n] {
-			case "SET", "CREATE", "INSERT", "DROP":
-				cmd = line
-				if line[len(line)-1] == ';' {
-					cmds = append(cmds, cmd)
-				} else {
-					in = true
-				}
-			}
-		}
-	}
-
-	for i := 0; i < len(cmds); i++ {
-		_, err := tx.Exec(cmds[i])
-		if err != nil {
-			klog.V(3).Infof("%v", err)
-			return fmt.Errorf("sql %s\nerr %s", cmds[i], err)
-		}
-	}
-	return nil
-}
-
-type ormTx struct {
-	tx *sql.Tx
-
-	Interface
-}
-
-func (p *ormTx) Tx() *sql.Tx {
-	return p.tx
-}
-
-func (p *ormTx) Rollback() error {
-	return p.tx.Rollback()
-}
-
-func (p *ormTx) Commit() error {
-	return p.tx.Commit()
 }
 
 type Rows struct {
@@ -483,3 +375,122 @@ func (p *rowsIterator) Row(dst ...interface{}) error {
 
 	return p.rows.Scan(dst...)
 }
+
+// {{{ tx
+
+var _ Tx = new(ormTx)
+
+type ormTx struct {
+	tx *sql.Tx
+
+	Interface
+}
+
+func (p *ormTx) Tx() *sql.Tx {
+	return p.tx
+}
+
+func (p *ormTx) Rollback() error {
+	return p.tx.Rollback()
+}
+
+func (p *ormTx) Commit() error {
+	return p.tx.Commit()
+}
+
+// }}}
+
+// {{{ ormDB
+
+var _ DB = new(ormDB)
+
+type ormDB struct {
+	*DBOptions
+	db *sql.DB // DB
+
+	Interface
+}
+
+func (p *ormDB) SqlDB() *sql.DB {
+	return p.db
+}
+
+func (p *ormDB) Close() error {
+	return p.db.Close()
+}
+
+func (p *ormDB) Begin() (Tx, error) {
+	return p.BeginTx(context.Background(), nil)
+}
+
+func (p *ormDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
+	tx, err := p.db.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ormTx{
+		tx: tx,
+		//Interface: p.WithRawDB(tx),
+		Interface: NewBaseInterface(p, tx, p.DBOptions),
+	}, nil
+}
+
+func (p *ormDB) ExecRows(bytes []byte) (err error) {
+	var cmds []string
+	var tx *sql.Tx
+
+	if tx, err = p.db.Begin(); err != nil {
+		return fmt.Errorf("Begin() err: %s", err)
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		} else {
+			tx.Commit()
+		}
+	}()
+
+	lines := strings.Split(string(bytes), "\n")
+	for cmd, in, i := "", false, 0; i < len(lines); i++ {
+		line := lines[i]
+		if len(line) == 0 || strings.HasPrefix(line, "-- ") {
+			continue
+		}
+
+		if in {
+			cmd += " " + strings.TrimSpace(line)
+			if cmd[len(cmd)-1] == ';' {
+				cmds = append(cmds, cmd)
+				in = false
+			}
+		} else {
+			n := strings.Index(line, " ")
+			if n <= 0 {
+				continue
+			}
+
+			switch line[:n] {
+			case "SET", "CREATE", "INSERT", "DROP":
+				cmd = line
+				if line[len(line)-1] == ';' {
+					cmds = append(cmds, cmd)
+				} else {
+					in = true
+				}
+			}
+		}
+	}
+
+	for i := 0; i < len(cmds); i++ {
+		_, err := tx.Exec(cmds[i])
+		if err != nil {
+			klog.V(3).Infof("%v", err)
+			return fmt.Errorf("sql %s\nerr %s", cmds[i], err)
+		}
+	}
+	return nil
+}
+
+// }}}

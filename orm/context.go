@@ -19,10 +19,10 @@ const (
 //	return db, ok
 //}
 
-func WithInterface(ctx context.Context, orm Interface) context.Context {
+func WithDB(ctx context.Context, orm Interface) context.Context {
 	return context.WithValue(ctx, interfaceKey, orm)
 }
-func InterfaceFrom(ctx context.Context) (Interface, bool) {
+func DBFrom(ctx context.Context) (Interface, bool) {
 	i, ok := ctx.Value(interfaceKey).(Interface)
 	return i, ok
 }

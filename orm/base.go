@@ -1,6 +1,7 @@
 package orm
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
@@ -30,10 +31,18 @@ func (p *baseInterface) WithRawDB(raw RawDB) Interface {
 	return NewBaseInterface(p.Driver, raw, p.DBOptions)
 }
 
-func (p *baseInterface) Exec(query string, args ...interface{}) (sql.Result, error) {
+func (p *baseInterface) rawDBFrom(ctx context.Context) RawDB {
+	if i, ok := ctx.Value(interfaceKey).(Interface); ok {
+		return i.RawDB()
+	}
+	return p.RawDB()
+}
+
+func (p *baseInterface) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	dlogSql(1, query, args...)
 
-	ret, err := p.db.Exec(query, args...)
+	//ret, err := p.db.Exec(ctx, query, args...)
+	ret, err := p.rawDBFrom(ctx).ExecContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("Exec() err: %s", err)
 	}
@@ -41,13 +50,14 @@ func (p *baseInterface) Exec(query string, args ...interface{}) (sql.Result, err
 	return ret, nil
 }
 
-func (p *baseInterface) ExecLastId(query string, args ...interface{}) (int64, error) {
+func (p *baseInterface) ExecLastId(ctx context.Context, query string, args ...interface{}) (int64, error) {
 	dlogSql(1, query, args...)
-	return p.execLastId(query, args...)
+	return p.execLastId(ctx, query, args...)
 }
 
-func (p *baseInterface) execLastId(query string, args ...interface{}) (int64, error) {
-	res, err := p.db.Exec(query, args...)
+func (p *baseInterface) execLastId(ctx context.Context, query string, args ...interface{}) (int64, error) {
+	//res, err := p.db.Exec(ctx, query, args...)
+	res, err := p.rawDBFrom(ctx).ExecContext(ctx, query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("Exec() err: %s", err)
 	}
@@ -59,13 +69,14 @@ func (p *baseInterface) execLastId(query string, args ...interface{}) (int64, er
 	}
 }
 
-func (p *baseInterface) ExecNum(query string, args ...interface{}) (int64, error) {
+func (p *baseInterface) ExecNum(ctx context.Context, query string, args ...interface{}) (int64, error) {
 	dlogSql(1, query, args...)
-	return p.execNum(query, args...)
+	return p.execNum(ctx, query, args...)
 }
 
-func (p *baseInterface) execNum(query string, args ...interface{}) (int64, error) {
-	res, err := p.db.Exec(query, args...)
+func (p *baseInterface) execNum(ctx context.Context, query string, args ...interface{}) (int64, error) {
+	//res, err := p.db.Exec(ctx, query, args...)
+	res, err := p.rawDBFrom(ctx).ExecContext(ctx, query, args...)
 	if err != nil {
 		return 0, fmt.Errorf("Exec() err: %s", err)
 	}
@@ -77,13 +88,13 @@ func (p *baseInterface) execNum(query string, args ...interface{}) (int64, error
 	}
 }
 
-func (p *baseInterface) ExecNumErr(query string, args ...interface{}) error {
+func (p *baseInterface) ExecNumErr(ctx context.Context, query string, args ...interface{}) error {
 	dlogSql(1, query, args...)
-	return p.execNumErr(query, args...)
+	return p.execNumErr(ctx, query, args...)
 }
 
-func (p *baseInterface) execNumErr(query string, args ...interface{}) error {
-	if n, err := p.execNum(query, args...); err != nil {
+func (p *baseInterface) execNumErr(ctx context.Context, query string, args ...interface{}) error {
+	if n, err := p.execNum(ctx, query, args...); err != nil {
 		return err
 	} else if n == 0 {
 		return errors.NewNotFound("object")
@@ -92,12 +103,12 @@ func (p *baseInterface) execNumErr(query string, args ...interface{}) error {
 	}
 }
 
-func (p *baseInterface) Query(query string, args ...interface{}) *Rows {
+func (p *baseInterface) Query(ctx context.Context, query string, args ...interface{}) *Rows {
 	dlogSql(1, query, args...)
-	return p.query(query, args...)
+	return p.query(ctx, query, args...)
 }
 
-func (p *baseInterface) query(query string, args ...interface{}) *Rows {
+func (p *baseInterface) query(ctx context.Context, query string, args ...interface{}) *Rows {
 	ret := &Rows{
 		db:        p,
 		DBOptions: p.DBOptions,
@@ -105,11 +116,11 @@ func (p *baseInterface) query(query string, args ...interface{}) *Rows {
 		args:      args,
 		maxRows:   p.maxRows,
 	}
-	ret.rows, ret.err = p.db.Query(query, args...)
+	ret.rows, ret.err = p.rawDBFrom(ctx).QueryContext(ctx, query, args...)
 	return ret
 }
 
-func (p *baseInterface) Insert(sample interface{}, opts ...Option) error {
+func (p *baseInterface) Insert(ctx context.Context, sample interface{}, opts ...Option) error {
 	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return err
@@ -121,10 +132,10 @@ func (p *baseInterface) Insert(sample interface{}, opts ...Option) error {
 	}
 
 	dlogSql(1, query, args...)
-	return p.execNumErr(query, args...)
+	return p.execNumErr(ctx, query, args...)
 }
 
-func (p *baseInterface) InsertLastId(sample interface{}, opts ...Option) (int64, error) {
+func (p *baseInterface) InsertLastId(ctx context.Context, sample interface{}, opts ...Option) (int64, error) {
 	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return 0, err
@@ -136,10 +147,10 @@ func (p *baseInterface) InsertLastId(sample interface{}, opts ...Option) (int64,
 	}
 
 	dlogSql(1, query, args...)
-	return p.execLastId(query, args...)
+	return p.execLastId(ctx, query, args...)
 }
 
-func (p *baseInterface) List(into interface{}, opts ...Option) error {
+func (p *baseInterface) List(ctx context.Context, into interface{}, opts ...Option) error {
 	o, err := NewOptions(append(opts, WithSample(into))...)
 	if err != nil {
 		return err
@@ -155,13 +166,13 @@ func (p *baseInterface) List(into interface{}, opts ...Option) error {
 	}
 
 	dlogSql(1, querySql, args...)
-	if err := p.query(querySql, args...).Rows(into); err != nil {
+	if err := p.query(ctx, querySql, args...).Rows(into); err != nil {
 		return err
 	}
 
 	if o.total != nil {
 		dlogSql(1, countSql, args...)
-		if err := p.query(countSql, args...).Row(o.total); err != nil {
+		if err := p.query(ctx, countSql, args...).Row(o.total); err != nil {
 			return err
 		}
 	}
@@ -169,7 +180,7 @@ func (p *baseInterface) List(into interface{}, opts ...Option) error {
 	return nil
 }
 
-func (p *baseInterface) Get(into interface{}, opts ...Option) error {
+func (p *baseInterface) Get(ctx context.Context, into interface{}, opts ...Option) error {
 	o, err := NewOptions(append(opts, WithSample(into))...)
 	if err != nil {
 		return err
@@ -181,10 +192,10 @@ func (p *baseInterface) Get(into interface{}, opts ...Option) error {
 	}
 
 	dlogSql(1, query, args...)
-	return o.Error(p.query(query, args...).Row(into))
+	return o.Error(p.query(ctx, query, args...).Row(into))
 }
 
-func (p *baseInterface) Update(sample interface{}, opts ...Option) error {
+func (p *baseInterface) Update(ctx context.Context, sample interface{}, opts ...Option) error {
 	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return err
@@ -196,10 +207,10 @@ func (p *baseInterface) Update(sample interface{}, opts ...Option) error {
 	}
 
 	dlogSql(1, query, args...)
-	return o.Error(p.execNumErr(query, args...))
+	return o.Error(p.execNumErr(ctx, query, args...))
 }
 
-func (p *baseInterface) Delete(sample interface{}, opts ...Option) error {
+func (p *baseInterface) Delete(ctx context.Context, sample interface{}, opts ...Option) error {
 	o, err := NewOptions(append(opts, WithSample(sample))...)
 	if err != nil {
 		return err
@@ -211,5 +222,5 @@ func (p *baseInterface) Delete(sample interface{}, opts ...Option) error {
 	}
 
 	dlogSql(1, query, args...)
-	return o.Error(p.execNumErr(query, args...))
+	return o.Error(p.execNumErr(ctx, query, args...))
 }
