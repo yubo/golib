@@ -47,8 +47,8 @@ func TestGenListSql(t *testing.T) {
 		cols       []string
 		selector   string
 		orderby    []string
-		offset     *int64
-		limit      *int64
+		offset     int64
+		limit      int64
 		query      string
 		queryCount string
 		args       []interface{}
@@ -62,8 +62,8 @@ func TestGenListSql(t *testing.T) {
 			cols:       []string{"name", "age"},
 			selector:   "name=tom",
 			orderby:    []string{"name DESC"},
-			offset:     util.Int64(0),
-			limit:      util.Int64(10),
+			offset:     0,
+			limit:      10,
 			query:      "SELECT `name`, `age` FROM `user` WHERE `name` = ? ORDER BY name DESC LIMIT 0, 10",
 			queryCount: "SELECT COUNT(*) FROM `user` WHERE `name` = ?",
 			args:       []interface{}{"tom"},

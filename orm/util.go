@@ -218,7 +218,7 @@ func NewCurTime(t TimeType, cur time.Time) interface{} {
 	}
 }
 
-func GenListSql(table string, cols []string, selector queries.Selector, orderby []string, offset, limit *int64) (string, string, []interface{}, error) {
+func GenListSql(table string, cols []string, selector queries.Selector, orderby []string, offset, limit int64) (string, string, []interface{}, error) {
 	if table == "" {
 		return "", "", nil, errTableEmpty
 	}
@@ -259,8 +259,8 @@ func GenListSql(table string, cols []string, selector queries.Selector, orderby 
 	}
 
 	// limit
-	if offset != nil && limit != nil {
-		fmt.Fprintf(buf, " LIMIT %d, %d", *offset, *limit)
+	if limit > 0 {
+		fmt.Fprintf(buf, " LIMIT %d, %d", offset, limit)
 	}
 
 	return buf.String(), buf2.String(), args, nil
