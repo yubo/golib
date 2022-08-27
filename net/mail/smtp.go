@@ -61,8 +61,8 @@ func (p *Config) NewMail(tpl Executer, input interface{}) (*MailContext, error) 
 	buff := &bytes.Buffer{}
 	var contentType string
 
-	if tpl_, ok := tpl.(*ht.Template); ok {
-		if err := tpl_.Execute(buff, input); err != nil {
+	if htpl, ok := tpl.(*ht.Template); ok {
+		if err := htpl.Execute(buff, input); err != nil {
 			return nil, err
 		}
 		contentType = "text/html"

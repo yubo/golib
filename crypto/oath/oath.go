@@ -17,10 +17,8 @@ import (
 	"time"
 )
 
-func Validate(secret, otp string, window int) (v bool, err error) {
-	v, _, err = ValidateOtp(secret, otp, true, 6,
-		time.Now().Unix(), 30, int64(window))
-	return
+func Validate(secret, otp string, window int) (bool, int64, error) {
+	return ValidateOtp(secret, otp, true, 6, time.Now().Unix(), 30, int64(window))
 }
 
 func Oath(secret string) (string, error) {
