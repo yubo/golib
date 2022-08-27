@@ -218,7 +218,7 @@ func NewCurTime(t TimeType, cur time.Time) interface{} {
 	}
 }
 
-func GenListSql(table string, cols []string, selector queries.Selector, orderby []string, offset, limit int64) (string, string, []interface{}, error) {
+func GenListSql(table string, cols []string, selector queries.Selector, orderby []string, offset, limit int) (string, string, []interface{}, error) {
 	if table == "" {
 		return "", "", nil, errTableEmpty
 	}

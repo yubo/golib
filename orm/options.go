@@ -113,14 +113,14 @@ func NewOptions(opts ...Option) (*Options, error) {
 type Options struct {
 	err            error
 	sample         interface{}
-	total          *int64
+	total          *int
 	table          string
 	tableOptions   []string
 	selector       queries.Selector
 	cols           []string
 	orderby        []string
-	offset         int64
-	limit          int64
+	offset         int
+	limit          int
 	ignoreNotFound bool
 }
 
@@ -157,7 +157,7 @@ func WithIgnoreNotFoundErr() Option {
 	}
 }
 
-func WithTotal(total *int64) Option {
+func WithTotal(total *int) Option {
 	return func(o *Options) {
 		o.total = total
 	}
@@ -193,7 +193,7 @@ func WithSelector(selector string) Option {
 	}
 }
 
-func WithLimit(offset, limit int64) Option {
+func WithLimit(offset, limit int) Option {
 	return func(o *Options) {
 		o.offset = offset
 		o.limit = limit

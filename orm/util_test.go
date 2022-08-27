@@ -47,8 +47,8 @@ func TestGenListSql(t *testing.T) {
 		cols       []string
 		selector   string
 		orderby    []string
-		offset     int64
-		limit      int64
+		offset     int
+		limit      int
 		query      string
 		queryCount string
 		args       []interface{}
