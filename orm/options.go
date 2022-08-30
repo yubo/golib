@@ -151,9 +151,9 @@ func WithTableOptions(options ...string) Option {
 	}
 }
 
-func WithIgnoreNotFoundErr() Option {
+func WithIgnoreNotFoundErr(ignoreNotFound bool) Option {
 	return func(o *Options) {
-		o.ignoreNotFound = true
+		o.ignoreNotFound = ignoreNotFound
 	}
 }
 
