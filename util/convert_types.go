@@ -1,7 +1,14 @@
 // from aws-sdk-go
 package util
 
-import "time"
+import (
+	"reflect"
+	"time"
+)
+
+func IsNil(v interface{}) bool {
+	return v == nil || (reflect.ValueOf(v).Kind() == reflect.Ptr && reflect.ValueOf(v).IsNil())
+}
 
 // String returns a pointer to the string value passed in.
 func String(v string) *string {

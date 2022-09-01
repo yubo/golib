@@ -11,6 +11,7 @@ import (
 	"github.com/yubo/golib/util/sets"
 	"github.com/yubo/golib/util/validation"
 	"github.com/yubo/golib/util/validation/field"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -19,6 +20,7 @@ var (
 		string(selection.Equals), string(selection.DoubleEquals), string(selection.NotEquals),
 		string(selection.Exists), string(selection.DoesNotExist),
 		string(selection.GreaterThan), string(selection.LessThan),
+		string(selection.Contains), string(selection.NotContains),
 	}
 )
 
@@ -28,7 +30,7 @@ type Requirements []Requirement
 // Selector represents a query selector.
 type Selector interface {
 	// Matches returns true if this selector matches the given set of queries.
-	//Matches(Queries) bool
+	Matches(Queries) bool
 
 	// Empty returns true if this selector does not restrict the selection space.
 	Empty() bool
@@ -63,7 +65,7 @@ func Everything() Selector {
 
 type nothingSelector struct{}
 
-//func (n nothingSelector) Matches(_ Queries) bool             { return false }
+func (n nothingSelector) Matches(_ Queries) bool             { return false }
 func (n nothingSelector) Empty() bool                        { return false }
 func (n nothingSelector) String() string                     { return "" }
 func (n nothingSelector) Sql() (string, []interface{})       { return "", nil }
@@ -153,6 +155,10 @@ func NewRequirement(key string, op selection.Operator, vals []string, opts ...fi
 		if len(vals) != 1 {
 			allErrs = append(allErrs, field.Invalid(valuePath, vals, "exact-match compatibility requires one single value"))
 		}
+	case selection.Contains, selection.NotContains:
+		if len(vals) != 1 {
+			allErrs = append(allErrs, field.Invalid(valuePath, vals, "exact-contains compatibility requires one single value"))
+		}
 	//case selection.Exists, selection.DoesNotExist:
 	//	if len(vals) != 0 {
 	//		allErrs = append(allErrs, field.Invalid(valuePath, vals, "values set must be empty for exists and does not exist"))
@@ -198,51 +204,65 @@ func (r *Requirement) hasValue(value string) bool {
 //     Requirement's key.
 // (5) The operator is GreaterThanOperator or LessThanOperator, and Queries has
 //     the Requirement's key and the corresponding value satisfies mathematical inequality.
-//func (r *Requirement) Matches(ls Queries) bool {
-//	switch r.operator {
-//	case selection.In, selection.Equals, selection.DoubleEquals:
-//		if !ls.Has(r.key) {
-//			return false
-//		}
-//		return r.hasValue(ls.Get(r.key))
-//	case selection.NotIn, selection.NotEquals:
-//		if !ls.Has(r.key) {
-//			return true
-//		}
-//		return !r.hasValue(ls.Get(r.key))
-//	case selection.Exists:
-//		return ls.Has(r.key)
-//	case selection.DoesNotExist:
-//		return !ls.Has(r.key)
-//	case selection.GreaterThan, selection.LessThan:
-//		if !ls.Has(r.key) {
-//			return false
-//		}
-//		lsValue, err := strconv.ParseInt(ls.Get(r.key), 10, 64)
-//		if err != nil {
-//			klog.V(10).Infof("ParseInt failed for value %+v in query %+v, %+v", ls.Get(r.key), ls, err)
-//			return false
-//		}
-//
-//		// There should be only one strValue in r.strValues, and can be converted to an integer.
-//		if len(r.strValues) != 1 {
-//			klog.V(10).Infof("Invalid values count %+v of requirement %#v, for 'Gt', 'Lt' operators, exactly one value is required", len(r.strValues), r)
-//			return false
-//		}
-//
-//		var rValue int64
-//		for i := range r.strValues {
-//			rValue, err = strconv.ParseInt(r.strValues[i], 10, 64)
-//			if err != nil {
-//				klog.V(10).Infof("ParseInt failed for value %+v in requirement %#v, for 'Gt', 'Lt' operators, the value must be an integer", r.strValues[i], r)
-//				return false
-//			}
-//		}
-//		return (r.operator == selection.GreaterThan && lsValue > rValue) || (r.operator == selection.LessThan && lsValue < rValue)
-//	default:
-//		return false
-//	}
-//}
+func (r *Requirement) Matches(ls Queries) bool {
+	switch r.operator {
+	case selection.In, selection.Equals, selection.DoubleEquals:
+		if !ls.Has(r.key) {
+			return false
+		}
+		return r.hasValue(ls.Get(r.key))
+	case selection.NotIn, selection.NotEquals:
+		if !ls.Has(r.key) {
+			return true
+		}
+		return !r.hasValue(ls.Get(r.key))
+	case selection.Exists:
+		return ls.Has(r.key)
+	case selection.DoesNotExist:
+		return !ls.Has(r.key)
+	case selection.Contains, selection.NotContains:
+		if !ls.Has(r.key) {
+			return false
+		}
+		lsValue := ls.Get(r.key)
+
+		// There should be only one strValue in r.strValues, and can be converted to an integer.
+		if len(r.strValues) != 1 {
+			klog.V(10).Infof("Invalid values count %+v of requirement %#v, for 'contains', 'not contains' operators, exactly one value is required", len(r.strValues), r)
+			return false
+		}
+
+		rValue := r.strValues[0]
+		return (r.operator == selection.Contains && strings.Contains(lsValue, rValue)) || (r.operator == selection.NotContains && !strings.Contains(lsValue, rValue))
+	case selection.GreaterThan, selection.LessThan:
+		if !ls.Has(r.key) {
+			return false
+		}
+		lsValue, err := strconv.ParseInt(ls.Get(r.key), 10, 64)
+		if err != nil {
+			klog.V(10).Infof("ParseInt failed for value %+v in query %+v, %+v", ls.Get(r.key), ls, err)
+			return false
+		}
+
+		// There should be only one strValue in r.strValues, and can be converted to an integer.
+		if len(r.strValues) != 1 {
+			klog.V(10).Infof("Invalid values count %+v of requirement %#v, for 'Gt', 'Lt' operators, exactly one value is required", len(r.strValues), r)
+			return false
+		}
+
+		var rValue int64
+		for i := range r.strValues {
+			rValue, err = strconv.ParseInt(r.strValues[i], 10, 64)
+			if err != nil {
+				klog.V(10).Infof("ParseInt failed for value %+v in requirement %#v, for 'Gt', 'Lt' operators, the value must be an integer", r.strValues[i], r)
+				return false
+			}
+		}
+		return (r.operator == selection.GreaterThan && lsValue > rValue) || (r.operator == selection.LessThan && lsValue < rValue)
+	default:
+		return false
+	}
+}
 
 func sqlArray(key, op string, values []string) (query string, args []interface{}) {
 	if len(values) == 0 {
@@ -280,6 +300,14 @@ func (r *Requirement) Sql() (string, []interface{}) {
 	case selection.LessThan:
 		if len(r.strValues) == 1 {
 			return fmt.Sprintf("`%s` < ?", r.key), []interface{}{r.strValues[0]}
+		}
+	case selection.Contains:
+		if len(r.strValues) == 1 {
+			return fmt.Sprintf("`%s` like ?", r.key), []interface{}{"%" + r.strValues[0] + "%"}
+		}
+	case selection.NotContains:
+		if len(r.strValues) == 1 {
+			return fmt.Sprintf("`%s` not like ?", r.key), []interface{}{"%" + r.strValues[0] + "%"}
 		}
 	}
 	return "", nil
@@ -355,6 +383,10 @@ func (r *Requirement) String() string {
 		sb.WriteString(">")
 	case selection.LessThan:
 		sb.WriteString("<")
+	case selection.Contains:
+		sb.WriteString("=~")
+	case selection.NotContains:
+		sb.WriteString("!~")
 	case selection.Exists, selection.DoesNotExist:
 		return sb.String()
 	}
@@ -405,14 +437,14 @@ func (s internalSelector) Add(reqs ...Requirement) Selector {
 // Matches for a internalSelector returns true if all
 // its Requirements match the input Queries. If any
 // Requirement does not match, false is returned.
-//func (s internalSelector) Matches(l Queries) bool {
-//	for ix := range s {
-//		if matches := s[ix].Matches(l); !matches {
-//			return false
-//		}
-//	}
-//	return true
-//}
+func (s internalSelector) Matches(l Queries) bool {
+	for ix := range s {
+		if matches := s[ix].Matches(l); !matches {
+			return false
+		}
+	}
+	return true
+}
 
 func (s internalSelector) Sql() (string, []interface{}) {
 	queries := []string{}
@@ -488,6 +520,10 @@ const (
 	InToken
 	// LessThanToken represents less than
 	LessThanToken
+	// Contains represents contains in
+	ContainsToken
+	// NotContains represents contains in
+	NotContainsToken
 	// NotEqualsToken represents not equal
 	NotEqualsToken
 	// NotInToken represents not in
@@ -507,6 +543,8 @@ var string2token = map[string]Token{
 	">":     GreaterThanToken,
 	"in":    InToken,
 	"<":     LessThanToken,
+	"=~":    ContainsToken,
+	"!~":    NotContainsToken,
 	"!=":    NotEqualsToken,
 	"notin": NotInToken,
 	"(":     OpenParToken,
@@ -526,7 +564,7 @@ func isWhitespace(ch byte) bool {
 // isSpecialSymbol detects if the character ch can be an operator
 func isSpecialSymbol(ch byte) bool {
 	switch ch {
-	case '=', '!', '(', ')', ',', '>', '<':
+	case '=', '!', '(', ')', ',', '>', '<', '~':
 		return true
 	}
 	return false
@@ -743,7 +781,7 @@ func (p *Parser) parseRequirement() (*Requirement, error) {
 	switch operator {
 	case selection.In, selection.NotIn:
 		values, err = p.parseValues()
-	case selection.Equals, selection.DoubleEquals, selection.NotEquals, selection.GreaterThan, selection.LessThan:
+	case selection.Equals, selection.DoubleEquals, selection.NotEquals, selection.GreaterThan, selection.LessThan, selection.Contains, selection.NotContains:
 		values, err = p.parseExactValue()
 	}
 	if err != nil {
@@ -794,6 +832,10 @@ func (p *Parser) parseOperator() (op selection.Operator, err error) {
 		op = selection.GreaterThan
 	case LessThanToken:
 		op = selection.LessThan
+	case ContainsToken:
+		op = selection.Contains
+	case NotContainsToken:
+		op = selection.NotContains
 	case NotInToken:
 		op = selection.NotIn
 	case NotEqualsToken:
