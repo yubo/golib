@@ -282,6 +282,10 @@ func sqlArray(key, op string, values []string) (query string, args []interface{}
 }
 
 func (r *Requirement) Sql() (string, []interface{}) {
+	if r == nil {
+		return "", nil
+	}
+
 	switch r.operator {
 	case selection.In, selection.Equals, selection.DoubleEquals:
 		if len(r.strValues) == 1 {

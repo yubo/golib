@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/yubo/golib/selection"
 	"github.com/yubo/golib/util/sets"
 	"github.com/yubo/golib/util/validation/field"
@@ -58,105 +58,105 @@ func TestSelectorParse(t *testing.T) {
 
 func TestDeterministicParse(t *testing.T) {
 	s, err := Parse("x=a,a=x")
-	assert.NoError(t, err)
-	assert.Equal(t, "x=a,a=x", s.String())
+	require.NoError(t, err)
+	require.Equal(t, "x=a,a=x", s.String())
 
 	s, err = Parse("a=x,x=a")
-	assert.NoError(t, err)
-	assert.Equal(t, "a=x,x=a", s.String())
+	require.NoError(t, err)
+	require.Equal(t, "a=x,x=a", s.String())
 
 }
 
-//func expectMatch(t *testing.T, selector string, ls Set) {
-//	lq, err := Parse(selector)
-//	if err != nil {
-//		t.Errorf("Unable to parse %v as a selector\n", selector)
-//		return
-//	}
-//	if !lq.Matches(ls) {
-//		t.Errorf("Wanted %s to match '%s', but it did not.\n", selector, ls)
-//	}
-//}
+func expectMatch(t *testing.T, selector string, ls Set) {
+	lq, err := Parse(selector)
+	if err != nil {
+		t.Errorf("Unable to parse %v as a selector\n", selector)
+		return
+	}
+	if !lq.Matches(ls) {
+		t.Errorf("Wanted %s to match '%s', but it did not.\n", selector, ls)
+	}
+}
 
-//func expectNoMatch(t *testing.T, selector string, ls Set) {
-//	lq, err := Parse(selector)
-//	if err != nil {
-//		t.Errorf("Unable to parse %v as a selector\n", selector)
-//		return
-//	}
-//	if lq.Matches(ls) {
-//		t.Errorf("Wanted '%s' to not match '%s', but it did.", selector, ls)
-//	}
-//}
+func expectNoMatch(t *testing.T, selector string, ls Set) {
+	lq, err := Parse(selector)
+	if err != nil {
+		t.Errorf("Unable to parse %v as a selector\n", selector)
+		return
+	}
+	if lq.Matches(ls) {
+		t.Errorf("Wanted '%s' to not match '%s', but it did.", selector, ls)
+	}
+}
 
-//func TestEverything(t *testing.T) {
-//	if !Everything().Matches(Set{"x": "y"}) {
-//		t.Errorf("Nil selector didn't match")
-//	}
-//	if !Everything().Empty() {
-//		t.Errorf("Everything was not empty")
-//	}
-//}
+func TestEverything(t *testing.T) {
+	if !Everything().Matches(Set{"x": "y"}) {
+		t.Errorf("Nil selector didn't match")
+	}
+	if !Everything().Empty() {
+		t.Errorf("Everything was not empty")
+	}
+}
 
-//func TestSelectorMatches(t *testing.T) {
-//	expectMatch(t, "", Set{"x": "y"})
-//	expectMatch(t, "x=y", Set{"x": "y"})
-//	expectMatch(t, "x=y,z=w", Set{"x": "y", "z": "w"})
-//	expectMatch(t, "x!=y,z!=w", Set{"x": "z", "z": "a"})
-//	expectMatch(t, "notin=in", Set{"notin": "in"}) // in and notin in exactMatch
-//	expectMatch(t, "x", Set{"x": "z"})
-//	expectMatch(t, "!x", Set{"y": "z"})
-//	expectMatch(t, "x>1", Set{"x": "2"})
-//	expectMatch(t, "x<1", Set{"x": "0"})
-//	expectNoMatch(t, "x=z", Set{})
-//	expectNoMatch(t, "x=y", Set{"x": "z"})
-//	expectNoMatch(t, "x=y,z=w", Set{"x": "w", "z": "w"})
-//	expectNoMatch(t, "x!=y,z!=w", Set{"x": "z", "z": "w"})
-//	expectNoMatch(t, "x", Set{"y": "z"})
-//	expectNoMatch(t, "!x", Set{"x": "z"})
-//	expectNoMatch(t, "x>1", Set{"x": "0"})
-//	expectNoMatch(t, "x<1", Set{"x": "2"})
-//
-//	queryset := Set{
-//		"foo": "bar",
-//		"baz": "blah",
-//	}
-//	expectMatch(t, "foo=bar", queryset)
-//	expectMatch(t, "baz=blah", queryset)
-//	expectMatch(t, "foo=bar,baz=blah", queryset)
-//	expectNoMatch(t, "foo=blah", queryset)
-//	expectNoMatch(t, "baz=bar", queryset)
-//	expectNoMatch(t, "foo=bar,foobar=bar,baz=blah", queryset)
-//}
+func TestSelectorMatches(t *testing.T) {
+	//expectMatch(t, "", Set{"x": "y"})
+	expectMatch(t, "x=y", Set{"x": "y"})
+	expectMatch(t, "x=y,z=w", Set{"x": "y", "z": "w"})
+	expectMatch(t, "x!=y,z!=w", Set{"x": "z", "z": "a"})
+	expectMatch(t, "notin=in", Set{"notin": "in"}) // in and notin in exactMatch
+	//expectMatch(t, "x", Set{"x": "z"})
+	//expectMatch(t, "!x", Set{"y": "z"})
+	expectMatch(t, "x>1", Set{"x": "2"})
+	expectMatch(t, "x<1", Set{"x": "0"})
+	expectNoMatch(t, "x=z", Set{})
+	expectNoMatch(t, "x=y", Set{"x": "z"})
+	expectNoMatch(t, "x=y,z=w", Set{"x": "w", "z": "w"})
+	expectNoMatch(t, "x!=y,z!=w", Set{"x": "z", "z": "w"})
+	//expectNoMatch(t, "x", Set{"y": "z"})
+	//expectNoMatch(t, "!x", Set{"x": "z"})
+	expectNoMatch(t, "x>1", Set{"x": "0"})
+	expectNoMatch(t, "x<1", Set{"x": "2"})
 
-//func expectMatchDirect(t *testing.T, selector, ls Set) {
-//	if !SelectorFromSet(selector).Matches(ls) {
-//		t.Errorf("Wanted %s to match '%s', but it did not.\n", selector, ls)
-//	}
-//}
+	queryset := Set{
+		"foo": "bar",
+		"baz": "blah",
+	}
+	expectMatch(t, "foo=bar", queryset)
+	expectMatch(t, "baz=blah", queryset)
+	expectMatch(t, "foo=bar,baz=blah", queryset)
+	expectNoMatch(t, "foo=blah", queryset)
+	expectNoMatch(t, "baz=bar", queryset)
+	expectNoMatch(t, "foo=bar,foobar=bar,baz=blah", queryset)
+}
+
+func expectMatchDirect(t *testing.T, selector, ls Set) {
+	if !SelectorFromSet(selector).Matches(ls) {
+		t.Errorf("Wanted %s to match '%s', but it did not.\n", selector, ls)
+	}
+}
 
 //lint:ignore U1000 currently commented out in TODO of TestSetMatches
-//func expectNoMatchDirect(t *testing.T, selector, ls Set) {
-//	if SelectorFromSet(selector).Matches(ls) {
-//		t.Errorf("Wanted '%s' to not match '%s', but it did.", selector, ls)
-//	}
-//}
+func expectNoMatchDirect(t *testing.T, selector, ls Set) {
+	if SelectorFromSet(selector).Matches(ls) {
+		t.Errorf("Wanted '%s' to not match '%s', but it did.", selector, ls)
+	}
+}
 
-//func TestSetMatches(t *testing.T) {
-//	queryset := Set{
-//		"foo": "bar",
-//		"baz": "blah",
-//	}
-//	expectMatchDirect(t, Set{}, queryset)
-//	expectMatchDirect(t, Set{"foo": "bar"}, queryset)
-//	expectMatchDirect(t, Set{"baz": "blah"}, queryset)
-//	expectMatchDirect(t, Set{"foo": "bar", "baz": "blah"}, queryset)
-//
-//	//TODO: bad values not handled for the moment in SelectorFromSet
-//	//expectNoMatchDirect(t, Set{"foo": "=blah"}, queryset)
-//	//expectNoMatchDirect(t, Set{"baz": "=bar"}, queryset)
-//	//expectNoMatchDirect(t, Set{"foo": "=bar", "foobar": "bar", "baz": "blah"}, queryset)
-//}
+func TestSetMatches(t *testing.T) {
+	queryset := Set{
+		"foo": "bar",
+		"baz": "blah",
+	}
+	expectMatchDirect(t, Set{}, queryset)
+	expectMatchDirect(t, Set{"foo": "bar"}, queryset)
+	expectMatchDirect(t, Set{"baz": "blah"}, queryset)
+	expectMatchDirect(t, Set{"foo": "bar", "baz": "blah"}, queryset)
+
+	//TODO: bad values not handled for the moment in SelectorFromSet
+	//expectNoMatchDirect(t, Set{"foo": "=blah"}, queryset)
+	//expectNoMatchDirect(t, Set{"baz": "=bar"}, queryset)
+	//expectNoMatchDirect(t, Set{"foo": "=bar", "foobar": "bar", "baz": "blah"}, queryset)
+}
 
 func TestNilMapIsValid(t *testing.T) {
 	selector := Set(nil).AsSelector()
@@ -178,7 +178,7 @@ func TestSetIsEmpty(t *testing.T) {
 }
 
 func TestLexer(t *testing.T) {
-	testcases := []struct {
+	cases := []struct {
 		s string
 		t Token
 	}{
@@ -200,14 +200,13 @@ func TestLexer(t *testing.T) {
 		{"!~", NotContainsToken},
 		{"||", IdentifierToken},
 	}
-	for _, v := range testcases {
-		l := &Lexer{s: v.s, pos: 0}
+	for _, c := range cases {
+		l := &Lexer{s: c.s, pos: 0}
 		token, lit := l.Lex()
-		if token != v.t {
-			t.Errorf("Got %d it should be %d for '%s'", token, v.t, v.s)
-		}
-		if v.t != ErrorToken && lit != v.s {
-			t.Errorf("Got '%s' it should be '%s'", lit, v.s)
+		require.Equal(t, c.t, token)
+
+		if c.t != ErrorToken && lit != c.s {
+			t.Errorf("Got '%s' it should be '%s'", lit, c.s)
 		}
 	}
 }
@@ -221,7 +220,7 @@ func min(l, r int) (m int) {
 }
 
 func TestLexerSequence(t *testing.T) {
-	testcases := []struct {
+	cases := []struct {
 		s string
 		t []Token
 	}{
@@ -236,9 +235,9 @@ func TestLexerSequence(t *testing.T) {
 		{"key>2", []Token{IdentifierToken, GreaterThanToken, IdentifierToken}},
 		{"key<1", []Token{IdentifierToken, LessThanToken, IdentifierToken}},
 	}
-	for _, v := range testcases {
+	for _, c := range cases {
 		var tokens []Token
-		l := &Lexer{s: v.s, pos: 0}
+		l := &Lexer{s: c.s, pos: 0}
 		for {
 			token, _ := l.Lex()
 			if token == EndOfStringToken {
@@ -246,18 +245,18 @@ func TestLexerSequence(t *testing.T) {
 			}
 			tokens = append(tokens, token)
 		}
-		if len(tokens) != len(v.t) {
-			t.Errorf("Bad number of tokens for '%s %d, %d", v.s, len(tokens), len(v.t))
+		if len(tokens) != len(c.t) {
+			t.Errorf("Bad number of tokens for '%s %d, %d", c.s, len(tokens), len(c.t))
 		}
-		for i := 0; i < min(len(tokens), len(v.t)); i++ {
-			if tokens[i] != v.t[i] {
-				t.Errorf("Test '%s': Mismatching in token type found '%v' it should be '%v'", v.s, tokens[i], v.t[i])
+		for i := 0; i < min(len(tokens), len(c.t)); i++ {
+			if tokens[i] != c.t[i] {
+				t.Errorf("Test '%s': Mismatching in token type found '%v' it should be '%v'", c.s, tokens[i], c.t[i])
 			}
 		}
 	}
 }
 func TestParserLookahead(t *testing.T) {
-	testcases := []struct {
+	cases := []struct {
 		s string
 		t []Token
 	}{
@@ -273,11 +272,11 @@ func TestParserLookahead(t *testing.T) {
 		{"key>2", []Token{IdentifierToken, GreaterThanToken, IdentifierToken, EndOfStringToken}},
 		{"key<1", []Token{IdentifierToken, LessThanToken, IdentifierToken, EndOfStringToken}},
 	}
-	for _, v := range testcases {
-		p := &Parser{l: &Lexer{s: v.s, pos: 0}, position: 0}
+	for _, c := range cases {
+		p := &Parser{l: &Lexer{s: c.s, pos: 0}, position: 0}
 		p.scan()
-		if len(p.scannedItems) != len(v.t) {
-			t.Errorf("Expected %d items found %d", len(v.t), len(p.scannedItems))
+		if len(p.scannedItems) != len(c.t) {
+			t.Errorf("Expected %d items found %d", len(c.t), len(p.scannedItems))
 		}
 		for {
 			token, lit := p.lookahead(KeyAndOperator)
@@ -294,7 +293,7 @@ func TestParserLookahead(t *testing.T) {
 }
 
 func TestRequirementConstructor(t *testing.T) {
-	requirementConstructorTests := []struct {
+	cases := []struct {
 		Key     string
 		Op      selection.Operator
 		Vals    sets.String
@@ -467,17 +466,17 @@ func TestRequirementConstructor(t *testing.T) {
 			},
 		},
 	}
-	for _, rc := range requirementConstructorTests {
-		_, err := NewRequirement(rc.Key, rc.Op, rc.Vals.List())
-		if diff := cmp.Diff(rc.WantErr.ToAggregate(), err, ignoreDetail); diff != "" {
-			t.Errorf("NewRequirement test %v returned unexpected error (-want,+got):\n%s", rc.Key, diff)
+	for _, c := range cases {
+		_, err := NewRequirement(c.Key, c.Op, c.Vals.List())
+		if diff := cmp.Diff(c.WantErr.ToAggregate(), err, ignoreDetail); diff != "" {
+			t.Errorf("NewRequirement test %v returned unexpected error (-want,+got):\n%s", c.Key, diff)
 		}
 	}
 }
 
 func TestToString(t *testing.T) {
 	var req Requirement
-	toStringTests := []struct {
+	cases := []struct {
 		In    *internalSelector
 		Out   string
 		Valid bool
@@ -518,18 +517,18 @@ func TestToString(t *testing.T) {
 		},
 			"x>2,y<8", true},
 	}
-	for _, ts := range toStringTests {
-		if out := ts.In.String(); out == "" && ts.Valid {
-			t.Errorf("%#v.String() => '%v' expected no error", ts.In, out)
-		} else if out != ts.Out {
-			t.Errorf("%#v.String() => '%v' want '%v'", ts.In, out, ts.Out)
+	for _, c := range cases {
+		if out := c.In.String(); out == "" && c.Valid {
+			t.Errorf("%#v.String() => '%v' expected no error", c.In, out)
+		} else if out != c.Out {
+			t.Errorf("%#v.String() => '%v' want '%v'", c.In, out, c.Out)
 		}
 	}
 }
 
 func TestRequirementSelectorMatching(t *testing.T) {
 	var req Requirement
-	querySelectorMatchingTests := []struct {
+	cases := []struct {
 		Set   Set
 		Sel   Selector
 		Match bool
@@ -567,15 +566,15 @@ func TestRequirementSelectorMatching(t *testing.T) {
 			getRequirement("z", selection.GreaterThan, sets.NewString("1"), t),
 		}, false},
 	}
-	for _, lsm := range querySelectorMatchingTests {
-		if match := lsm.Sel.Matches(lsm.Set); match != lsm.Match {
-			t.Errorf("%+v.Matches(%#v) => %v, want %v", lsm.Sel, lsm.Set, match, lsm.Match)
+	for _, c := range cases {
+		if match := c.Sel.Matches(c.Set); match != c.Match {
+			t.Errorf("%+v.Matches(%#v) => %v, want %v", c.Sel, c.Set, match, c.Match)
 		}
 	}
 }
 
 func TestSetSelectorParser(t *testing.T) {
-	setSelectorParserTests := []struct {
+	cases := []struct {
 		In    string
 		Out   Selector
 		Match bool
@@ -664,13 +663,13 @@ func TestSetSelectorParser(t *testing.T) {
 		{"(", nil, false, false},              // opar
 	}
 
-	for _, ssp := range setSelectorParserTests {
-		if sel, err := Parse(ssp.In); err != nil && ssp.Valid {
-			t.Errorf("Parse(%s) => %v expected no error", ssp.In, err)
-		} else if err == nil && !ssp.Valid {
-			t.Errorf("Parse(%s) => %+v expected error", ssp.In, sel)
-		} else if ssp.Match && !reflect.DeepEqual(sel, ssp.Out) {
-			t.Errorf("Parse(%s) => parse output '%#v' doesn't match '%#v' expected match", ssp.In, sel, ssp.Out)
+	for _, c := range cases {
+		if sel, err := Parse(c.In); err != nil && c.Valid {
+			t.Errorf("Parse(%s) => %v expected no error", c.In, err)
+		} else if err == nil && !c.Valid {
+			t.Errorf("Parse(%s) => %+v expected error", c.In, sel)
+		} else if c.Match && !reflect.DeepEqual(sel, c.Out) {
+			t.Errorf("Parse(%s) => parse output '%#v' doesn't match '%#v' expected match", c.In, sel, c.Out)
 		}
 	}
 }
@@ -685,7 +684,7 @@ func getRequirement(key string, op selection.Operator, vals sets.String, t *test
 }
 
 func TestAdd(t *testing.T) {
-	testCases := []struct {
+	cases := []struct {
 		name        string
 		sel         Selector
 		key         string
@@ -713,20 +712,20 @@ func TestAdd(t *testing.T) {
 			},
 		},
 	}
-	for _, ts := range testCases {
-		req, err := NewRequirement(ts.key, ts.operator, ts.values)
+	for _, c := range cases {
+		req, err := NewRequirement(c.key, c.operator, c.values)
 		if err != nil {
-			t.Errorf("%s - Unable to create queries.Requirement", ts.name)
+			t.Errorf("%s - Unable to create queries.Requirement", c.name)
 		}
-		ts.sel = ts.sel.Add(*req)
-		if !reflect.DeepEqual(ts.sel, ts.refSelector) {
-			t.Errorf("%s - Expected %v found %v", ts.name, ts.refSelector, ts.sel)
+		c.sel = c.sel.Add(*req)
+		if !reflect.DeepEqual(c.sel, c.refSelector) {
+			t.Errorf("%s - Expected %v found %v", c.name, c.refSelector, c.sel)
 		}
 	}
 }
 
 func TestSafeSort(t *testing.T) {
-	tests := []struct {
+	cases := []struct {
 		name   string
 		in     []string
 		inCopy []string
@@ -757,13 +756,13 @@ func TestSafeSort(t *testing.T) {
 			want:   []string{"bar", "bar", "foo", "foo"},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := safeSort(tt.in); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("safeSort() = %v, want %v", got, tt.want)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := safeSort(c.in); !reflect.DeepEqual(got, c.want) {
+				t.Errorf("safeSort() = %v, want %v", got, c.want)
 			}
-			if !reflect.DeepEqual(tt.in, tt.inCopy) {
-				t.Errorf("after safeSort(), input = %v, want %v", tt.in, tt.inCopy)
+			if !reflect.DeepEqual(c.in, c.inCopy) {
+				t.Errorf("after safeSort(), input = %v, want %v", c.in, c.inCopy)
 			}
 		})
 	}
@@ -783,7 +782,7 @@ func BenchmarkSelectorFromValidatedSet(b *testing.B) {
 }
 
 func TestRequiresExactMatch(t *testing.T) {
-	testCases := []struct {
+	cases := []struct {
 		name          string
 		sel           Selector
 		query         string
@@ -846,14 +845,14 @@ func TestRequiresExactMatch(t *testing.T) {
 			expectedValue: "value",
 		},
 	}
-	for _, ts := range testCases {
-		t.Run(ts.name, func(t *testing.T) {
-			value, found := ts.sel.RequiresExactMatch(ts.query)
-			if found != ts.expectedFound {
-				t.Errorf("Expected match %v, found %v", ts.expectedFound, found)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			value, found := c.sel.RequiresExactMatch(c.query)
+			if found != c.expectedFound {
+				t.Errorf("Expected match %v, found %v", c.expectedFound, found)
 			}
-			if found && value != ts.expectedValue {
-				t.Errorf("Expected value %v, found %v", ts.expectedValue, value)
+			if found && value != c.expectedValue {
+				t.Errorf("Expected value %v, found %v", c.expectedValue, value)
 			}
 
 		})
@@ -861,7 +860,7 @@ func TestRequiresExactMatch(t *testing.T) {
 }
 
 func TestValidatedSelectorFromSet(t *testing.T) {
-	tests := []struct {
+	cases := []struct {
 		name             string
 		input            Set
 		expectedSelector internalSelector
@@ -891,14 +890,14 @@ func TestValidatedSelectorFromSet(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
-		selector, err := ValidatedSelectorFromSet(tc.input)
-		if diff := cmp.Diff(tc.expectedError.ToAggregate(), err, ignoreDetail); diff != "" {
-			t.Errorf("ValidatedSelectorFromSet %#v returned unexpected error (-want,+got):\n%s", tc.name, diff)
+	for _, c := range cases {
+		selector, err := ValidatedSelectorFromSet(c.input)
+		if diff := cmp.Diff(c.expectedError.ToAggregate(), err, ignoreDetail); diff != "" {
+			t.Errorf("ValidatedSelectorFromSet %#v returned unexpected error (-want,+got):\n%s", c.name, diff)
 		}
 		if err == nil {
-			if diff := cmp.Diff(tc.expectedSelector, selector); diff != "" {
-				t.Errorf("ValidatedSelectorFromSet %#v returned unexpected selector (-want,+got):\n%s", tc.name, diff)
+			if diff := cmp.Diff(c.expectedSelector, selector); diff != "" {
+				t.Errorf("ValidatedSelectorFromSet %#v returned unexpected selector (-want,+got):\n%s", c.name, diff)
 			}
 		}
 	}
@@ -923,7 +922,7 @@ func BenchmarkRequirementString(b *testing.B) {
 }
 
 func TestRequirementEqual(t *testing.T) {
-	tests := []struct {
+	cases := []struct {
 		name string
 		x, y *Requirement
 		want bool
@@ -985,17 +984,17 @@ func TestRequirementEqual(t *testing.T) {
 			want: false,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := cmp.Equal(tt.x, tt.y); got != tt.want {
-				t.Errorf("cmp.Equal() = %v, want %v", got, tt.want)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := cmp.Equal(c.x, c.y); got != c.want {
+				t.Errorf("cmp.Equal() = %v, want %v", got, c.want)
 			}
 		})
 	}
 }
 
 func TestRequirementSql(t *testing.T) {
-	tests := []struct {
+	cases := []struct {
 		name  string
 		r     *Requirement
 		query string
@@ -1074,22 +1073,32 @@ func TestRequirementSql(t *testing.T) {
 		query: "`name` not like ?",
 		args:  []interface{}{"%2%"},
 	}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			query, args := tt.r.Sql()
-			assert.Equal(t, tt.query, query)
-			assert.Equal(t, tt.args, args)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			query, args := c.r.Sql()
+			require.Equal(t, c.query, query)
+			require.Equal(t, c.args, args)
 		})
 	}
 }
 
 func TestSelectorSql(t *testing.T) {
-	tests := []struct {
+	cases := []struct {
 		name     string
 		selector string
 		query    string
 		args     []interface{}
 	}{{
+		name:     "empty",
+		selector: "",
+		query:    "",
+		args:     []interface{}(nil),
+	}, {
+		name:     "empty space",
+		selector: "  ",
+		query:    "",
+		args:     []interface{}(nil),
+	}, {
 		name:     "equal",
 		selector: "user_name = tom",
 		query:    "`user_name` = ?",
@@ -1136,16 +1145,15 @@ func TestSelectorSql(t *testing.T) {
 		query:    "`user_name` not like ?",
 		args:     []interface{}{"%tom%"},
 	}}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s, err := Parse(tt.selector)
-			if err != nil {
-				t.Error(err)
-			}
-			if query, args := s.Sql(); query != tt.query || !reflect.DeepEqual(args, tt.args) {
-				t.Errorf("r.Sql() = %v %v, want %v %v",
-					query, args, tt.query, tt.args)
-			}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s, err := Parse(c.selector)
+			require.NoError(t, err)
+
+			query, args := s.Sql()
+			require.Equal(t, c.query, query, c.selector)
+			require.Equal(t, c.args, args, c.selector)
+
 		})
 	}
 }

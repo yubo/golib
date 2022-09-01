@@ -3,6 +3,7 @@ package orm
 import (
 	"context"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/yubo/golib/api/errors"
@@ -107,7 +108,20 @@ func NewOptions(opts ...Option) (*Options, error) {
 		}
 	}
 
-	return o, o.err
+	if o.err != nil {
+		return nil, o.err
+	}
+
+	if len(o.selectors) > 0 {
+		selector, err := queries.Parse(strings.Join(o.selectors, ","))
+		if err != nil {
+			return nil, err
+		}
+
+		o.selector = selector
+	}
+
+	return o, nil
 }
 
 type Options struct {
@@ -117,6 +131,7 @@ type Options struct {
 	table          string
 	tableOptions   []string
 	selector       queries.Selector
+	selectors      []string
 	cols           []string
 	orderby        []string
 	offset         int
@@ -172,24 +187,7 @@ func WithTotal(total *int) Option {
 //   =, ==, in, !=, notin, >, <
 func WithSelector(selector string) Option {
 	return func(o *Options) {
-		if selector == "" {
-			return
-		}
-		if o.err != nil {
-			return
-		}
-		if o.selector == nil {
-			o.selector, o.err = queries.Parse(selector)
-			return
-		}
-		s, err := queries.Parse(selector)
-		if err != nil {
-			o.err = err
-			return
-		}
-		if r, ok := s.Requirements(); ok {
-			o.selector.Add(r...)
-		}
+		o.selectors = append(o.selectors, strings.Trim(selector, ","))
 	}
 }
 
