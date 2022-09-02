@@ -22,23 +22,23 @@ db.AutoMigrate(&User{})
 * `Exec` runs a SQL string, it returns `error`
 
 ```go
-err := db.ExecNumErr("delete from user where name=?", "test")
+err := db.ExecNumErr(context.Backgroud(), "delete from user where name=?", "test")
 ```
 
 
 * `Insert` one record to database
 ```go
-err := db.Insert(&user)
+err := db.Insert(context.Backgroud(), &user)
 // insert into user () values ()
 
-err := db.Insert(&user, orm.WithTable("system_user"))
+err := db.Insert(context.Backgroud(), &user, orm.WithTable("system_user"))
 // insert into system_user () values ()
 ```
 
 * `Query` query one record from database
 
 ```go
-err := db.Query("select * from user limit 1").Row(&user)
+err := db.Query(context.Backgroud(), "select * from user limit 1").Row(&user)
 ```
 
 * check if one record or affected exist with query/exec
@@ -53,16 +53,27 @@ if errors.IsNotFound(err) {
 * `Rows` query multiple records from database
 ```go
 var users []User
-err := db.Query("select * from user where age > ?", 10).Rows(&users)
+err := db.Query(context.Backgroud(), "select * from user where age > ?", 10).Rows(&users)
 ```
 
 * `Rows` query multiple records from database with Count
 ```
 var users []User
 var total int64
-err := db.Query("select * from user where age > ?", 10).Count(&total).Rows(&users)
+err := db.Query(context.Backgroud(), "select * from user where age > ?", 10).Rows(&users)
 // select * from user where age > 10
-// select count(*) from user where age > 10
+```
+
+* `List` 
+```
+var users []User
+var total int64
+err := db.List(context.Backgroud(), &users,
+	orm.WithSelector("age<16,user_name=~tom"),
+	orm.WithCols("user_name", "city", "age"),
+	orm.WithTotal(&total))
+// select user_name, city, age from user where age < 16 and user_name like '%tom%'
+// select count(*) where age < 16 and user_name like '%tom%'
 ```
 
 * `Update` update one record
@@ -73,7 +84,7 @@ type User struct {
     Passwd *string
 }
 
-db.Update(&user)
+db.Update(context.Backgroud(), &user)
 // if user.Passwd == nil
 // update user set age=? where name = ?
 // else
@@ -81,10 +92,10 @@ db.Update(&user)
 
 // with selector
 passwd := ""
-db.Update(&user{Passwd:&passwd}, orm.WithSelector("age<16"))
+db.Update(context.Backgroud(), &user{Passwd:&passwd}, orm.WithSelector("age<16"))
 // update user set passwd='' where age < 16
 
-db.Update(&user, orm.WithTable("system_user"))
+db.Update(context.Backgroud(), &user, orm.WithTable("system_user"))
 // update system_user set ... where name = ?
 ```
 
@@ -97,7 +108,7 @@ if err != nil {
 
 // do something...
 
-if err := tx.Insert(&user); err != nil {
+if err := tx.Insert(context.Backgroud(), &user); err != nil {
 	tx.Rollback()
 	return err
 }

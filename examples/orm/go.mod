@@ -1,7 +1,17 @@
 module examples/orm
 
-go 1.16
+go 1.18
 
 replace github.com/yubo/golib => ../..
 
-require github.com/yubo/golib v0.0.1
+require (
+	github.com/yubo/golib v0.0.1
+	k8s.io/klog/v2 v2.60.1
+)
+
+require (
+	github.com/go-logr/logr v1.2.3 // indirect
+	github.com/google/go-cmp v0.5.5 // indirect
+	github.com/mattn/go-sqlite3 v1.14.15 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
+)
