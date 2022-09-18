@@ -989,7 +989,7 @@ func validateQueryKey(k string, path *field.Path) *field.Error {
 }
 
 func validateQueryValue(k, v string, path *field.Path) *field.Error {
-	if errs := validation.IsValidLabelValue(v); len(errs) != 0 {
+	if errs := validation.IsValidLabelValueZh(v); len(errs) != 0 {
 		return field.Invalid(path.Key(k), v, strings.Join(errs, "; "))
 	}
 	return nil

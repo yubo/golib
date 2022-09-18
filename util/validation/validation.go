@@ -27,13 +27,19 @@ import (
 	"github.com/yubo/golib/util/validation/field"
 )
 
+const qnameCharFmtZh string = "[\u4e00-\u9fa5A-Za-z0-9]"
+const qnameExtCharFmtZh string = "[-\u4e00-\u9fa5A-Za-z0-9_.]"
+const qualifiedNameFmtZh string = "(" + qnameCharFmtZh + qnameExtCharFmtZh + "*)?" + qnameCharFmtZh
+
 const qnameCharFmt string = "[A-Za-z0-9]"
 const qnameExtCharFmt string = "[-A-Za-z0-9_.]"
 const qualifiedNameFmt string = "(" + qnameCharFmt + qnameExtCharFmt + "*)?" + qnameCharFmt
+
 const qualifiedNameErrMsg string = "must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character"
 const qualifiedNameMaxLength int = 63
 
 var qualifiedNameRegexp = regexp.MustCompile("^" + qualifiedNameFmt + "$")
+var qualifiedNameRegexpZh = regexp.MustCompile("^" + qualifiedNameFmtZh + "$")
 
 // IsQualifiedName tests whether the value passed is what Kubernetes calls a
 // "qualified name".  This is a format used in various places throughout the
@@ -153,12 +159,14 @@ func IsDomainPrefixedPath(fldPath *field.Path, dpPath string) field.ErrorList {
 }
 
 const labelValueFmt string = "(" + qualifiedNameFmt + ")?"
+const labelValueFmtZh string = "(" + qualifiedNameFmtZh + ")?"
 const labelValueErrMsg string = "a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character"
 
 // LabelValueMaxLength is a label's max length
 const LabelValueMaxLength int = 63
 
 var labelValueRegexp = regexp.MustCompile("^" + labelValueFmt + "$")
+var labelValueRegexpZh = regexp.MustCompile("^" + labelValueFmtZh + "$")
 
 // IsValidLabelValue tests whether the value passed is a valid label value.  If
 // the value is not valid, a list of error strings is returned.  Otherwise an
@@ -169,6 +177,20 @@ func IsValidLabelValue(value string) []string {
 		errs = append(errs, MaxLenError(LabelValueMaxLength))
 	}
 	if !labelValueRegexp.MatchString(value) {
+		errs = append(errs, RegexError(labelValueErrMsg, labelValueFmt, "MyValue", "my_value", "12345"))
+	}
+	return errs
+}
+
+// IsValidLabelValue tests whether the value passed is a valid label value.  If
+// the value is not valid, a list of error strings is returned.  Otherwise an
+// empty list (or nil) is returned.
+func IsValidLabelValueZh(value string) []string {
+	var errs []string
+	if len(value) > LabelValueMaxLength {
+		errs = append(errs, MaxLenError(LabelValueMaxLength))
+	}
+	if !labelValueRegexpZh.MatchString(value) {
 		errs = append(errs, RegexError(labelValueErrMsg, labelValueFmt, "MyValue", "my_value", "12345"))
 	}
 	return errs
