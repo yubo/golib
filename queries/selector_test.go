@@ -23,6 +23,7 @@ func TestSelectorParse(t *testing.T) {
 		"",
 		"x!=a,y=b",
 		"x=",
+		"x=true",
 		"x= ",
 		"x=,z= ",
 		"x= ,z= ",

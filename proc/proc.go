@@ -144,7 +144,7 @@ func RegisterHooks(in []HookOps) error {
 }
 
 func Configer() configer.ParsedConfiger {
-	return DefaultProcess.Configer()
+	return DefaultProcess.parsedConfiger
 }
 
 func ReadConfig(path string, into interface{}) error {
