@@ -129,17 +129,23 @@ func (p *mysql) getSchemaStringType(f *StructField) string {
 		}
 	}
 
-	if size >= 65536 && size <= int64(math.Pow(2, 24)) {
+	// 0 ~ 2^16  varchar
+	if size > 0 && size < 16384 {
+		f.Size = util.Int64(size)
+		return fmt.Sprintf("varchar(%d)", size)
+	}
+
+	f.Size = nil
+	if size >= 16384 && size < 65536 {
+		return "text"
+	}
+
+	if size >= 65536 && size < int64(math.Pow(2, 24)) {
 		return "mediumtext"
 	}
 
-	if size > int64(math.Pow(2, 24)) || size <= 0 {
-		return "longtext"
-	}
-
-	f.Size = util.Int64(size)
-
-	return fmt.Sprintf("varchar(%d)", size)
+	// size >= int64(math.Pow(2, 24)) || size <= 0
+	return "longtext"
 }
 
 func (p mysql) getSchemaTimeType(field *StructField) string {
@@ -158,14 +164,20 @@ func (p mysql) getSchemaTimeType(field *StructField) string {
 func (p mysql) getSchemaBytesType(f *StructField) string {
 	size := util.Int64Value(f.Size)
 
-	if size > 0 && size < 65536 {
+	if size > 0 && size < 16384 {
 		return fmt.Sprintf("varbinary(%d)", size)
 	}
 
-	if size >= 65536 && size <= int64(math.Pow(2, 24)) {
+	f.Size = nil
+	if size >= 16384 && size < 65536 {
+		return "blob"
+	}
+
+	if size >= 65536 && size < int64(math.Pow(2, 24)) {
 		return "mediumblob"
 	}
 
+	// size >= int64(math.Pow(2, 24)) || size <= 0
 	return "longblob"
 }
 
@@ -374,7 +386,7 @@ func (p *mysql) MigrateColumn(ctx context.Context, expect, actual *StructField, 
 	alterColumn := false
 
 	// check size
-	if actual.Size != nil && util.Int64Value(expect.Size) != util.Int64Value(actual.Size) {
+	if expect.Size != nil && actual.Size != nil && util.Int64Value(expect.Size) != util.Int64Value(actual.Size) {
 		klog.V(3).InfoS("migrate", "column", expect.Name, "expect", util.Int64Value(expect.Size), "actiual", util.Int64Value(actual.Size))
 		alterColumn = true
 	}

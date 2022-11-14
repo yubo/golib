@@ -370,14 +370,15 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 				// unset name if has inline tag
 				opt.Name = ""
 			} else {
-				opt.DataType = Bytes
+				opt.DataType = String
 			}
 		}
 	case reflect.Array, reflect.Slice, reflect.Map:
-		//if t.Elem().Kind() == reflect.Uint8 {
-		//	opt.DataType = Bytes
-		//}
-		opt.DataType = Bytes
+		if t.Elem().Kind() == reflect.Uint8 {
+			opt.DataType = Bytes
+		} else {
+			opt.DataType = String
+		}
 	}
 
 	if set.Has("auto_createtime") || (opt.Name == "created_at" && (opt.DataType == Time || opt.DataType == Int || opt.DataType == Uint)) {
@@ -426,6 +427,9 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 			opt.Size = util.Int64(16)
 		case reflect.Int32, reflect.Uint32, reflect.Float32:
 			opt.Size = util.Int64(32)
+		case reflect.Struct, reflect.Array, reflect.Slice, reflect.Map:
+			// json string, 32k
+			opt.Size = util.Int64(16384)
 		}
 	}
 
