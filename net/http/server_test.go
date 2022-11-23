@@ -16,10 +16,6 @@ func (h *hw) Hello(ctx context.Context) (string, error) {
 	return "hello world", nil
 }
 
-func (h *hw) Add(ctx context.Context, req *Request) (*Response, error) {
-	return "hello world", nil
-}
-
 func TestNewHandlerFunc(t *testing.T) {
 	server := NewServer()
 	server.Register(new(hw))

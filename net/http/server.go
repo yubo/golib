@@ -18,7 +18,7 @@ import (
 )
 
 type methodType struct {
-	ServiceMethod string      `json:"serviceMethod"` // moduleName.funcName
+	ServiceMethod string      `json:"method"` // serviceName.methodName
 	Request       interface{} `json:"request"`
 	Response      interface{} `json:"response"`
 	serviceName   string
@@ -75,12 +75,10 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 		rt = reflect.PointerTo(rt)
 	}
 
-	fmt.Printf("method num %d\n", rt.NumMethod())
 	for i := 0; i < rt.NumMethod(); i++ {
 		rm := rt.Method(i)
 
 		if !rm.IsExported() {
-			fmt.Printf("continue\n")
 			continue
 		}
 
@@ -88,7 +86,6 @@ func (server *Server) register(rcvr interface{}, name string, useName bool) erro
 		if err != nil {
 			return err
 		}
-		fmt.Printf("register method name %s\n", method.ServiceMethod)
 
 		if method != nil {
 			if _, ok := server.methods[method.ServiceMethod]; ok {
@@ -259,5 +256,4 @@ func newElem(rt reflect.Type) interface{} {
 	}
 
 	return reflect.New(rt).Interface()
-
 }

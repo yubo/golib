@@ -25,7 +25,7 @@ $ curl -XPOST http://localhost:8000 -d '
 
 [
     {
-        "serviceMethod": "Arith.Add",
+        "method": "Arith.Add",
         "request": {
             "A": 0,
             "B": 0
@@ -35,7 +35,7 @@ $ curl -XPOST http://localhost:8000 -d '
         }
     },
     {
-        "serviceMethod": "Arith.Div",
+        "method": "Arith.Div",
         "request": {
             "A": 0,
             "B": 0
@@ -45,7 +45,7 @@ $ curl -XPOST http://localhost:8000 -d '
         }
     },
     {
-        "serviceMethod": "Arith.Error",
+        "method": "Arith.Error",
         "request": {
             "A": 0,
             "B": 0
@@ -55,7 +55,7 @@ $ curl -XPOST http://localhost:8000 -d '
         }
     },
     {
-        "serviceMethod": "Arith.Mul",
+        "method": "Arith.Mul",
         "request": {
             "A": 0,
             "B": 0
@@ -65,14 +65,14 @@ $ curl -XPOST http://localhost:8000 -d '
         }
     },
     {
-        "serviceMethod": "Arith.Scan",
+        "method": "Arith.Scan",
         "request": "",
         "response": {
             "C": 0
         }
     },
     {
-        "serviceMethod": "Arith.SleepMilli",
+        "method": "Arith.SleepMilli",
         "request": {
             "A": 0,
             "B": 0
@@ -80,7 +80,7 @@ $ curl -XPOST http://localhost:8000 -d '
         "response": null
     },
     {
-        "serviceMethod": "Arith.String",
+        "method": "Arith.String",
         "request": {
             "A": 0,
             "B": 0
@@ -88,7 +88,7 @@ $ curl -XPOST http://localhost:8000 -d '
         "response": ""
     },
     {
-        "serviceMethod": "hw.Hello",
+        "method": "hw.Hello",
         "request": null,
         "response": ""
     }
