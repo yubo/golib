@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"testing"
 )
 
 type hw struct{}
 
-func (h *hw) Hello(ctx context.Context) (string, error) {
-	return "hello world", nil
+func (h *hw) Hello(ctx context.Context) ([]byte, error) {
+	return []byte("hello world"), nil
 }
 
 func TestNewHandlerFunc(t *testing.T) {
@@ -28,16 +28,15 @@ func TestNewHandlerFunc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	res, err := svc.Client().Do(req)
+	resp, err := svc.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	b, _ = io.ReadAll(res.Body)
-	t.Logf("resp: %s", b)
-	res.Body.Close()
+	b, _ = httputil.DumpResponse(resp, true)
+	t.Logf("resp: %s", string(b))
 
-	if g, w := res.StatusCode, http.StatusOK; g != w {
+	if g, w := resp.StatusCode, http.StatusOK; g != w {
 		t.Fatalf("Status code mismatch: got %d, want %d", g, w)
 	}
 

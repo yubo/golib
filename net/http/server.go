@@ -239,6 +239,12 @@ func (s *Server) writeError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) writeJson(w http.ResponseWriter, resp interface{}) {
+	if b, ok := resp.([]byte); ok {
+		w.Header().Set("Content-Type", "text/plan")
+		w.Write(b)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
