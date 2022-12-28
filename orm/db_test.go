@@ -2,16 +2,14 @@ package orm
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/clock"
-	"github.com/yubo/golib/util/validation/field"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -21,7 +19,6 @@ var (
 	testDsn       string
 	testDriver    string
 	testAvailable bool
-	ignoreDetail  = cmpopts.IgnoreFields(field.Error{}, "Detail")
 )
 
 // See https://github.com/go-sql-driver/mysql/wiki/Testing
@@ -121,81 +118,109 @@ func TestAutoMigrate(t *testing.T) {
 }
 
 func TestInsert(t *testing.T) {
-	runTests(t,
+	runTests(t, func(db DB, ctx context.Context) {
 		// raw sql
-		func(db DB, ctx context.Context) {
-			db.Exec(ctx, "CREATE TABLE test (value int)")
-			if _, err := db.Exec(ctx, "INSERT INTO test VALUES (?)", 1); err != nil {
-				t.Error(err)
-			}
+		db.Exec(ctx, "CREATE TABLE test (value int)")
+		if _, err := db.Exec(ctx, "INSERT INTO test VALUES (?)", 1); err != nil {
+			t.Error(err)
+		}
 
-			var v int
-			err := db.Query(ctx, "SELECT value FROM test").Row(&v)
-			assert.NoError(t, err)
-			assert.Equal(t, 1, v)
-		},
-		func(db DB, ctx context.Context) {
-			type test struct {
-				ID    *int `sql:",primary_key,auto_increment=1000"`
-				Value int
-			}
+		var v int
+		err := db.Query(ctx, "SELECT value FROM test").Row(&v)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, v)
+	}, func(db DB, ctx context.Context) {
+		type test struct {
+			ID    *int `sql:",primary_key,auto_increment=1000"`
+			Value int
+		}
 
-			err := db.AutoMigrate(ctx, &test{})
-			assert.NoError(t, err)
+		err := db.AutoMigrate(ctx, &test{})
+		assert.NoError(t, err)
 
-			n, err := db.InsertLastId(ctx, &test{Value: 1})
-			assert.NoError(t, err)
-			assert.Equal(t, 1000, int(n))
+		n, err := db.InsertLastId(ctx, &test{Value: 1})
+		assert.NoError(t, err)
+		assert.Equal(t, 1000, int(n))
 
-			var got test
-			err = db.Get(ctx, &got, WithSelector("value=1"))
-			assert.NoError(t, err)
-			assert.Equal(t, test{util.Int(1000), 1}, got)
-		})
+		var got test
+		err = db.Get(ctx, &got, WithSelector("value=1"))
+		assert.NoError(t, err)
+		assert.Equal(t, test{util.Int(1000), 1}, got)
+	}, func(db DB, ctx context.Context) {
+		type User struct {
+			UserID   int
+			UserName string
+		}
+		type Group struct {
+			GroupID   int
+			GroupName string
+		}
+
+		type Role struct {
+			RouteID  int
+			RoleName string
+		}
+
+		type test struct {
+			Name  string //
+			Admin bool   // bool
+			User         // inline
+			Group Group  `sql:",inline"`        // inline
+			Role  Role   `sql:"role,size=1024"` // use json.Marshal as []byte
+		}
+
+		v := test{Name: "test", User: User{1, "user-name"}, Admin: true, Group: Group{2, "group-name"}, Role: Role{3, "role-name"}}
+
+		err := db.AutoMigrate(ctx, &v)
+		assert.NoError(t, err)
+
+		err = db.Insert(ctx, &v)
+		assert.NoError(t, err)
+
+		var got test
+		err = db.Get(ctx, &got, WithSelector("name=test"))
+		assert.NoError(t, err)
+		assert.Equal(t, v, got, "test struct")
+	})
 }
 
 func TestQueryRows(t *testing.T) {
-	runTests(t,
-		// into []int
-		func(db DB, ctx context.Context) {
-			db.Exec(ctx, "CREATE TABLE test (value int)")
-			db.Exec(ctx, "INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+	runTests(t, func(db DB, ctx context.Context) {
+		db.Exec(ctx, "CREATE TABLE test (value int)")
+		db.Exec(ctx, "INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
+		{
 			var v []int
-			db.Query(ctx, "SELECT value FROM test").Rows(&v)
+			err := db.Query(ctx, "SELECT value FROM test WHERE value in (1, 2, 3)").Rows(&v)
+			assert.NoError(t, err)
 			assert.Equal(t, 3, len(v))
-		},
-		// into []*int
-		func(db DB, ctx context.Context) {
-			db.Exec(ctx, "CREATE TABLE test (value int)")
-			db.Exec(ctx, "INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+		}
 
-			var v []*int
-			db.Query(ctx, "SELECT value FROM test").Rows(&v)
+		{
+			var v []int
+			err := db.Query(ctx, "SELECT value FROM test WHERE value IN ('1', '2', '3')").Rows(&v)
+			assert.NoError(t, err)
 			assert.Equal(t, 3, len(v))
-		},
-		// into []*int with Row()
-		func(db DB, ctx context.Context) {
-			db.Exec(ctx, "CREATE TABLE test (value int)")
-			db.Exec(ctx, "INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+		}
 
-			var v []*int
+		{
+			var v []int
 			iter, err := db.Query(ctx, "SELECT value FROM test").Iterator()
 			assert.NoError(t, err)
 			defer iter.Close()
 
 			for iter.Next() {
-				i := new(int)
+				var i int
 				iter.Row(i)
 				v = append(v, i)
 			}
 
 			assert.Equal(t, 3, len(v))
-		},
-	)
+		}
+	})
 }
 
-func TestDelRows(t *testing.T) {
+func TestDel(t *testing.T) {
 	runTests(t,
 		func(db DB, ctx context.Context) {
 			db.Exec(ctx, "CREATE TABLE test (value int)")
@@ -235,328 +260,101 @@ func TestExecNum(t *testing.T) {
 	)
 }
 
-func TestStructType(t *testing.T) {
-	runTests(t,
-		// bool
-		func(db DB, ctx context.Context) {
-			type test struct {
-				Id     int
-				Int    int
-				Int8   int8
-				Int16  int16
-				Int32  int32
-				Int64  int64
-				Uint   uint
-				UInt8  uint8
-				Uint16 uint16
-				Uint32 uint32
-				Uint64 uint64
-				String string
-				Byte   byte
-				Bool   bool
-				Time   time.Time
-			}
-
-			err := db.AutoMigrate(ctx, &test{})
-			assert.NoError(t, err)
-
-			ts := time.Unix(1000, 0)
-
-			cases := []struct {
-				Key  string
-				Data test
-			}{
-				{
-					Key:  "1",
-					Data: test{Id: 1, Time: ts},
-				},
-				{
-					Key:  "2",
-					Data: test{2, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, "a", 'b', true, ts},
-				},
-			}
-
-			for _, c := range cases {
-				err := db.Insert(ctx, &c.Data)
-				if err != nil {
-					t.Errorf("%v: error %v", c.Key, err)
-				}
-
-				var got test
-				err = db.Query(ctx, "SELECT * FROM test where id=?", c.Data.Id).Row(&got)
-				if err != nil {
-					t.Errorf("%v: error %v", c.Key, err)
-				}
-
-				if diff := cmp.Diff(c.Data, got, ignoreDetail); diff != "" {
-					t.Fatalf("test %v returned unexpected error (-want,+got):\n%s", c.Key, diff)
-				}
-
-			}
-		},
-		// ptr
-		func(db DB, ctx context.Context) {
-			type test struct {
-				Id     int
-				Int    *int
-				Int8   *int8
-				Int16  *int16
-				Int32  *int32
-				Int64  *int64
-				Uint   *uint
-				UInt8  *uint8
-				Uit16  *uint16
-				Uint32 *uint32
-				Uint64 *uint64
-				String *string
-				Byte   *byte
-				Bool   *bool
-				Time   *time.Time
-			}
-
-			err := db.AutoMigrate(ctx, &test{})
-			assert.NoError(t, err)
-
-			ts := time.Unix(1000, 0)
-
-			cases := []struct {
-				Key  string
-				Data test
-			}{
-				{
-					Key:  "1",
-					Data: test{Id: 1},
-				},
-				{
-					Key: "2",
-					Data: test{2,
-						util.Int(1),
-						util.Int8(2),
-						util.Int16(3),
-						util.Int32(4),
-						util.Int64(5),
-						util.Uint(6),
-						util.Uint8(7),
-						util.Uint16(8),
-						util.Uint32(9),
-						util.Uint64(10),
-						util.String("a"),
-						util.Byte('b'),
-						util.Bool(true),
-						util.Time(ts),
-					},
-				},
-				{
-					Key: "3",
-					Data: test{3,
-						util.Int(0),
-						util.Int8(0),
-						util.Int16(0),
-						util.Int32(0),
-						util.Int64(0),
-						util.Uint(0),
-						util.Uint8(0),
-						util.Uint16(0),
-						util.Uint32(0),
-						util.Uint64(0),
-						util.String(""),
-						util.Byte(0),
-						util.Bool(false),
-						util.Time(ts),
-					},
-				},
-			}
-
-			for _, c := range cases {
-				err := db.Insert(ctx, &c.Data)
-				if err != nil {
-					t.Errorf("%v: error %v", c.Key, err)
-				}
-
-				var got test
-				err = db.Query(ctx, "SELECT * FROM test where id=?", c.Data.Id).Row(&got)
-				if err != nil {
-					t.Errorf("%v: error %v", c.Key, err)
-				}
-
-				if diff := cmp.Diff(c.Data, got, ignoreDetail); diff != "" {
-					t.Fatalf("test %v returned unexpected error (-want,+got):\n%s", c.Key, diff)
-				}
-
-			}
-
-		},
-	)
-}
-
 func TestQueryRowStruct(t *testing.T) {
-	runTests(t,
-		func(db DB, ctx context.Context) {
-			type test struct {
-				X       int64
-				Y       int64 `sql:"point_y"`
-				Private int64
-				private int64
-			}
+	runTests(t, func(db DB, ctx context.Context) {
+		type test struct {
+			X int64
+		}
 
-			err := db.AutoMigrate(ctx, &test{})
+		err := db.AutoMigrate(ctx, &test{})
+		assert.NoError(t, err)
+
+		err = db.Insert(ctx, &test{1})
+		assert.NoError(t, err)
+
+		{
+			v := test{}
+			err := db.Query(ctx, "SELECT * FROM test").Row(&v)
 			assert.NoError(t, err)
+			assert.Equal(t, test{1}, v)
+		}
 
-			err = db.Insert(ctx, &test{X: 1, Y: 2})
+		{
+			v := test{2}
+			err := db.Query(ctx, "SELECT * FROM test").Row(&v)
 			assert.NoError(t, err)
+			assert.Equal(t, test{1}, v)
+		}
 
-			{
-				v := test{}
-				err := db.Query(ctx, "SELECT * FROM test").Row(&v)
-				assert.NoError(t, err)
-				assert.Equal(t, test{1, 2, 0, 0}, v)
-			}
-
-			{
-				v := test{0, 0, 3, 0}
-				err := db.Query(ctx, "SELECT * FROM test").Row(&v)
-				assert.NoError(t, err)
-				assert.Equal(t, test{1, 2, 0, 0}, v)
-			}
-
-			{
-				var v *test
-				err := db.Query(ctx, "SELECT * FROM test").Row(&v)
-				assert.NoError(t, err)
-				assert.Equal(t, test{1, 2, 0, 0}, *v)
-			}
-
-			{
-				var v *int
-				err := db.Query(ctx, "SELECT point_y FROM test").Row(&v)
-				assert.NoError(t, err)
-				assert.Equal(t, 2, *v)
-			}
-		},
-		func(db DB, ctx context.Context) {
-			type test struct {
-				X       *int64
-				Y       *int64 `sql:"point_y"`
-				Private *int64
-				private *int64
-			}
-
-			err := db.AutoMigrate(ctx, &test{})
+		{
+			var v *test // nil ptr
+			err := db.Query(ctx, "SELECT * FROM test").Row(&v)
 			assert.NoError(t, err)
+			assert.Equal(t, test{1}, *v)
+		}
 
-			err = db.Insert(ctx, &test{util.Int64(1), util.Int64(2), nil, nil})
+		{
+			var v *int
+			err := db.Query(ctx, "SELECT x FROM test").Row(&v)
 			assert.NoError(t, err)
+			assert.Equal(t, 1, *v)
+		}
+	}, func(db DB, ctx context.Context) {
+		type test struct {
+			X *int64
+			Y *int64
+		}
 
-			{
-				var v test
-				err := db.Query(ctx, "SELECT * FROM test").Row(&v)
-				assert.NoError(t, err)
-				assert.Equal(t, test{util.Int64(1), util.Int64(2), nil, nil}, v)
-			}
+		err := db.AutoMigrate(ctx, &test{})
+		assert.NoError(t, err)
 
-			{
-				var v *test
-				err := db.Query(ctx, "SELECT * FROM test").Row(&v)
-				assert.NoError(t, err)
-				assert.Equal(t, test{util.Int64(1), util.Int64(2), nil, nil}, *v)
-			}
+		err = db.Insert(ctx, &test{util.Int64(1), nil})
+		assert.NoError(t, err)
 
-			{
-				var v *test
-				err := db.Query(ctx, "SELECT * FROM test where 1 = 2").Row(&v)
-				assert.Error(t, err)
-				assert.Nil(t, v)
-			}
-		},
-		func(db DB, ctx context.Context) {
-			type Point struct {
-				X int
-				Y int
-			}
-			type test struct {
-				A []string
-				B map[string]string
-				C *Point
-				D Point
-				E []byte
-				F **string
-				G *string
-				N int
-			}
-
-			// CREATE TABLE `test` (`a` blob,`b` blob,`c` blob,`d` blob,`e` blob,`f` ,`g` text,`n` integer)
-			err := db.AutoMigrate(ctx, &test{})
+		{
+			v := test{util.Int64(2), util.Int64(2)}
+			err := db.Query(ctx, "SELECT * FROM test").Row(&v)
 			assert.NoError(t, err)
+			assert.Equal(t, test{util.Int64(1), nil}, v)
+		}
 
-			v := util.String("string")
-			cases := []test{{
-				A: []string{"a", "b"},
-				B: map[string]string{"c": "d", "e": "f"},
-				C: &Point{1, 2},
-				D: Point{3, 4},
-				E: []byte{'5', '6'},
-				F: &v,
-				G: util.String("hello"),
-				N: 0,
-			}, {
-				A: nil,
-				B: nil,
-				C: nil,
-				D: Point{},
-				E: nil,
-				F: nil,
-				G: nil,
-				N: 1,
-			}}
-
-			for _, c := range cases {
-				err := db.Insert(ctx, c, WithTable("test"))
-				assert.NoError(t, err)
-
-				got := test{}
-				db.Query(ctx, "SELECT * FROM test WHERE n = ?", c.N).Row(&got)
-				assert.Equal(t, c, got)
-			}
-		},
-		func(db DB, ctx context.Context) {
-			type test struct {
-				X int64
-				Y int64 `sql:"point_y"`
-				z int64
-			}
-
-			// CREATE TABLE `test` (`x` integer,`point_y` integer)
-			err := db.AutoMigrate(ctx, &test{})
+		{
+			v := test{util.Int64(2), util.Int64(2)}
+			err := db.Query(ctx, "SELECT x FROM test").Row(&v)
 			assert.NoError(t, err)
+			assert.Equal(t, test{util.Int64(1), util.Int64(2)}, v)
+		}
 
-			_, err = db.Exec(ctx, "INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
+		{
+			var v *test // nil ptr
+			err := db.Query(ctx, "SELECT * FROM test").Row(&v)
 			assert.NoError(t, err)
+			assert.Equal(t, test{util.Int64(1), nil}, *v)
+		}
 
-			var v []test
-			err = db.Query(ctx, "SELECT * FROM test").Rows(&v)
-			assert.NoError(t, err)
-			assert.Equal(t, 3, len(v))
-		},
-		func(db DB, ctx context.Context) {
-			type test struct {
-				X int64
-				Y int64 `sql:"point_y"`
-				z int64
-			}
+		{
+			var v *test
+			err := db.Query(ctx, "SELECT * FROM test where 1 = 2").Row(&v)
+			assert.Error(t, err)
+			assert.Nil(t, v)
+		}
+	}, func(db DB, ctx context.Context) {
+		type test struct {
+			X int64
+		}
 
-			// CREATE TABLE `test` (`x` integer,`point_y` integer)
-			err := db.AutoMigrate(ctx, &test{})
-			assert.NoError(t, err)
+		// CREATE TABLE `test` (`x` integer,`point_y` integer)
+		err := db.AutoMigrate(ctx, &test{})
+		assert.NoError(t, err)
 
-			_, err = db.Exec(ctx, "INSERT INTO test VALUES (?, ?), (?, ?), (?, ?)", 1, 2, 3, 4, 5, 6)
-			assert.NoError(t, err)
+		_, err = db.Exec(ctx, "INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
+		assert.NoError(t, err)
 
-			var v []*test
-			err = db.Query(ctx, "SELECT * FROM test").Rows(&v)
-			assert.NoError(t, err)
-			assert.Equal(t, 3, len(v))
-		},
-	)
+		var v []test
+		err = db.Query(ctx, "SELECT * FROM test").Rows(&v)
+		assert.NoError(t, err)
+		assert.Equal(t, 3, len(v))
+	})
 }
 
 func TestPing(t *testing.T) {
@@ -574,9 +372,7 @@ func TestSqlArg(t *testing.T) {
 		var v int
 		db.Query(ctx, "SELECT value FROM test WHERE value=?;", 1).Row(&v)
 		assert.Equal(t, 1, v)
-	})
-
-	runTests(t, func(db DB, ctx context.Context) {
+	}, func(db DB, ctx context.Context) {
 		a := 1
 		db.Exec(ctx, "CREATE TABLE test (value int);")
 		db.Exec(ctx, "INSERT INTO test VALUES (?);", &a)
@@ -584,9 +380,7 @@ func TestSqlArg(t *testing.T) {
 		var v int
 		db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
 		assert.Equal(t, 1, v)
-	})
-
-	runTests(t, func(db DB, ctx context.Context) {
+	}, func(db DB, ctx context.Context) {
 		type foo struct {
 			PointX  *int
 			PointY  *int `sql:"point_y"`
@@ -602,110 +396,81 @@ func TestSqlArg(t *testing.T) {
 		db.Query(ctx, "SELECT * FROM test;").Row(&v)
 		assert.Equal(t, v, foo{&x, nil, nil, nil})
 	})
-
 }
 
 func TestTx(t *testing.T) {
-	runTests(t,
-		func(db DB, ctx context.Context) {
-			db.Exec(ctx, "CREATE TABLE test (value int)")
+	runTests(t, func(db DB, ctx context.Context) {
+		db.Exec(ctx, "CREATE TABLE test (value int)")
 
-			tx, err := db.Begin()
-			assert.NoError(t, err)
+		tx, err := db.Begin()
+		assert.NoError(t, err)
 
-			a := 1
-			_, err = tx.Exec(ctx, "INSERT INTO test VALUES (?);", &a)
-			assert.NoError(t, err)
+		a := 1
+		_, err = tx.Exec(ctx, "INSERT INTO test VALUES (?);", &a)
+		assert.NoError(t, err)
 
-			err = tx.Commit()
-			assert.NoError(t, err)
+		err = tx.Commit()
+		assert.NoError(t, err)
 
-			var v int
-			db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
-			assert.Equal(t, 1, v)
-		},
-		func(db DB, ctx context.Context) {
-			db.Exec(ctx, "CREATE TABLE test (value int)")
+		var v int
+		db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
+		assert.Equal(t, 1, v)
+	}, func(db DB, ctx context.Context) {
+		db.Exec(ctx, "CREATE TABLE test (value int)")
 
-			tx, err := db.Begin()
-			assert.NoError(t, err)
+		tx, err := db.Begin()
+		assert.NoError(t, err)
 
-			a := 1
-			_, err = tx.Exec(ctx, "INSERT INTO test VALUES (?);", &a)
-			assert.NoError(t, err)
+		a := 1
+		_, err = tx.Exec(ctx, "INSERT INTO test VALUES (?);", &a)
+		assert.NoError(t, err)
 
-			err = tx.Rollback()
-			assert.NoError(t, err)
+		err = tx.Rollback()
+		assert.NoError(t, err)
 
-			var v int
-			db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
-			assert.Equal(t, 0, v)
-		},
-	)
+		var v int
+		db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
+		assert.Equal(t, 0, v)
+	})
 }
 
 func TestTxWithContext(t *testing.T) {
-	runTests(t,
-		func(db DB, ctx context.Context) {
-			db.Exec(ctx, "CREATE TABLE test (value int)")
-
-			tx, err := db.Begin()
-			assert.NoError(t, err)
-
-			a := 1
-			_, err = db.Exec(WithDB(ctx, tx), "INSERT INTO test VALUES (?);", &a)
-			assert.NoError(t, err)
-
-			err = tx.Commit()
-			assert.NoError(t, err)
-
-			var v int
-			db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
-			assert.Equal(t, 1, v)
-		},
-		func(db DB, ctx context.Context) {
-			db.Exec(ctx, "CREATE TABLE test (value int)")
-
-			tx, err := db.Begin()
-			assert.NoError(t, err)
-
-			a := 1
-			_, err = db.Exec(WithDB(ctx, tx), "INSERT INTO test VALUES (?);", &a)
-			assert.NoError(t, err)
-
-			err = tx.Rollback()
-			assert.NoError(t, err)
-
-			var v int
-			db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
-			assert.Equal(t, 0, v)
-		},
-	)
-}
-
-func TestList(t *testing.T) {
 	runTests(t, func(db DB, ctx context.Context) {
 		db.Exec(ctx, "CREATE TABLE test (value int)")
-		db.Exec(ctx, "INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
-		var v []int
-		err := db.Query(ctx, "SELECT value FROM test WHERE value in (1, 2, 3)").Rows(&v)
+		tx, err := db.Begin()
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(v))
-	})
 
-	runTests(t, func(db DB, ctx context.Context) {
+		a := 1
+		_, err = db.Exec(WithDB(ctx, tx), "INSERT INTO test VALUES (?);", &a)
+		assert.NoError(t, err)
+
+		err = tx.Commit()
+		assert.NoError(t, err)
+
+		var v int
+		db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
+		assert.Equal(t, 1, v)
+	}, func(db DB, ctx context.Context) {
 		db.Exec(ctx, "CREATE TABLE test (value int)")
-		db.Exec(ctx, "INSERT INTO test VALUES (?), (?), (?)", 1, 2, 3)
 
-		var v []int
-		err := db.Query(ctx, "SELECT value FROM test WHERE value IN ('1', '2', '3')").Rows(&v)
+		tx, err := db.Begin()
 		assert.NoError(t, err)
-		assert.Equal(t, 3, len(v))
+
+		a := 1
+		_, err = db.Exec(WithDB(ctx, tx), "INSERT INTO test VALUES (?);", &a)
+		assert.NoError(t, err)
+
+		err = tx.Rollback()
+		assert.NoError(t, err)
+
+		var v int
+		db.Query(ctx, "SELECT value FROM test WHERE value=?;", &a).Row(&v)
+		assert.Equal(t, 0, v)
 	})
 }
 
-func TestStructCRUD(t *testing.T) {
+func TestCRUD(t *testing.T) {
 	runTests(t, func(db DB, ctx context.Context) {
 		createdAt := time.Unix(1000, 0).UTC()
 		updatedAt := time.Unix(2000, 0).UTC()
@@ -752,9 +517,7 @@ func TestStructCRUD(t *testing.T) {
 		got = test{}
 		err = db.Get(ctx, &got, WithSelector("name=tom"))
 		assert.NoError(t, err)
-		if diff := cmp.Diff(user, got, ignoreDetail); diff != "" {
-			t.Fatalf("user get returned unexpected error (-want,+got):\n%s", diff)
-		}
+		assert.Equalf(t, user, got, "user get")
 
 		// delete
 		user = test{Name: "tom"}
@@ -763,117 +526,315 @@ func TestStructCRUD(t *testing.T) {
 	})
 }
 
-func TestStructInsert(t *testing.T) {
+func TestTypeRaw(t *testing.T) {
 	runTests(t, func(db DB, ctx context.Context) {
-		type User struct {
-			UserID   int
-			UserName string
-		}
-		type Group struct {
-			GroupID   int
-			GroupName string
+		type test struct {
+			Id           int
+			Int          int
+			Int8         int8
+			Int16        int16
+			Int32        int32
+			Int64        int64
+			Uint         uint
+			UInt8        uint8
+			Uint16       uint16
+			Uint32       uint32
+			Uint64       uint64
+			String       string
+			Byte         byte
+			Bool         bool
+			Time         time.Time
+			SliceString  []string
+			SliceStringP []*string
+			MapString    map[string]string
 		}
 
-		type Role struct {
-			RouteID  int
-			RoleName string
+		err := db.AutoMigrate(ctx, &test{})
+		assert.NoError(t, err)
+
+		ts := time.Unix(1000, 0).UTC()
+
+		cases := []struct {
+			Key  string
+			Data test
+		}{{
+			Key:  "1",
+			Data: test{Id: 1, Time: ts},
+		}, {
+			Key: "2",
+			Data: test{
+				Id:           2,
+				Int:          1,
+				Int8:         2,
+				Int16:        3,
+				Int32:        4,
+				Int64:        5,
+				Uint:         6,
+				UInt8:        7,
+				Uint16:       8,
+				Uint32:       9,
+				Uint64:       10,
+				String:       "a",
+				Byte:         'b',
+				Bool:         true,
+				Time:         ts,
+				SliceString:  []string{"a", "b"},
+				SliceStringP: []*string{util.String("a"), util.String("b")},
+				MapString:    map[string]string{"a": "a", "b": "b"},
+			},
+		}}
+
+		for _, c := range cases {
+			err := db.Insert(ctx, &c.Data)
+			if err != nil {
+				t.Errorf("%v: error %v", c.Key, err)
+			}
+
+			var got test
+			err = db.Query(ctx, "SELECT * FROM test where id=?", c.Data.Id).Row(&got)
+			if err != nil {
+				t.Errorf("%v: error %v", c.Key, err)
+			}
+
+			assert.Equal(t, c.Data, got)
 		}
+	})
+}
+
+func TestTypePtr(t *testing.T) {
+	runTests(t, func(db DB, ctx context.Context) {
+		type test struct {
+			Id       int
+			IntP     *int
+			Int8P    *int8
+			Int16P   *int16
+			Int32P   *int32
+			Int64P   *int64
+			UintP    *uint
+			UInt8P   *uint8
+			Uit16P   *uint16
+			Uint32P  *uint32
+			Uint64P  *uint64
+			StringP  *string
+			StringPP **string
+			ByteP    *byte
+			BoolP    *bool
+			TimeP    *time.Time
+		}
+
+		err := db.AutoMigrate(ctx, &test{})
+		assert.NoError(t, err)
+
+		ts := time.Unix(1000, 0).UTC()
+		stringP := util.String("a")
+		emptyStringP := util.String("")
+
+		cases := []struct {
+			Key  string
+			Data test
+		}{{
+			Key:  "1",
+			Data: test{Id: 1},
+		}, {
+			Key: "2",
+			Data: test{
+				Id:       2,
+				IntP:     util.Int(1),
+				Int8P:    util.Int8(2),
+				Int16P:   util.Int16(3),
+				Int32P:   util.Int32(4),
+				Int64P:   util.Int64(5),
+				UintP:    util.Uint(6),
+				UInt8P:   util.Uint8(7),
+				Uit16P:   util.Uint16(8),
+				Uint32P:  util.Uint32(9),
+				Uint64P:  util.Uint64(10),
+				StringP:  stringP,
+				StringPP: &stringP,
+				ByteP:    util.Byte('b'),
+				BoolP:    util.Bool(true),
+				TimeP:    util.Time(ts),
+			},
+		}, {
+			Key: "3",
+			Data: test{
+				Id:       3,
+				IntP:     util.Int(0),
+				Int8P:    util.Int8(0),
+				Int16P:   util.Int16(0),
+				Int32P:   util.Int32(0),
+				Int64P:   util.Int64(0),
+				UintP:    util.Uint(0),
+				UInt8P:   util.Uint8(0),
+				Uit16P:   util.Uint16(0),
+				Uint32P:  util.Uint32(0),
+				Uint64P:  util.Uint64(0),
+				StringP:  emptyStringP,
+				StringPP: &emptyStringP,
+				ByteP:    util.Byte(0),
+				BoolP:    util.Bool(false),
+				TimeP:    util.Time(ts),
+			},
+		}}
+
+		for _, c := range cases {
+			err := db.Insert(ctx, &c.Data)
+			if err != nil {
+				t.Errorf("%v: error %v", c.Key, err)
+			}
+
+			var got test
+			err = db.Query(ctx, "SELECT * FROM test where id=?", c.Data.Id).Row(&got)
+			if err != nil {
+				t.Errorf("%v: error %v", c.Key, err)
+			}
+
+			assert.Equal(t, c.Data, got)
+		}
+	})
+
+}
+
+type (
+	CustomInt    int
+	CustomString string
+	CustomBytes  []byte
+	CustomTime   time.Time
+)
+
+func (t *CustomTime) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, (*time.Time)(t))
+}
+func (t CustomTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Time(t))
+}
+
+func TestTypeCustom(t *testing.T) {
+	runTests(t, func(db DB, ctx context.Context) {
+		type Point struct {
+			X int
+			Y int
+		}
+		type test struct {
+			Id           int
+			CustomInt    CustomInt
+			CustomString CustomString
+			CustomBytes  CustomBytes
+			CustomTime   CustomTime
+			Point        Point
+			PointP       *Point
+		}
+
+		err := db.AutoMigrate(ctx, &test{})
+		assert.NoError(t, err)
+
+		ts := time.Unix(1000, 0)
+
+		cases := []struct {
+			Key  string
+			Data test
+		}{{
+			Key:  "1",
+			Data: test{Id: 1},
+		}, {
+			Key: "2",
+			Data: test{
+				Id:           2,
+				CustomInt:    CustomInt(1),
+				CustomString: CustomString("2"),
+				CustomBytes:  CustomBytes("3"),
+				CustomTime:   CustomTime(ts),
+				Point:        Point{X: 1, Y: 2},
+				PointP:       &Point{X: 1, Y: 2},
+			},
+		}}
+
+		for _, c := range cases {
+			err := db.Insert(ctx, &c.Data)
+			if err != nil {
+				t.Errorf("%v: error %v", c.Key, err)
+			}
+
+			var got test
+			err = db.Query(ctx, "SELECT * FROM test where id=?", c.Data.Id).Row(&got)
+			if err != nil {
+				t.Errorf("%v: error %v", c.Key, err)
+			}
+			assert.Equalf(t, c.Data, got, "custom type")
+		}
+	})
+}
+
+func TestTypeTime(t *testing.T) {
+	runTests(t, func(db DB, ctx context.Context) {
+		createdAt := time.Unix(1000, 0).UTC()
+		updatedAt := time.Unix(2000, 0).UTC()
+		c := &clock.FakeClock{}
+		SetClock(c)
+		c.SetTime(createdAt)
 
 		type test struct {
-			Name  string //
-			Admin bool   // bool
-			User         // inline
-			Group Group  `sql:",inline"`        // inline
-			Role  Role   `sql:"role,size=1024"` // use json.Marshal as []byte
+			Name      string     `sql:",where"`
+			TimeSec   int64      `sql:",auto_updatetime"`
+			TimeMilli int64      `sql:",auto_updatetime=milli"`
+			TimeNano  int64      `sql:",auto_updatetime=nano"`
+			Time      time.Time  `sql:",auto_updatetime"`
+			TimeP     *time.Time `sql:",auto_updatetime"`
 		}
 
-		v := test{Name: "test", User: User{1, "user-name"}, Admin: true, Group: Group{2, "group-name"}, Role: Role{3, "role-name"}}
-
+		v := test{Name: "test"}
 		err := db.AutoMigrate(ctx, &v)
 		assert.NoError(t, err)
 
 		err = db.Insert(ctx, &v)
 		assert.NoError(t, err)
 
-		var got test
-		err = db.Get(ctx, &got, WithSelector("name=test"))
+		v = test{}
+		err = db.Get(ctx, &v, WithSelector("name=test"))
 		assert.NoError(t, err)
-		assert.Equal(t, v, got, "test struct")
+
+		assert.Equal(t, createdAt.Unix(), v.TimeSec, "time sec")
+		assert.Equal(t, createdAt.UnixMilli(), v.TimeMilli, "time milli")
+		assert.Equal(t, createdAt.UnixNano(), v.TimeNano, "time nano")
+		assert.WithinDuration(t, createdAt, v.Time, time.Second, "time")
+		assert.WithinDuration(t, createdAt, *v.TimeP, time.Second, "time")
+
+		c.SetTime(updatedAt)
+		err = db.Update(ctx, &v)
+		assert.NoError(t, err)
+
+		v = test{}
+		err = db.Get(ctx, &v, WithSelector("name=test"))
+		assert.NoError(t, err)
+		assert.Equal(t, updatedAt.Unix(), v.TimeSec, "time sec")
+		assert.Equal(t, updatedAt.UnixMilli(), v.TimeMilli, "time milli")
+		assert.Equal(t, updatedAt.UnixNano(), v.TimeNano, "time nano")
+		assert.WithinDuration(t, updatedAt, v.Time, time.Second, "time")
+		assert.WithinDuration(t, updatedAt, *v.TimeP, time.Second, "time")
+	}, func(db DB, ctx context.Context) {
+		type test struct {
+			Time time.Time
+		}
+
+		t1 := time.Unix(1000, 0).UTC()
+		v := test{Time: t1}
+		err := db.AutoMigrate(ctx, &v)
+		assert.NoError(t, err)
+
+		err = db.Insert(ctx, &v)
+		assert.NoError(t, err)
+
+		v = test{}
+		err = db.Query(ctx, "select * from test where time = ?", t1).Row(&v)
+		assert.NoError(t, err)
+		assert.Equal(t, t1, v.Time)
+
+		err = db.Query(ctx, "select * from test where time > ?", t1.Add(-time.Second)).Row(&v)
+		assert.NoError(t, err)
+		assert.Equal(t, t1, v.Time)
+
+		err = db.Query(ctx, "select * from test where time < ?", t1.Add(time.Second)).Row(&v)
+		assert.NoError(t, err)
+		assert.Equal(t, t1, v.Time)
 	})
-}
-
-func TestTime(t *testing.T) {
-	runTests(t,
-		func(db DB, ctx context.Context) {
-			createdAt := time.Unix(1000, 0).UTC()
-			updatedAt := time.Unix(2000, 0).UTC()
-			c := &clock.FakeClock{}
-			SetClock(c)
-			c.SetTime(createdAt)
-
-			type test struct {
-				Name      string     `sql:",where"`
-				TimeSec   int64      `sql:",auto_updatetime"`
-				TimeMilli int64      `sql:",auto_updatetime=milli"`
-				TimeNano  int64      `sql:",auto_updatetime=nano"`
-				Time      time.Time  `sql:",auto_updatetime"`
-				TimeP     *time.Time `sql:",auto_updatetime"`
-			}
-
-			v := test{Name: "test"}
-			err := db.AutoMigrate(ctx, &v)
-			assert.NoError(t, err)
-
-			err = db.Insert(ctx, &v)
-			assert.NoError(t, err)
-
-			v = test{}
-			err = db.Get(ctx, &v, WithSelector("name=test"))
-			assert.NoError(t, err)
-			assert.Equal(t, createdAt.Unix(), v.TimeSec, "time sec")
-			assert.Equal(t, createdAt.UnixMilli(), v.TimeMilli, "time milli")
-			assert.Equal(t, createdAt.UnixNano(), v.TimeNano, "time nano")
-			assert.WithinDuration(t, createdAt, v.Time, time.Second, "time")
-			assert.WithinDuration(t, createdAt, *v.TimeP, time.Second, "time")
-
-			c.SetTime(updatedAt)
-			err = db.Update(ctx, &v)
-			assert.NoError(t, err)
-
-			v = test{}
-			err = db.Get(ctx, &v, WithSelector("name=test"))
-			assert.NoError(t, err)
-			assert.Equal(t, updatedAt.Unix(), v.TimeSec, "time sec")
-			assert.Equal(t, updatedAt.UnixMilli(), v.TimeMilli, "time milli")
-			assert.Equal(t, updatedAt.UnixNano(), v.TimeNano, "time nano")
-			assert.WithinDuration(t, updatedAt, v.Time, time.Second, "time")
-			assert.WithinDuration(t, updatedAt, *v.TimeP, time.Second, "time")
-		},
-		func(db DB, ctx context.Context) {
-			type test struct {
-				Time time.Time
-			}
-
-			t1 := time.Unix(1000, 0).UTC()
-			v := test{Time: t1}
-			err := db.AutoMigrate(ctx, &v)
-			assert.NoError(t, err)
-
-			err = db.Insert(ctx, &v)
-			assert.NoError(t, err)
-
-			v = test{}
-			err = db.Query(ctx, "select * from test where time = ?", t1).Row(&v)
-			assert.NoError(t, err)
-			assert.Equal(t, t1, v.Time)
-
-			err = db.Query(ctx, "select * from test where time > ?", t1.Add(-time.Second)).Row(&v)
-			assert.NoError(t, err)
-			assert.Equal(t, t1, v.Time)
-
-			err = db.Query(ctx, "select * from test where time < ?", t1.Add(time.Second)).Row(&v)
-			assert.NoError(t, err)
-			assert.Equal(t, t1, v.Time)
-		},
-	)
 }
