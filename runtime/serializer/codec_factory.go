@@ -146,7 +146,7 @@ func DisableStrict(options *CodecFactoryOptions) {
 // TODO: allow other codecs to be compiled in?
 // TODO: accept a scheme interface
 func NewCodecFactory(mutators ...CodecFactoryOptionsMutator) CodecFactory {
-	options := CodecFactoryOptions{Pretty: true}
+	options := CodecFactoryOptions{}
 	for _, fn := range mutators {
 		fn(&options)
 	}

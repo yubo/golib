@@ -45,7 +45,7 @@ func (p HookOps) dlog() {
 			"hookName", p.HookNum.String(),
 			"owner", p.Owner,
 			"priority", p.priority.String(),
-			"nameOfFunction", nameOfFunction(p.Hook))
+			"nameOfFunction", NameOfFunction(p.Hook))
 	}
 }
 

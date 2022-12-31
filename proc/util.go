@@ -49,7 +49,7 @@ func sigContains(v os.Signal, sigs []os.Signal) bool {
 	return false
 }
 
-func nameOfFunction(f interface{}) string {
+func NameOfFunction(f interface{}) string {
 	fun := runtime.FuncForPC(reflect.ValueOf(f).Pointer())
 	tokenized := strings.Split(fun.Name(), ".")
 	last := tokenized[len(tokenized)-1]

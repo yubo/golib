@@ -1,8 +1,10 @@
 package util
 
 import (
+	"encoding/json"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -340,6 +342,48 @@ func TestSubStr3(t *testing.T) {
 	for i, c := range cases {
 		got := SubStr3(c.in, c.begin, c.end)
 		require.Equalf(t, c.want, got, "%d - SubStr(%s, %d, %d)", i, c.in, c.begin, c.end)
+	}
+}
+
+func TestName(t *testing.T) {
+	type Foo struct{}
+	type bar struct{}
+	cases := []struct {
+		in   any
+		want string
+	}{
+		{Foo{}, "Foo"},
+		{&Foo{}, "Foo"},
+		{bar{}, "bar"},
+		{Name, "Name"},
+		{time.Time{}, "Time"},
+		{time.Unix, "Unix"},
+	}
+
+	for _, c := range cases {
+		require.Equal(t, c.want, Name(c.in))
+	}
+
+}
+
+func TestPkgPath(t *testing.T) {
+	type Foo struct{}
+	now := time.Now
+
+	cases := []struct {
+		in   any
+		want string
+	}{
+		{Foo{}, "github.com/yubo/golib/util"},
+		{time.Time{}, "time"},
+		{&time.Time{}, "time"},
+		{now, "time"},
+		{&now, "time"},
+		{json.Marshal, "encoding/json"},
+	}
+
+	for _, c := range cases {
+		require.Equal(t, c.want, PkgPath(c.in))
 	}
 
 }

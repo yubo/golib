@@ -302,7 +302,7 @@ func (p *Process) start() error {
 	for _, ops := range p.hookOps[ACTION_START] {
 		ops.dlog()
 		if err := ops.Hook(WithHookOps(ctx, ops)); err != nil {
-			return fmt.Errorf("%s.%s() err: %s", ops.Owner, nameOfFunction(ops.Hook), err)
+			return fmt.Errorf("%s.%s() err: %s", ops.Owner, NameOfFunction(ops.Hook), err)
 		}
 	}
 	p.status.Set(STATUS_RUNNING)
@@ -381,7 +381,7 @@ func (p *Process) stop() error {
 
 		stop.dlog()
 		if err := stop.Hook(WithHookOps(ctx, stop)); err != nil {
-			p.err = fmt.Errorf("%s.%s() err: %s", stop.Owner, nameOfFunction(stop.Hook), err)
+			p.err = fmt.Errorf("%s.%s() err: %s", stop.Owner, NameOfFunction(stop.Hook), err)
 
 			return p.err
 		}

@@ -800,3 +800,68 @@ func PrepareValue(rv reflect.Value, rt reflect.Type) {
 func NewUUID() types.UID {
 	return types.UID(uuid.New().String())
 }
+
+func Filter[T any](arr []T, f func(T) bool) []T {
+	result := []T{}
+	for _, elem := range arr {
+		if f(elem) {
+			result = append(result, elem)
+		}
+	}
+	return result
+}
+
+func Map[T1 any, T2 any](arr []T1, f func(T1) T2) []T2 {
+	result := make([]T2, len(arr))
+	for i, elem := range arr {
+		result[i] = f(elem)
+	}
+	return result
+}
+
+func Reduce[T1 any, T2 any](arr []T1, init T2, f func(T2, T1) T2) T2 {
+	acc := init
+	for _, cur := range arr {
+		acc = f(acc, cur)
+	}
+	return acc
+}
+
+// Name get name of type/func
+func Name(a any) string {
+	rv := reflect.Indirect(reflect.ValueOf(a))
+	switch rv.Kind() {
+	case reflect.Func:
+		return funcName(runtime.FuncForPC(rv.Pointer()).Name())
+	default:
+		return rv.Type().Name()
+	}
+}
+
+// PkgPath get package path of type/func
+func PkgPath(a any) string {
+	rv := reflect.Indirect(reflect.ValueOf(a))
+	switch rv.Kind() {
+	case reflect.Func:
+		return funcPkgPath(runtime.FuncForPC(rv.Pointer()).Name())
+	default:
+		return rv.Type().PkgPath()
+	}
+}
+
+// funcName get func name of funcPath
+func funcName(funcPath string) string {
+	tokenized := strings.Split(funcPath, ".")
+	last := tokenized[len(tokenized)-1]
+	last = strings.TrimSuffix(last, ")·fm") // < Go 1.5
+	last = strings.TrimSuffix(last, ")-fm") // Go 1.5
+	last = strings.TrimSuffix(last, "·fm")  // < Go 1.5
+	last = strings.TrimSuffix(last, "-fm")  // Go 1.5
+	return last
+}
+
+// funcName get pkgPath of funcPath
+func funcPkgPath(funcPath string) string {
+	tokenized := strings.Split(funcPath, ".")
+	return strings.Join(tokenized[:len(tokenized)-1], ".")
+}
