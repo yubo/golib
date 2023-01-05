@@ -14,9 +14,8 @@ import (
 )
 
 var (
-	dbFactories    = map[string]DBFactory{}
-	DEBUG          = false
-	LogDepthOffset = 0
+	dbFactories = map[string]DBFactory{}
+	DEBUG       = false
 )
 
 func Register(name string, d DBFactory) {
@@ -314,7 +313,7 @@ func (p *transfer) unmarshal() error {
 
 	if jsonStr, ok := p.dstProxy.([]byte); ok {
 		if err := json.Unmarshal(jsonStr, rv.Addr().Interface()); err != nil {
-			dlog(2, "json.Unmarshal() error %s", err)
+			elog("json.Unmarshal() error %s", err)
 		}
 	}
 

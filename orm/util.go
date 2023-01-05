@@ -3,6 +3,7 @@ package orm
 import (
 	"bytes"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,66 +35,52 @@ var (
 	defaultClock     clock.Clock = clock.RealClock{}
 )
 
-func printString(b []byte) string {
-	s := make([]byte, len(b))
-
-	for i := 0; i < len(b); i++ {
-		if strconv.IsPrint(rune(b[i])) {
-			s[i] = b[i]
-		} else {
-			s[i] = '.'
-		}
-	}
-	return string(s)
-}
-
-func dlog(depth int, format string, args ...interface{}) {
+func dlog(format string, args ...interface{}) {
 	if klog.V(6).Enabled() || DEBUG {
-		klog.InfoDepth(depth, fmt.Sprintf(format, args...))
+		klog.InfofDepth(2, format, args...)
 	}
 }
 
-func elog(depth int, format string, args ...interface{}) {
-	klog.ErrorDepth(depth, fmt.Sprintf(format, args...))
+func elog(format string, args ...interface{}) {
+	klog.ErrorfDepth(1, format, args...)
 }
 
-func dlogSql(depth int, query string, args ...interface{}) {
+func dlogSql(query string, args ...interface{}) {
 	if klog.V(10).Enabled() || DEBUG {
 		prepared, err := interpolateParams(query, args)
 		if err != nil {
-			klog.ErrorDepth(depth+LogDepthOffset, err)
+			klog.ErrorDepth(1, err)
 			return
 		}
-		klog.InfoDepth(depth+LogDepthOffset, prepared)
+		klog.InfoDepth(2, prepared)
 	}
 }
 
 // {1,2,3} => "(1,2,3)"
 func Ints2sql(array []int64) string {
-	out := bytes.NewBuffer([]byte("("))
+	buf := []byte("(")
 
 	for i := 0; i < len(array); i++ {
 		if i > 0 {
-			out.WriteByte(',')
+			buf = append(buf, ',')
 		}
-		fmt.Fprintf(out, "%d", array[i])
+		buf = strconv.AppendInt(buf, array[i], 10)
 	}
-	out.WriteByte(')')
-	return out.String()
+	return string(append(buf, ')'))
 }
 
 // {"1","2","3"} => "('1', '2', '3')"
 func Strings2sql(array []string) string {
-	out := bytes.NewBuffer([]byte("("))
-
+	buf := []byte("(")
 	for i := 0; i < len(array); i++ {
 		if i > 0 {
-			out.WriteByte(',')
+			buf = append(buf, ',')
 		}
-		out.Write([]byte("'" + array[i] + "'"))
+		buf = append(buf, '\'')
+		buf = append(buf, array[i]...)
+		buf = append(buf, '\'')
 	}
-	out.WriteByte(')')
-	return out.String()
+	return string(append(buf, ')'))
 }
 
 // struct{}, *struct{}, **struct{} return true
@@ -552,21 +539,14 @@ func interpolateParams(query string, args []interface{}) (string, error) {
 			continue
 		}
 
+		arg, err = driver.DefaultParameterConverter.ConvertValue(arg)
+		if err != nil {
+			return "", err
+		}
+
 		switch v := arg.(type) {
-		case int:
-			buf = strconv.AppendInt(buf, int64(v), 10)
-		case int16:
-			buf = strconv.AppendInt(buf, int64(v), 10)
-		case int32:
-			buf = strconv.AppendInt(buf, int64(v), 10)
 		case int64:
 			buf = strconv.AppendInt(buf, v, 10)
-		case uint:
-			buf = strconv.AppendUint(buf, uint64(v), 10)
-		case uint16:
-			buf = strconv.AppendUint(buf, uint64(v), 10)
-		case uint32:
-			buf = strconv.AppendUint(buf, uint64(v), 10)
 		case uint64:
 			buf = strconv.AppendUint(buf, v, 10)
 		case float32:
@@ -610,7 +590,7 @@ func interpolateParams(query string, args []interface{}) (string, error) {
 			buf = escapeStringQuotes(buf, v)
 			buf = append(buf, '\'')
 		default:
-			elog(0, "unsupport print type %v", reflect.TypeOf(v))
+			elog("unsupport print type %v", reflect.TypeOf(v))
 			return "", ErrSkip
 		}
 

@@ -39,7 +39,7 @@ func (p *baseInterface) rawDBFrom(ctx context.Context) RawDB {
 }
 
 func (p *baseInterface) Exec(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 
 	//ret, err := p.db.Exec(ctx, query, args...)
 	ret, err := p.rawDBFrom(ctx).ExecContext(ctx, query, args...)
@@ -51,7 +51,7 @@ func (p *baseInterface) Exec(ctx context.Context, query string, args ...interfac
 }
 
 func (p *baseInterface) ExecLastId(ctx context.Context, query string, args ...interface{}) (int64, error) {
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return p.execLastId(ctx, query, args...)
 }
 
@@ -70,7 +70,7 @@ func (p *baseInterface) execLastId(ctx context.Context, query string, args ...in
 }
 
 func (p *baseInterface) ExecNum(ctx context.Context, query string, args ...interface{}) (int64, error) {
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return p.execNum(ctx, query, args...)
 }
 
@@ -89,7 +89,7 @@ func (p *baseInterface) execNum(ctx context.Context, query string, args ...inter
 }
 
 func (p *baseInterface) ExecNumErr(ctx context.Context, query string, args ...interface{}) error {
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return p.execNumErr(ctx, query, args...)
 }
 
@@ -104,7 +104,7 @@ func (p *baseInterface) execNumErr(ctx context.Context, query string, args ...in
 }
 
 func (p *baseInterface) Query(ctx context.Context, query string, args ...interface{}) *Rows {
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return p.query(ctx, query, args...)
 }
 
@@ -131,7 +131,7 @@ func (p *baseInterface) Insert(ctx context.Context, sample interface{}, opts ...
 		return err
 	}
 
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return p.execNumErr(ctx, query, args...)
 }
 
@@ -146,7 +146,7 @@ func (p *baseInterface) InsertLastId(ctx context.Context, sample interface{}, op
 		return 0, err
 	}
 
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return p.execLastId(ctx, query, args...)
 }
 
@@ -165,13 +165,13 @@ func (p *baseInterface) List(ctx context.Context, into interface{}, opts ...Opti
 		return err
 	}
 
-	dlogSql(1, querySql, args...)
+	dlogSql(querySql, args...)
 	if err := p.query(ctx, querySql, args...).Rows(into); err != nil {
 		return err
 	}
 
 	if o.total != nil {
-		dlogSql(1, countSql, args...)
+		dlogSql(countSql, args...)
 		if err := p.query(ctx, countSql, args...).Row(o.total); err != nil {
 			return err
 		}
@@ -191,7 +191,7 @@ func (p *baseInterface) Get(ctx context.Context, into interface{}, opts ...Optio
 		return err
 	}
 
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return o.Error(p.query(ctx, query, args...).Row(into))
 }
 
@@ -206,7 +206,7 @@ func (p *baseInterface) Update(ctx context.Context, sample interface{}, opts ...
 		return err
 	}
 
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return o.Error(p.execNumErr(ctx, query, args...))
 }
 
@@ -221,6 +221,6 @@ func (p *baseInterface) Delete(ctx context.Context, sample interface{}, opts ...
 		return err
 	}
 
-	dlogSql(1, query, args...)
+	dlogSql(query, args...)
 	return o.Error(p.execNumErr(ctx, query, args...))
 }
