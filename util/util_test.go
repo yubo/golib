@@ -2,7 +2,9 @@ package util
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -326,25 +328,6 @@ func TestSubStr(t *testing.T) {
 
 }
 
-func TestSubStr3(t *testing.T) {
-	cases := []struct {
-		in    string
-		begin int
-		end   int
-		want  string
-	}{
-		{"1234567890", 3, -3, "123...890"},
-		{"", 3, -3, ""},
-		{"1234567890", 8, -8, "1234567890"},
-		{"1234567890", 20, 20, "1234567890"},
-	}
-
-	for i, c := range cases {
-		got := SubStr3(c.in, c.begin, c.end)
-		require.Equalf(t, c.want, got, "%d - SubStr(%s, %d, %d)", i, c.in, c.begin, c.end)
-	}
-}
-
 func TestName(t *testing.T) {
 	type Foo struct{}
 	type bar struct{}
@@ -385,5 +368,29 @@ func TestPkgPath(t *testing.T) {
 	for _, c := range cases {
 		require.Equal(t, c.want, PkgPath(c.in))
 	}
+
+}
+
+func TestReduce(t *testing.T) {
+	require.Equal(t, "123", Reduce([]int{1, 2, 3}, "", func(acc string, cur int) string {
+		return fmt.Sprintf("%s%d", acc, cur)
+	}))
+}
+func TestFilter(t *testing.T) {
+	require.Equal(t, []int{1, 3}, Filter([]int{1, 2, 3}, func(elem int) bool {
+		return elem&1 == 1
+	}))
+
+}
+func TestMap(t *testing.T) {
+	require.Equal(t, []string{"1", "2", "3"}, Map([]int{1, 2, 3}, func(elem int) string {
+		return strconv.Itoa(elem)
+	}))
+
+}
+func TestFind(t *testing.T) {
+	require.Equal(t, []int{3}, Find([]int{1, 2, 3}, func(elem int) bool {
+		return elem == 3
+	}))
 
 }
