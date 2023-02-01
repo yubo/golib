@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml"
 )
 
 // GlobalKey is the name of the Values key that is used for storing global vars.

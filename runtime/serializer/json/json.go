@@ -26,12 +26,11 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/modern-go/reflect2"
-	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
 
 	"github.com/yubo/golib/runtime"
 	"github.com/yubo/golib/runtime/serializer/recognizer"
 	"github.com/yubo/golib/util/framer"
-	utilyaml "github.com/yubo/golib/yaml"
+	"github.com/yubo/golib/util/yaml"
 )
 
 // NewSerializer creates a JSON serializer that handles encoding versioned objects into the proper JSON form. If typer
@@ -249,7 +248,7 @@ func (yamlFramer) NewFrameWriter(w io.Writer) io.Writer {
 // NewFrameReader implements stream framing for this serializer
 func (yamlFramer) NewFrameReader(r io.ReadCloser) io.ReadCloser {
 	// extract the YAML document chunks directly
-	return utilyaml.NewDocumentDecoder(r)
+	return yaml.NewDocumentDecoder(r)
 }
 
 type yamlFrameWriter struct {

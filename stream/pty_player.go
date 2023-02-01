@@ -14,8 +14,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/yubo/golib/util/clock"
 	"github.com/yubo/golib/term"
+	"github.com/yubo/golib/util/clock/testing"
 	"k8s.io/klog/v2"
 )
 
@@ -152,7 +152,7 @@ func (p *Player) run() error {
 	}
 
 	startTime := time.Unix(0, frame.Time)
-	clock := clock.NewFakeClock(startTime)
+	clock := testing.NewFakeClock(startTime)
 
 	go func() {
 		tick := time.NewTicker(SampleTime)
@@ -192,7 +192,7 @@ func (p *Player) run() error {
 	return nil
 }
 
-func (p *Player) sendMsg(frame *RecData, clock *clock.FakeClock) {
+func (p *Player) sendMsg(frame *RecData, clock *testing.FakeClock) {
 	wait := time.Unix(0, frame.Time).Sub(clock.Now())
 	if wait > p.maxWait {
 		clock.Step(wait - p.maxWait)

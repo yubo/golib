@@ -20,13 +20,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yubo/golib/util/clock"
+	testingclock "github.com/yubo/golib/util/clock/testing"
 )
 
 func TestRateLimitingQueue(t *testing.T) {
 	limiter := NewItemExponentialFailureRateLimiter(1*time.Millisecond, 1*time.Second)
 	queue := NewRateLimitingQueue(limiter).(*rateLimitingType)
-	fakeClock := clock.NewFakeClock(time.Now())
+	fakeClock := testingclock.NewFakeClock(time.Now())
 	delayingQueue := &delayingType{
 		Interface:       New(),
 		clock:           fakeClock,

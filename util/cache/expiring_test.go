@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	utilclock "github.com/yubo/golib/util/clock"
+	testingclock "github.com/yubo/golib/util/clock/testing"
 	"github.com/yubo/golib/util/uuid"
 )
 
@@ -57,7 +57,7 @@ func TestExpiringCache(t *testing.T) {
 }
 
 func TestExpiration(t *testing.T) {
-	fc := &utilclock.FakeClock{}
+	fc := &testingclock.FakeClock{}
 	c := NewExpiringWithClock(fc)
 
 	c.Set("a", "a", time.Second)
@@ -103,7 +103,7 @@ func TestExpiration(t *testing.T) {
 }
 
 func TestGarbageCollection(t *testing.T) {
-	fc := &utilclock.FakeClock{}
+	fc := &testingclock.FakeClock{}
 
 	type entry struct {
 		key, val string

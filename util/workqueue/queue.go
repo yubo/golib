@@ -46,7 +46,7 @@ func NewNamed(name string) *Type {
 	)
 }
 
-func newQueue(c clock.Clock, metrics queueMetrics, updatePeriod time.Duration) *Type {
+func newQueue(c clock.WithTicker, metrics queueMetrics, updatePeriod time.Duration) *Type {
 	t := &Type{
 		clock:                      c,
 		dirty:                      set{},
@@ -90,7 +90,7 @@ type Type struct {
 	metrics queueMetrics
 
 	unfinishedWorkUpdatePeriod time.Duration
-	clock                      clock.Clock
+	clock                      clock.WithTicker
 }
 
 type empty struct{}

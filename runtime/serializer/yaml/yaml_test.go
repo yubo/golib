@@ -20,8 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yubo/golib/yaml"
-	sigsyaml "github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml"
+	sigsyaml "github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 type testcase struct {

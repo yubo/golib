@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yubo/golib/util"
-	"github.com/yubo/golib/util/clock"
+	testingclock "github.com/yubo/golib/util/clock/testing"
 
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/mattn/go-sqlite3"
@@ -475,7 +475,7 @@ func TestCRUD(t *testing.T) {
 		createdAt := time.Unix(1000, 0).UTC()
 		updatedAt := time.Unix(2000, 0).UTC()
 
-		c := &clock.FakeClock{}
+		c := &testingclock.FakeClock{}
 		SetClock(c)
 		c.SetTime(createdAt)
 
@@ -769,7 +769,7 @@ func TestTypeTime(t *testing.T) {
 	runTests(t, func(db DB, ctx context.Context) {
 		createdAt := time.Unix(1000, 0).UTC()
 		updatedAt := time.Unix(2000, 0).UTC()
-		c := &clock.FakeClock{}
+		c := &testingclock.FakeClock{}
 		SetClock(c)
 		c.SetTime(createdAt)
 

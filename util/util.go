@@ -20,7 +20,7 @@ import (
 
 	"github.com/yubo/golib/types"
 	"github.com/yubo/golib/util/uuid"
-	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
 
 const (

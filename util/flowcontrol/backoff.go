@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/yubo/golib/util/clock"
+	"github.com/yubo/golib/util/clock/testing"
 	"github.com/yubo/golib/util/integer"
 )
 
@@ -37,7 +38,7 @@ type Backoff struct {
 	perItemBackoff  map[string]*backoffEntry
 }
 
-func NewFakeBackOff(initial, max time.Duration, tc *clock.FakeClock) *Backoff {
+func NewFakeBackOff(initial, max time.Duration, tc *testing.FakeClock) *Backoff {
 	return &Backoff{
 		perItemBackoff:  map[string]*backoffEntry{},
 		Clock:           tc,
