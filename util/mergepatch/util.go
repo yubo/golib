@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/yubo/golib/yaml/sigs.k8s.io/yaml"
+	"github.com/yubo/golib/util/yaml"
 )
 
 // PreconditionFunc asserts that an incompatible change is not present within a patch.

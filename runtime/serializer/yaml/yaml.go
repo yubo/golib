@@ -18,7 +18,7 @@ package yaml
 
 import (
 	"github.com/yubo/golib/runtime"
-	"github.com/yubo/golib/yaml"
+	"github.com/yubo/golib/util/yaml"
 )
 
 // yamlSerializer converts YAML passed to the Decoder methods to JSON.

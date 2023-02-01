@@ -28,6 +28,7 @@ import (
 
 	"github.com/yubo/golib/api"
 	"github.com/yubo/golib/util/clock"
+	testingclock "github.com/yubo/golib/util/clock/testing"
 	"github.com/yubo/golib/util/runtime"
 )
 
@@ -698,7 +699,7 @@ func TestContextForChannel(t *testing.T) {
 }
 
 func TestExponentialBackoffManagerGetNextBackoff(t *testing.T) {
-	fc := clock.NewFakeClock(time.Now())
+	fc := testingclock.NewFakeClock(time.Now())
 	backoff := NewExponentialBackoffManager(1, 10, 10, 2.0, 0.0, fc)
 	durations := []time.Duration{1, 2, 4, 8, 10, 10, 10}
 	for i := 0; i < len(durations); i++ {
@@ -717,7 +718,7 @@ func TestExponentialBackoffManagerGetNextBackoff(t *testing.T) {
 
 func TestJitteredBackoffManagerGetNextBackoff(t *testing.T) {
 	// positive jitter
-	backoffMgr := NewJitteredBackoffManager(1, 1, clock.NewFakeClock(time.Now()))
+	backoffMgr := NewJitteredBackoffManager(1, 1, testingclock.NewFakeClock(time.Now()))
 	for i := 0; i < 5; i++ {
 		backoff := backoffMgr.(*jitteredBackoffManagerImpl).getNextBackoff()
 		if backoff < 1 || backoff > 2 {
@@ -726,7 +727,7 @@ func TestJitteredBackoffManagerGetNextBackoff(t *testing.T) {
 	}
 
 	// negative jitter, shall be a fixed backoff
-	backoffMgr = NewJitteredBackoffManager(1, -1, clock.NewFakeClock(time.Now()))
+	backoffMgr = NewJitteredBackoffManager(1, -1, testingclock.NewFakeClock(time.Now()))
 	backoff := backoffMgr.(*jitteredBackoffManagerImpl).getNextBackoff()
 	if backoff != 1 {
 		t.Errorf("backoff should be 1, but got %d", backoff)

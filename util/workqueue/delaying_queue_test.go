@@ -23,12 +23,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yubo/golib/util/clock"
+	testingclock "github.com/yubo/golib/util/clock/testing"
 	"github.com/yubo/golib/util/wait"
 )
 
 func TestSimpleQueue(t *testing.T) {
-	fakeClock := clock.NewFakeClock(time.Now())
+	fakeClock := testingclock.NewFakeClock(time.Now())
 	q := NewDelayingQueueWithCustomClock(fakeClock, "")
 
 	first := "foo"
@@ -70,7 +70,7 @@ func TestSimpleQueue(t *testing.T) {
 }
 
 func TestDeduping(t *testing.T) {
-	fakeClock := clock.NewFakeClock(time.Now())
+	fakeClock := testingclock.NewFakeClock(time.Now())
 	q := NewDelayingQueueWithCustomClock(fakeClock, "")
 
 	first := "foo"
@@ -129,7 +129,7 @@ func TestDeduping(t *testing.T) {
 }
 
 func TestAddTwoFireEarly(t *testing.T) {
-	fakeClock := clock.NewFakeClock(time.Now())
+	fakeClock := testingclock.NewFakeClock(time.Now())
 	q := NewDelayingQueueWithCustomClock(fakeClock, "")
 
 	first := "foo"
@@ -178,7 +178,7 @@ func TestAddTwoFireEarly(t *testing.T) {
 }
 
 func TestCopyShifting(t *testing.T) {
-	fakeClock := clock.NewFakeClock(time.Now())
+	fakeClock := testingclock.NewFakeClock(time.Now())
 	q := NewDelayingQueueWithCustomClock(fakeClock, "")
 
 	first := "foo"
@@ -216,7 +216,7 @@ func TestCopyShifting(t *testing.T) {
 }
 
 func BenchmarkDelayingQueue_AddAfter(b *testing.B) {
-	fakeClock := clock.NewFakeClock(time.Now())
+	fakeClock := testingclock.NewFakeClock(time.Now())
 	q := NewDelayingQueueWithCustomClock(fakeClock, "")
 
 	// Add items

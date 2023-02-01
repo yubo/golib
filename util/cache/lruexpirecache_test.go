@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yubo/golib/util/clock"
+	testingclock "github.com/yubo/golib/util/clock/testing"
 )
 
 func expectEntry(t *testing.T, c *LRUExpireCache, key interface{}, value interface{}) {
@@ -43,7 +43,7 @@ func TestSimpleGet(t *testing.T) {
 }
 
 func TestExpiredGet(t *testing.T) {
-	fakeClock := clock.NewFakeClock(time.Now())
+	fakeClock := testingclock.NewFakeClock(time.Now())
 	c := NewLRUExpireCacheWithClock(10, fakeClock)
 	c.Add("short-lived", "12345", 1*time.Millisecond)
 	// ensure the entry expired
