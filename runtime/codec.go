@@ -3,9 +3,12 @@ package runtime
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"reflect"
+
+	"k8s.io/klog/v2"
 )
 
 // codec binds an encoder and decoder.
@@ -62,10 +65,17 @@ type NoopEncoder struct {
 
 var _ Serializer = NoopEncoder{}
 
+const noopEncoderIdentifier Identifier = "noop"
+
 func (n NoopEncoder) Encode(obj Object, w io.Writer) error {
 	// There is no need to handle runtime.CacheableObject, as we don't
 	// process the obj at all.
 	return fmt.Errorf("encoding is not allowed for this codec: %v", reflect.TypeOf(n.Decoder))
+}
+
+// Identifier implements runtime.Encoder interface.
+func (n NoopEncoder) Identifier() Identifier {
+	return noopEncoderIdentifier
 }
 
 // NoopDecoder converts an Encoder to a Serializer or Codec for code that expects them but only uses encoding.
@@ -82,13 +92,30 @@ func (n NoopDecoder) Decode(data []byte, into Object) (Object, error) {
 type base64Serializer struct {
 	Encoder
 	Decoder
+
+	identifier Identifier
 }
 
 func NewBase64Serializer(e Encoder, d Decoder) Serializer {
 	return &base64Serializer{
-		Encoder: e,
-		Decoder: d,
+		Encoder:    e,
+		Decoder:    d,
+		identifier: identifier(e),
 	}
+}
+
+func identifier(e Encoder) Identifier {
+	result := map[string]string{
+		"name": "base64",
+	}
+	if e != nil {
+		result["encoder"] = string(e.Identifier())
+	}
+	identifier, err := json.Marshal(result)
+	if err != nil {
+		klog.Fatalf("Failed marshaling identifier for base64Serializer: %v", err)
+	}
+	return Identifier(identifier)
 }
 
 func (s base64Serializer) Encode(obj Object, stream io.Writer) error {
@@ -105,6 +132,11 @@ func (s base64Serializer) Decode(data []byte, into Object) (Object, error) {
 		return nil, err
 	}
 	return s.Decoder.Decode(out[:n], into)
+}
+
+// Identifier implements runtime.Encoder interface.
+func (s base64Serializer) Identifier() Identifier {
+	return s.identifier
 }
 
 // SerializerInfoForMediaType returns the first info in types that has a matching media type (which cannot

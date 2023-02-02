@@ -18,7 +18,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/yubo/golib/types"
 	"github.com/yubo/golib/util/uuid"
 	"github.com/yubo/golib/util/yaml/sigs.k8s.io/yaml"
 )
@@ -764,8 +763,8 @@ func PrepareValue(rv reflect.Value, rt reflect.Type) {
 //}
 //
 
-func NewUUID() types.UID {
-	return types.UID(uuid.New().String())
+func NewUUID() string {
+	return uuid.New().String()
 }
 
 // Name get name of type/func

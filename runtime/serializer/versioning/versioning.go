@@ -17,9 +17,12 @@ limitations under the License.
 package versioning
 
 import (
+	"encoding/json"
 	"io"
+	"sync"
 
 	"github.com/yubo/golib/runtime"
+	"k8s.io/klog/v2"
 )
 
 // NewDefaultingCodecForScheme is a convenience method for callers that are using a scheme.
@@ -32,17 +35,48 @@ func NewDefaultingCodecForScheme(encoder runtime.Encoder, decoder runtime.Decode
 // This class is also a serializer, but is generally used with a specific version.
 func NewCodec(encoder runtime.Encoder, decoder runtime.Decoder, defaulter runtime.ObjectDefaulter) runtime.Codec {
 	internal := &codec{
-		encoder:   encoder,
-		decoder:   decoder,
-		defaulter: defaulter,
+		encoder:    encoder,
+		decoder:    decoder,
+		defaulter:  defaulter,
+		identifier: identifier(encoder),
 	}
 	return internal
 }
 
 type codec struct {
-	encoder   runtime.Encoder
-	decoder   runtime.Decoder
-	defaulter runtime.ObjectDefaulter
+	encoder    runtime.Encoder
+	decoder    runtime.Decoder
+	defaulter  runtime.ObjectDefaulter
+	identifier runtime.Identifier
+}
+
+var _ runtime.Encoder = &codec{}
+
+var identifiersMap sync.Map
+
+type codecIdentifier struct {
+	Encoder string `json:"encoder,omitempty"`
+	Name    string `json:"name,omitempty"`
+}
+
+// identifier computes Identifier of Encoder based on codec parameters.
+func identifier(encoder runtime.Encoder) runtime.Identifier {
+	result := codecIdentifier{
+		Name: "versioning",
+	}
+
+	if encoder != nil {
+		result.Encoder = string(encoder.Identifier())
+	}
+	if id, ok := identifiersMap.Load(result); ok {
+		return id.(runtime.Identifier)
+	}
+	identifier, err := json.Marshal(result)
+	if err != nil {
+		klog.Fatalf("Failed marshaling identifier for codec: %v", err)
+	}
+	identifiersMap.Store(result, runtime.Identifier(identifier))
+	return runtime.Identifier(identifier)
 }
 
 // Decode attempts a decode of the object, then tries to convert it to the internal version. If into is provided and the decoding is
@@ -72,10 +106,10 @@ func (c *codec) Decode(data []byte, into runtime.Object) (runtime.Object, error)
 // Encode ensures the provided object is output in the appropriate group and version, invoking
 // conversion if necessary. Unversioned objects (according to the ObjectTyper) are output as is.
 func (c *codec) Encode(obj runtime.Object, w io.Writer) error {
-	switch obj := obj.(type) {
-	case *runtime.Unknown:
-		return c.encoder.Encode(obj, w)
-	}
+	//switch obj := obj.(type) {
+	//case *runtime.Unknown:
+	//	return c.encoder.Encode(obj, w)
+	//}
 
 	if e, ok := obj.(runtime.NestedObjectEncoder); ok {
 		if err := e.EncodeNestedObjects(c.encoder); err != nil {
@@ -85,4 +119,9 @@ func (c *codec) Encode(obj runtime.Object, w io.Writer) error {
 
 	// Conversion is responsible for setting the proper group, version, and kind onto the outgoing object
 	return c.encoder.Encode(obj, w)
+}
+
+// Identifier implements runtime.Encoder interface.
+func (c *codec) Identifier() runtime.Identifier {
+	return c.identifier
 }

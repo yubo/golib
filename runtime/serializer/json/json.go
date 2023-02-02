@@ -17,20 +17,17 @@ limitations under the License.
 package json
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	"strconv"
-	"unicode"
-	"unsafe"
 
-	jsoniter "github.com/json-iterator/go"
-	"github.com/modern-go/reflect2"
+	kjson "sigs.k8s.io/json"
 
 	"github.com/yubo/golib/runtime"
 	"github.com/yubo/golib/runtime/serializer/recognizer"
 	"github.com/yubo/golib/util/framer"
-	"github.com/yubo/golib/util/yaml"
+	utilyaml "github.com/yubo/golib/util/yaml"
+	"k8s.io/klog/v2"
 )
 
 // NewSerializer creates a JSON serializer that handles encoding versioned objects into the proper JSON form. If typer
@@ -52,7 +49,25 @@ func NewYAMLSerializer() *Serializer {
 // form. If typer is not nil, the object has the group, version, and kind fields set. Options are copied into the Serializer
 // and are immutable.
 func NewSerializerWithOptions(options SerializerOptions) *Serializer {
-	return &Serializer{options: options}
+	return &Serializer{
+		options:    options,
+		identifier: identifier(options),
+	}
+}
+
+// identifier computes Identifier of Encoder based on the given options.
+func identifier(options SerializerOptions) runtime.Identifier {
+	result := map[string]string{
+		"name":   "json",
+		"yaml":   strconv.FormatBool(options.Yaml),
+		"pretty": strconv.FormatBool(options.Pretty),
+		"strict": strconv.FormatBool(options.Strict),
+	}
+	identifier, err := json.Marshal(result)
+	if err != nil {
+		klog.Fatalf("Failed marshaling identifier for json Serializer: %v", err)
+	}
+	return runtime.Identifier(identifier)
 }
 
 // SerializerOptions holds the options which are used to configure a JSON/YAML serializer.
@@ -78,84 +93,13 @@ type SerializerOptions struct {
 // Serializer handles encoding versioned objects into the proper JSON form
 type Serializer struct {
 	options SerializerOptions
+
+	identifier runtime.Identifier
 }
 
 // Serializer implements Serializer
 var _ runtime.Serializer = &Serializer{}
 var _ recognizer.RecognizingDecoder = &Serializer{}
-
-type customNumberExtension struct {
-	jsoniter.DummyExtension
-}
-
-func (cne *customNumberExtension) CreateDecoder(typ reflect2.Type) jsoniter.ValDecoder {
-	if typ.String() == "interface {}" {
-		return customNumberDecoder{}
-	}
-	return nil
-}
-
-type customNumberDecoder struct {
-}
-
-func (customNumberDecoder) Decode(ptr unsafe.Pointer, iter *jsoniter.Iterator) {
-	switch iter.WhatIsNext() {
-	case jsoniter.NumberValue:
-		var number jsoniter.Number
-		iter.ReadVal(&number)
-		i64, err := strconv.ParseInt(string(number), 10, 64)
-		if err == nil {
-			*(*interface{})(ptr) = i64
-			return
-		}
-		f64, err := strconv.ParseFloat(string(number), 64)
-		if err == nil {
-			*(*interface{})(ptr) = f64
-			return
-		}
-		iter.ReportError("DecodeNumber", err.Error())
-	default:
-		*(*interface{})(ptr) = iter.Read()
-	}
-}
-
-// CaseSensitiveJSONIterator returns a jsoniterator API that's configured to be
-// case-sensitive when unmarshalling, and otherwise compatible with
-// the encoding/json standard library.
-func CaseSensitiveJSONIterator() jsoniter.API {
-	config := jsoniter.Config{
-		EscapeHTML:             true,
-		SortMapKeys:            true,
-		ValidateJsonRawMessage: true,
-		CaseSensitive:          true,
-	}.Froze()
-	// Force jsoniter to decode number to interface{} via int64/float64, if possible.
-	config.RegisterExtension(&customNumberExtension{})
-	return config
-}
-
-// StrictCaseSensitiveJSONIterator returns a jsoniterator API that's configured to be
-// case-sensitive, but also disallows unknown fields when unmarshalling. It is compatible with
-// the encoding/json standard library.
-func StrictCaseSensitiveJSONIterator() jsoniter.API {
-	config := jsoniter.Config{
-		EscapeHTML:             true,
-		SortMapKeys:            true,
-		ValidateJsonRawMessage: true,
-		CaseSensitive:          true,
-		DisallowUnknownFields:  true,
-	}.Froze()
-	// Force jsoniter to decode number to interface{} via int64/float64, if possible.
-	config.RegisterExtension(&customNumberExtension{})
-	return config
-}
-
-// Private copies of jsoniter to try to shield against possible mutations
-// from outside. Still does not protect from package level jsoniter.Register*() functions - someone calling them
-// in some other library will mess with every usage of the jsoniter library in the whole program.
-// See https://github.com/json-iterator/go/issues/265
-var caseSensitiveJSONIterator = CaseSensitiveJSONIterator()
-var strictCaseSensitiveJSONIterator = StrictCaseSensitiveJSONIterator()
 
 // Decode attempts to convert the provided data into YAML or JSON, extract the stored schema kind, apply the provided default gvk, and then
 // load that data into an object matching the desired schema kind or the provided into.
@@ -168,27 +112,47 @@ var strictCaseSensitiveJSONIterator = StrictCaseSensitiveJSONIterator()
 func (s *Serializer) Decode(originalData []byte, into runtime.Object) (runtime.Object, error) {
 	data := originalData
 	if s.options.Yaml {
-		altered, err := yaml.YAMLToJSON(data)
+		altered, err := utilyaml.YAMLToJSON(data)
 		if err != nil {
 			return nil, err
 		}
 		data = altered
 	}
-	if err := caseSensitiveJSONIterator.Unmarshal(data, into); err != nil {
+
+	//if unk, ok := into.(*runtime.Unknown); ok && unk != nil {
+	//	unk.Raw = originalData
+	//	unk.ContentType = runtime.ContentTypeJSON
+	//	return unk, nil
+	//}
+
+	strictErrs, err := s.unmarshal(into, data, originalData)
+	if err != nil {
 		return nil, err
 	}
 
+	if len(strictErrs) > 0 {
+		return into, runtime.NewStrictDecodingError(strictErrs)
+	}
+
 	return into, nil
+
 }
 
 // Encode serializes the provided object to the given writer.
 func (s *Serializer) Encode(obj runtime.Object, w io.Writer) error {
+	if co, ok := obj.(runtime.CacheableObject); ok {
+		return co.CacheEncode(s.Identifier(), s.doEncode, w)
+	}
+	return s.doEncode(obj, w)
+}
+
+func (s *Serializer) doEncode(obj runtime.Object, w io.Writer) error {
 	if s.options.Yaml {
-		json, err := caseSensitiveJSONIterator.Marshal(obj)
+		json, err := json.Marshal(obj)
 		if err != nil {
 			return err
 		}
-		data, err := yaml.JSONToYAML(json)
+		data, err := utilyaml.JSONToYAML(json)
 		if err != nil {
 			return err
 		}
@@ -197,7 +161,7 @@ func (s *Serializer) Encode(obj runtime.Object, w io.Writer) error {
 	}
 
 	if s.options.Pretty {
-		data, err := caseSensitiveJSONIterator.MarshalIndent(obj, "", "  ")
+		data, err := json.MarshalIndent(obj, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -206,7 +170,55 @@ func (s *Serializer) Encode(obj runtime.Object, w io.Writer) error {
 	}
 	encoder := json.NewEncoder(w)
 	return encoder.Encode(obj)
+}
 
+// IsStrict indicates whether the serializer
+// uses strict decoding or not
+func (s *Serializer) IsStrict() bool {
+	return s.options.Strict
+}
+
+func (s *Serializer) unmarshal(into runtime.Object, data, originalData []byte) (strictErrs []error, err error) {
+	// If the deserializer is non-strict, return here.
+	if !s.options.Strict {
+		if err := kjson.UnmarshalCaseSensitivePreserveInts(data, into); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	}
+
+	if s.options.Yaml {
+		// In strict mode pass the original data through the YAMLToJSONStrict converter.
+		// This is done to catch duplicate fields in YAML that would have been dropped in the original YAMLToJSON conversion.
+		// TODO: rework YAMLToJSONStrict to return warnings about duplicate fields without terminating so we don't have to do this twice.
+		_, err := utilyaml.YAMLToJSONStrict(originalData)
+		if err != nil {
+			strictErrs = append(strictErrs, err)
+		}
+	}
+
+	var strictJSONErrs []error
+	if u, isUnstructured := into.(runtime.Unstructured); isUnstructured {
+		// Unstructured is a custom unmarshaler that gets delegated
+		// to, so in order to detect strict JSON errors we need
+		// to unmarshal directly into the object.
+		m := map[string]interface{}{}
+		strictJSONErrs, err = kjson.UnmarshalStrict(data, &m)
+		u.SetUnstructuredContent(m)
+	} else {
+		strictJSONErrs, err = kjson.UnmarshalStrict(data, into)
+	}
+	if err != nil {
+		// fatal decoding error, not due to strictness
+		return nil, err
+	}
+	strictErrs = append(strictErrs, strictJSONErrs...)
+	return strictErrs, nil
+}
+
+// Identifier implements runtime.Encoder interface.
+func (s *Serializer) Identifier() runtime.Identifier {
+	return s.identifier
 }
 
 // RecognizesData implements the RecognizingDecoder interface.
@@ -215,7 +227,7 @@ func (s *Serializer) RecognizesData(data []byte) (ok, unknown bool, err error) {
 		// we could potentially look for '---'
 		return false, true, nil
 	}
-	return IsJSONBuffer(data), false, nil
+	return utilyaml.IsJSONBuffer(data), false, nil
 }
 
 // Framer is the default JSON framing behavior, with newlines delimiting individual objects.
@@ -248,7 +260,7 @@ func (yamlFramer) NewFrameWriter(w io.Writer) io.Writer {
 // NewFrameReader implements stream framing for this serializer
 func (yamlFramer) NewFrameReader(r io.ReadCloser) io.ReadCloser {
 	// extract the YAML document chunks directly
-	return yaml.NewDocumentDecoder(r)
+	return utilyaml.NewDocumentDecoder(r)
 }
 
 type yamlFrameWriter struct {
@@ -262,25 +274,4 @@ func (w yamlFrameWriter) Write(data []byte) (n int, err error) {
 		return 0, err
 	}
 	return w.w.Write(data)
-}
-
-// IsJSONBuffer scans the provided buffer, looking
-// for an open brace indicating this is JSON.
-func IsJSONBuffer(buf []byte) bool {
-	return hasJSONPrefix(buf)
-}
-
-var jsonPrefix = []byte("{")
-
-// hasJSONPrefix returns true if the provided buffer appears to start with
-// a JSON open brace.
-func hasJSONPrefix(buf []byte) bool {
-	return hasPrefix(buf, jsonPrefix)
-}
-
-// Return true if the first non-whitespace bytes in buf is
-// prefix.
-func hasPrefix(buf []byte, prefix []byte) bool {
-	trim := bytes.TrimLeftFunc(buf, unicode.IsSpace)
-	return bytes.HasPrefix(trim, prefix)
 }

@@ -39,6 +39,7 @@ err := db.Insert(context.Backgroud(), &user, orm.WithTable("system_user"))
 
 ```go
 err := db.Query(context.Backgroud(), "select * from user limit 1").Row(&user)
+err := db.Query(context.Backgroud(), "select * from user where city in (?) limit 5", []string{"beijing", "wuhan"}).Row(&user)
 ```
 
 * check if one record or affected exist with query/exec
@@ -101,20 +102,33 @@ db.Update(context.Backgroud(), &user, orm.WithTable("system_user"))
 
 * Transation
 ```go
-tx, err := db.Begin()
-if err != nil {
-	return err
-}
+tx, _ := db.Begin()
 
 // do something...
 
-if err := tx.Insert(context.Backgroud(), &user); err != nil {
+if err := tx.Insert(ctx, &user); err != nil {
 	tx.Rollback()
 	return err
 }
 
 return tx.Commit()
 ```
+
+* Transation with context
+```go
+tx, _ := db.Begin()
+ctx := orm.WithDB(ctx, tx)
+
+// do something...
+
+if err := db.Insert(ctx, &user); err != nil {
+	tx.Rollback()
+	return err
+}
+
+return tx.Commit()
+```
+
 
 ## tags
 ```

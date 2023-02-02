@@ -198,6 +198,20 @@ func TestQueryRows(t *testing.T) {
 
 		{
 			var v []int
+			err := db.Query(ctx, "SELECT value FROM test WHERE value in (?)", []string{"1", "2", "3"}).Rows(&v)
+			assert.NoError(t, err)
+			assert.Equal(t, 3, len(v))
+		}
+
+		{
+			var v []int
+			err := db.Query(ctx, "SELECT value FROM test WHERE value in (?)", []int{1, 2, 3}).Rows(&v)
+			assert.NoError(t, err)
+			assert.Equal(t, 3, len(v))
+		}
+
+		{
+			var v []int
 			err := db.Query(ctx, "SELECT value FROM test WHERE value IN ('1', '2', '3')").Rows(&v)
 			assert.NoError(t, err)
 			assert.Equal(t, 3, len(v))
@@ -837,4 +851,7 @@ func TestTypeTime(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, t1, v.Time)
 	})
+}
+
+func TestOption(t *testing.T) {
 }

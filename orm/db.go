@@ -40,14 +40,14 @@ func Open(driverName, dataSourceName string, opts ...DBOption) (DB, error) {
 }
 
 func open(opts *DBOptions) (DB, error) {
-	rawDB, err := sql.Open(opts.driver, opts.dsn)
+	db, err := sql.Open(opts.driver, opts.dsn)
 	if err != nil {
 		return nil, err
 	}
 
 	if !opts.withoutPing {
-		if err := rawDB.Ping(); err != nil {
-			rawDB.Close()
+		if err := db.Ping(); err != nil {
+			db.Close()
 			return nil, err
 		}
 	}
@@ -55,35 +55,35 @@ func open(opts *DBOptions) (DB, error) {
 	if opts.ctx != nil {
 		go func() {
 			<-opts.ctx.Done()
-			rawDB.Close()
+			db.Close()
 		}()
 	}
 
 	if opts.maxIdleCount != nil {
-		rawDB.SetMaxIdleConns(*opts.maxIdleCount)
+		db.SetMaxIdleConns(*opts.maxIdleCount)
 	}
 	if opts.maxOpenConns != nil {
-		rawDB.SetMaxOpenConns(*opts.maxOpenConns)
+		db.SetMaxOpenConns(*opts.maxOpenConns)
 	}
 	if opts.connMaxLifetime != nil {
-		rawDB.SetConnMaxLifetime(*opts.connMaxLifetime)
+		db.SetConnMaxLifetime(*opts.connMaxLifetime)
 	}
 	if opts.connMaxIdletime != nil {
-		rawDB.SetConnMaxIdleTime(*opts.connMaxIdletime)
+		db.SetConnMaxIdleTime(*opts.connMaxIdletime)
 	}
 
 	driver := Driver(&nonDriver{})
-	db := &ormDB{
+	ormdb := &ormDB{
 		DBOptions: opts,
-		db:        rawDB,
-		Interface: NewBaseInterface(driver, rawDB, opts),
+		db:        db,
+		Interface: NewBaseInterface(driver, newRawDBWrapper(db), opts),
 	}
 
 	if f, ok := dbFactories[opts.driver]; ok {
-		db.Interface = NewBaseInterface(f(db, opts), rawDB, opts)
+		ormdb.Interface = NewBaseInterface(f(ormdb, opts), newRawDBWrapper(db), opts)
 	}
 
-	return db, nil
+	return ormdb, nil
 }
 
 type Rows struct {

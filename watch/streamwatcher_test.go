@@ -21,6 +21,7 @@ import (
 	"io"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/yubo/golib/runtime"
 	. "github.com/yubo/golib/watch"
@@ -52,7 +53,7 @@ type fakeReporter struct {
 	err error
 }
 
-func (f *fakeReporter) AsObject(err error) interface{} {
+func (f *fakeReporter) AsObject(err error) runtime.Object {
 	f.err = err
 	return runtime.Unstructured(nil)
 }
@@ -103,5 +104,18 @@ func TestStreamWatcherError(t *testing.T) {
 	_, ok = <-sw.ResultChan()
 	if ok {
 		t.Fatalf("unexpected open channel")
+	}
+}
+
+func TestStreamWatcherRace(t *testing.T) {
+	fd := fakeDecoder{err: fmt.Errorf("test error")}
+	fr := &fakeReporter{}
+	sw := NewStreamWatcher(fd, fr)
+	time.Sleep(10 * time.Millisecond)
+	sw.Stop()
+	time.Sleep(10 * time.Millisecond)
+	_, ok := <-sw.ResultChan()
+	if ok {
+		t.Fatalf("unexpected pending send")
 	}
 }
