@@ -20,15 +20,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/yubo/golib/api"
 	"github.com/yubo/golib/runtime"
 	"github.com/yubo/golib/runtime/serializer/json"
 )
 
 type testDecodable struct {
-	Other     string
-	Value     int           `json:"value"`
-	Spec      DecodableSpec `json:"spec"`
-	Interface interface{}   `json:"interface"`
+	api.TypeMeta `json:",inline"`
+	Other        string
+	Value        int           `json:"value"`
+	Spec         DecodableSpec `json:"spec"`
+	Interface    interface{}   `json:"interface"`
 }
 
 // DecodableSpec has 15 fields. json-iterator treats struct with more than 10
@@ -64,7 +66,7 @@ func TestDecode(t *testing.T) {
 		expectedObject runtime.Object
 	}{
 		{
-			data:           []byte(`{"kind":"Test","apiVersion":"other/blah"}`),
+			data:           []byte(`{}`),
 			into:           &testDecodable{},
 			expectedObject: &testDecodable{},
 		},
@@ -99,7 +101,7 @@ func TestDecode(t *testing.T) {
 
 		// unregistered objects can be decoded into directly
 		{
-			data: []byte(`{"kind":"Test","apiVersion":"other/blah","value":1,"Other":"test"}`),
+			data: []byte(`{"value":1,"Other":"test"}`),
 			into: &testDecodable{},
 			expectedObject: &testDecodable{
 				Other: "test",
@@ -118,7 +120,7 @@ func TestDecode(t *testing.T) {
 		// Unmarshalling is case-sensitive
 		{
 			// "VaLue" should have been "value"
-			data: []byte(`{"kind":"Test","apiVersion":"other/blah","VaLue":1,"Other":"test"}`),
+			data: []byte(`{"VaLue":1,"Other":"test"}`),
 			into: &testDecodable{},
 			expectedObject: &testDecodable{
 				Other: "test",
@@ -127,7 +129,7 @@ func TestDecode(t *testing.T) {
 		// Unmarshalling is case-sensitive for big struct.
 		{
 			// "b" should have been "B", "I" should have been "i"
-			data: []byte(`{"kind":"Test","apiVersion":"other/blah","spec": {"A": 1, "b": 2, "h": 3, "I": 4}}`),
+			data: []byte(`{"spec": {"A": 1, "b": 2, "h": 3, "I": 4}}`),
 			into: &testDecodable{},
 			expectedObject: &testDecodable{
 				Spec: DecodableSpec{A: 1, H: 3},
@@ -135,7 +137,7 @@ func TestDecode(t *testing.T) {
 		},
 		// Strict JSON decode into unregistered objects directly.
 		{
-			data: []byte(`{"kind":"Test","apiVersion":"other/blah","value":1,"Other":"test"}`),
+			data: []byte(`{"value":1,"Other":"test"}`),
 			into: &testDecodable{},
 			expectedObject: &testDecodable{
 				Other: "test",
@@ -145,9 +147,7 @@ func TestDecode(t *testing.T) {
 		},
 		// Strict YAML decode into unregistered objects directly.
 		{
-			data: []byte("kind: Test\n" +
-				"apiVersion: other/blah\n" +
-				"value: 1\n" +
+			data: []byte("value: 1\n" +
 				"Other: test\n"),
 			into: &testDecodable{},
 			expectedObject: &testDecodable{

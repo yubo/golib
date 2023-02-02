@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yubo/golib/queries"
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/clock"
 	"k8s.io/klog/v2"
@@ -45,43 +44,32 @@ func elog(format string, args ...interface{}) {
 	klog.ErrorfDepth(1, format, args...)
 }
 
-func dlogSql(query string, args ...interface{}) {
-	if klog.V(10).Enabled() || DEBUG {
-		prepared, err := interpolateParams(query, args)
-		if err != nil {
-			klog.ErrorDepth(1, err)
-			return
-		}
-		klog.InfoDepth(2, prepared)
-	}
-}
-
 // {1,2,3} => "(1,2,3)"
-func Ints2sql(array []int64) string {
-	buf := []byte("(")
-
-	for i := 0; i < len(array); i++ {
-		if i > 0 {
-			buf = append(buf, ',')
-		}
-		buf = strconv.AppendInt(buf, array[i], 10)
-	}
-	return string(append(buf, ')'))
-}
+//func Ints2sql(array []int64) string {
+//	buf := []byte("(")
+//
+//	for i := 0; i < len(array); i++ {
+//		if i > 0 {
+//			buf = append(buf, ',')
+//		}
+//		buf = strconv.AppendInt(buf, array[i], 10)
+//	}
+//	return string(append(buf, ')'))
+//}
 
 // {"1","2","3"} => "('1', '2', '3')"
-func Strings2sql(array []string) string {
-	buf := []byte("(")
-	for i := 0; i < len(array); i++ {
-		if i > 0 {
-			buf = append(buf, ',')
-		}
-		buf = append(buf, '\'')
-		buf = append(buf, array[i]...)
-		buf = append(buf, '\'')
-	}
-	return string(append(buf, ')'))
-}
+//func Strings2sql(array []string) string {
+//	buf := []byte("(")
+//	for i := 0; i < len(array); i++ {
+//		if i > 0 {
+//			buf = append(buf, ',')
+//		}
+//		buf = append(buf, '\'')
+//		buf = append(buf, array[i]...)
+//		buf = append(buf, '\'')
+//	}
+//	return string(append(buf, ')'))
+//}
 
 // struct{}, *struct{}, **struct{} return true
 func isStructMode(in interface{}) bool {
@@ -203,7 +191,7 @@ func NewCurTime(t TimeType, cur time.Time) interface{} {
 	}
 }
 
-func GenListSql(table string, cols []string, selector queries.Selector, orderby []string, offset, limit int) (string, string, []interface{}, error) {
+func GenListSql(table string, cols []string, selector Selector, orderby []string, offset, limit int) (string, string, []interface{}, error) {
 	if table == "" {
 		return "", "", nil, errTableEmpty
 	}
@@ -251,7 +239,7 @@ func GenListSql(table string, cols []string, selector queries.Selector, orderby 
 	return buf.String(), buf2.String(), args, nil
 }
 
-func GenGetSql(table string, cols []string, selector queries.Selector) (string, []interface{}, error) {
+func GenGetSql(table string, cols []string, selector Selector) (string, []interface{}, error) {
 	if table == "" {
 		return "", nil, errTableEmpty
 	}
@@ -285,7 +273,7 @@ func GenGetSql(table string, cols []string, selector queries.Selector) (string, 
 	return buf.String(), args, nil
 }
 
-func GenUpdateSql(table string, sample interface{}, db Driver, selector queries.Selector) (string, []interface{}, error) {
+func GenUpdateSql(table string, sample interface{}, db Driver, selector Selector) (string, []interface{}, error) {
 	if table == "" {
 		return "", nil, errTableEmpty
 	}
@@ -378,7 +366,7 @@ func genUpdateSql(rv reflect.Value, set, where *[]kv, db Driver) error {
 	return nil
 }
 
-func GenDeleteSql(table string, selector queries.Selector) (string, []interface{}, error) {
+func GenDeleteSql(table string, selector Selector) (string, []interface{}, error) {
 	if table == "" {
 		return "", nil, errTableEmpty
 	}
@@ -602,6 +590,58 @@ func interpolateParams(query string, args []interface{}) (string, error) {
 		return "", ErrSkip
 	}
 	return string(buf), nil
+}
+
+// prepareInterpolateParams
+func prepareInterpolateParams(query string, args []interface{}) (string, []interface{}, error) {
+	buf := []byte{}
+	args_ := []interface{}{}
+	argPos := 0
+
+	for i := 0; i < len(query); i++ {
+		q := strings.IndexByte(query[i:], '?')
+		if q == -1 {
+			buf = append(buf, query[i:]...)
+			break
+		}
+		buf = append(buf, query[i:i+q]...)
+		i += q
+
+		arg := args[argPos]
+		argPos++
+
+		if arg == nil {
+			buf = append(buf, '?')
+			args_ = append(args_, arg)
+			continue
+		}
+
+		switch v := arg.(type) {
+		case []byte:
+			buf = append(buf, '?')
+			args_ = append(args_, v)
+		default:
+			switch rv := reflect.ValueOf(v); rv.Kind() {
+			case reflect.Slice, reflect.Array:
+				if rv.Len() == 0 {
+					buf = append(buf, "NULL"...)
+				} else {
+					for i := 0; i < rv.Len(); i++ {
+						if i > 0 {
+							buf = append(buf, ',')
+						}
+						buf = append(buf, '?')
+						args_ = append(args_, rv.Index(i).Interface())
+					}
+				}
+			default:
+				buf = append(buf, '?')
+				args_ = append(args_, arg)
+			}
+		}
+	}
+
+	return string(buf), args_, nil
 }
 
 func appendDateTime(buf []byte, t time.Time) ([]byte, error) {

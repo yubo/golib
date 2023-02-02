@@ -47,7 +47,7 @@ type Validator interface {
 // Identifier represents an identifier.
 // Identitier of two different objects should be equal if and only if for every
 // input the output they produce is exactly the same.
-//type Identifier string
+type Identifier string
 
 // Encoder writes objects to a serialized form
 type Encoder interface {
@@ -67,7 +67,7 @@ type Encoder interface {
 	//     }
 	//     return e.doEncode(obj, w)
 	//   }
-	//Identifier() Identifier
+	Identifier() Identifier
 }
 
 // MemoryAllocator is responsible for allocating memory.
@@ -112,19 +112,6 @@ type Serializer interface {
 // they receive.
 type Codec Serializer
 
-// ParameterCodec defines methods for serializing and deserializing API objects to url.Values and
-// performing any necessary conversion. Unlike the normal Codec, query parameters are not self describing
-// and the desired version must be specified.
-//type ParameterCodec interface {
-//	// DecodeParameters takes the given url.Values in the specified group version and decodes them
-//	// into the provided object, or returns an error.
-//	DecodeParameters(parameter *Parameters, into Object) error
-//	// EncodeParameters encodes the provided object as query parameters or returns an error.
-//	EncodeParameters(obj Object) (*Parameters, error)
-//
-//	RouteBuilderParameters(rb *restful.RouteBuilder, obj Object)
-//}
-
 // Framer is a factory for creating readers and writers that obey a particular framing pattern.
 type Framer interface {
 	NewFrameReader(r io.ReadCloser) io.ReadCloser
@@ -146,6 +133,9 @@ type SerializerInfo struct {
 	// PrettySerializer, if set, can serialize this object in a form biased towards
 	// readability.
 	PrettySerializer Serializer
+	// StrictSerializer, if set, deserializes this object strictly,
+	// erring on unknown fields.
+	StrictSerializer Serializer
 	// StreamSerializer, if set, describes the streaming serialization format
 	// for this media type.
 	StreamSerializer *StreamSerializerInfo
@@ -225,6 +215,12 @@ type NestedObjectEncoder interface {
 
 // NestedObjectDecoder is an optional interface that objects may implement to be given
 // an opportunity to decode any nested Objects / RawExtensions during serialization.
+// It is possible for DecodeNestedObjects to return a non-nil error but for the decoding
+// to have succeeded in the case of strict decoding errors (e.g. unknown/duplicate fields).
+// As such it is important for callers of DecodeNestedObjects to check to confirm whether
+// an error is a runtime.StrictDecodingError before short circuiting.
+// Similarly, implementations of DecodeNestedObjects should ensure that a runtime.StrictDecodingError
+// is only returned when the rest of decoding has succeeded.
 type NestedObjectDecoder interface {
 	DecodeNestedObjects(d Decoder) error
 }
@@ -321,24 +317,24 @@ type Object interface{}
 
 // CacheableObject allows an object to cache its different serializations
 // to avoid performing the same serialization multiple times.
-//type CacheableObject interface {
-//	// CacheEncode writes an object to a stream. The <encode> function will
-//	// be used in case of cache miss. The <encode> function takes ownership
-//	// of the object.
-//	// If CacheableObject is a wrapper, then deep-copy of the wrapped object
-//	// should be passed to <encode> function.
-//	// CacheEncode assumes that for two different calls with the same <id>,
-//	// <encode> function will also be the same.
-//	CacheEncode(id Identifier, encode func(Object, io.Writer) error, w io.Writer) error
-//	// GetObject returns a deep-copy of an object to be encoded - the caller of
-//	// GetObject() is the owner of returned object. The reason for making a copy
-//	// is to avoid bugs, where caller modifies the object and forgets to copy it,
-//	// thus modifying the object for everyone.
-//	// The object returned by GetObject should be the same as the one that is supposed
-//	// to be passed to <encode> function in CacheEncode method.
-//	// If CacheableObject is a wrapper, the copy of wrapped object should be returned.
-//	GetObject() Object
-//}
+type CacheableObject interface {
+	// CacheEncode writes an object to a stream. The <encode> function will
+	// be used in case of cache miss. The <encode> function takes ownership
+	// of the object.
+	// If CacheableObject is a wrapper, then deep-copy of the wrapped object
+	// should be passed to <encode> function.
+	// CacheEncode assumes that for two different calls with the same <id>,
+	// <encode> function will also be the same.
+	CacheEncode(id Identifier, encode func(Object, io.Writer) error, w io.Writer) error
+	// GetObject returns a deep-copy of an object to be encoded - the caller of
+	// GetObject() is the owner of returned object. The reason for making a copy
+	// is to avoid bugs, where caller modifies the object and forgets to copy it,
+	// thus modifying the object for everyone.
+	// The object returned by GetObject should be the same as the one that is supposed
+	// to be passed to <encode> function in CacheEncode method.
+	// If CacheableObject is a wrapper, the copy of wrapped object should be returned.
+	GetObject() Object
+}
 
 // Unstructured objects store values as map[string]interface{}, with only values that can be serialized
 // to JSON allowed.

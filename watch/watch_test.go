@@ -26,6 +26,7 @@ import (
 
 type testType string
 
+//func (obj testType) GetObjectKind() schema.ObjectKind { return schema.EmptyObjectKind }
 func (obj testType) DeepCopyObject() runtime.Object { return obj }
 
 func TestFake(t *testing.T) {

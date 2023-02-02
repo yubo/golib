@@ -27,11 +27,11 @@ import (
 
 // Interface can be implemented by anything that knows how to watch and report changes.
 type Interface interface {
-	// Stops watching. Will close the channel returned by ResultChan(). Releases
+	// Stop stops watching. Will close the channel returned by ResultChan(). Releases
 	// any resources used by the watch.
 	Stop()
 
-	// Returns a chan which will receive all the events. If an error occurs
+	// ResultChan returns a chan which will receive all the events. If an error occurs
 	// or Stop() is called, the implementation will close this channel and
 	// release any resources used by the watch.
 	ResultChan() <-chan Event
@@ -66,7 +66,6 @@ type Event struct {
 	//    nor miss any events.
 	//  * If Type is Error: *api.Status is recommended; other types may make sense
 	//    depending on context.
-	//Object runtime.Object
 	Object runtime.Object
 }
 

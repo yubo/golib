@@ -2,11 +2,9 @@ package api
 
 import (
 	"time"
-
-	"github.com/yubo/golib/fields"
-	"github.com/yubo/golib/labels"
 )
 
+// core/v1
 const (
 	// Enable stdin for remote command execution
 	ExecStdinParam = "input"
@@ -696,38 +694,14 @@ const (
 // intent and helps make sure that UIDs and names do not get conflated.
 type UID string
 
-type LabelSelectorWrapper struct {
-	labels.Selector
-}
-
-func (p *LabelSelectorWrapper) Parse(in string) (err error) {
-	if in == "" {
-		return nil
-	}
-	p.Selector, err = labels.Parse(in)
-	return
-}
-
-type FieldSelectorWrapper struct {
-	fields.Selector
-}
-
-func (p *FieldSelectorWrapper) Parse(in string) (err error) {
-	if in == "" {
-		return nil
-	}
-	p.Selector, err = fields.ParseSelector(in)
-	return
-}
-
 // ListOptions is the query options to a standard REST list call.
 type ListOptions struct {
 	TypeMeta `param:"-"`
 
 	// A selector based on labels
-	LabelSelector *LabelSelectorWrapper `param:"query"`
+	LabelSelector string `param:"query"`
 	// A selector based on fields
-	FieldSelector *FieldSelectorWrapper `param:"query"`
+	FieldSelector string `param:"query"`
 	// If true, watch for changes to this list
 	Watch bool `param:"query"`
 	// allowWatchBookmarks requests watch events with type "BOOKMARK".
@@ -872,6 +846,8 @@ type GetOptions struct {
 	// +optional
 	ResourceVersion string `json:"resourceVersion,omitempty" protobuf:"bytes,1,opt,name=resourceVersion"`
 	// +k8s:deprecated=includeUninitialized,protobuf=2
+
+	IgnoreNotFound bool
 }
 
 // DeletionPropagation decides if a deletion will propagate to the dependents of
@@ -898,3 +874,52 @@ type RootPaths struct {
 	// paths are the paths available at root.
 	Paths []string `json:"paths" protobuf:"bytes,1,rep,name=paths"`
 }
+
+// k8s.io/apimachinery/pkg/types
+// NamespacedName comprises a resource name, with a mandatory namespace,
+// rendered as "<namespace>/<name>".  Being a type captures intent and
+// helps make sure that UIDs, namespaced names and non-namespaced names
+// do not get conflated in code.  For most use cases, namespace and name
+// will already have been format validated at the API entry point, so we
+// don't do that here.  Where that's not the case (e.g. in testing),
+// consider using NamespacedNameOrDie() in testing.go in this package.
+
+type NamespacedName struct {
+	Namespace string
+	Name      string
+}
+
+const (
+	Separator = '/'
+)
+
+// String returns the general purpose string representation
+func (n NamespacedName) String() string {
+	return n.Namespace + string(Separator) + n.Name
+}
+
+// NodeName is a type that holds a api.Node's Name identifier.
+// Being a type captures intent and helps make sure that the node name
+// is not confused with similar concepts (the hostname, the cloud provider id,
+// the cloud provider name etc)
+//
+// To clarify the various types:
+//
+// * Node.Name is the Name field of the Node in the API.  This should be stored in a NodeName.
+//   Unfortunately, because Name is part of ObjectMeta, we can't store it as a NodeName at the API level.
+//
+// * Hostname is the hostname of the local machine (from uname -n).
+//   However, some components allow the user to pass in a --hostname-override flag,
+//   which will override this in most places. In the absence of anything more meaningful,
+//   kubelet will use Hostname as the Node.Name when it creates the Node.
+//
+// * The cloudproviders have the own names: GCE has InstanceName, AWS has InstanceId.
+//
+//   For GCE, InstanceName is the Name of an Instance object in the GCE API.  On GCE, Instance.Name becomes the
+//   Hostname, and thus it makes sense also to use it as the Node.Name.  But that is GCE specific, and it is up
+//   to the cloudprovider how to do this mapping.
+//
+//   For AWS, the InstanceID is not yet suitable for use as a Node.Name, so we actually use the
+//   PrivateDnsName for the Node.Name.  And this is _not_ always the same as the hostname: if
+//   we are using a custom DHCP domain it won't be.
+type NodeName string

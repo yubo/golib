@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/yubo/golib/queries"
 	"github.com/yubo/golib/util"
 )
 
@@ -72,7 +71,7 @@ func TestGenListSql(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		selector, _ := queries.Parse(c.selector)
+		selector, _ := Parse(c.selector)
 
 		query, queryCount, args, err := GenListSql(c.table, c.cols, selector, c.orderby, c.offset, c.limit)
 		assert.Equal(t, c.query, query, "case-%d", i)
@@ -106,7 +105,7 @@ func TestGenGetSql(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		selector, _ := queries.Parse(c.selector)
+		selector, _ := Parse(c.selector)
 
 		query, args, err := GenGetSql(c.table, c.cols, selector)
 		assert.Equal(t, c.query, query, "case-%d", i)
@@ -116,8 +115,8 @@ func TestGenGetSql(t *testing.T) {
 	}
 }
 
-func newSelector(s string) queries.Selector {
-	selector, _ := queries.Parse(s)
+func newSelector(s string) Selector {
+	selector, _ := Parse(s)
 	return selector
 }
 
@@ -134,7 +133,7 @@ func TestGenUpdateSql(t *testing.T) {
 		query    string
 		args     []interface{}
 		isErr    bool
-		selector queries.Selector
+		selector Selector
 	}{
 		{
 			isErr: true,
@@ -193,7 +192,7 @@ func TestGenDeleteSql(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		selector, _ := queries.Parse(c.selector)
+		selector, _ := Parse(c.selector)
 
 		query, args, err := GenDeleteSql(c.table, selector)
 		assert.Equal(t, c.query, query, "case-%d", i)

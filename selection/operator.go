@@ -22,14 +22,16 @@ type Operator string
 
 const (
 	DoesNotExist Operator = "!"
+	Exists       Operator = "exists"
 	Equals       Operator = "="
 	DoubleEquals Operator = "=="
 	In           Operator = "in"
 	NotEquals    Operator = "!="
 	NotIn        Operator = "notin"
-	Exists       Operator = "exists"
 	GreaterThan  Operator = "gt"
 	LessThan     Operator = "lt"
-	Contains     Operator = "=~"
+	Contains     Operator = "~"
 	NotContains  Operator = "!~"
+	HasPrefix    Operator = "=~"
+	HasSuffix    Operator = "~="
 )

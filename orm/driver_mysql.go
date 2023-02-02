@@ -13,7 +13,7 @@ import (
 
 var (
 	_                        Driver = &mysql{}
-	DefaultMysqlTableOptions        = []Option{
+	DefaultMysqlTableOptions        = []QueryOption{
 		WithTableOptions("ENGINE=InnoDB DEFAULT CHARACTER SET=utf8 COLLATE=utf8_unicode_ci"),
 	}
 )
@@ -199,7 +199,7 @@ func (p mysql) FullDataTypeOf(field *StructField) string {
 }
 
 // AutoMigrate
-func (p *mysql) AutoMigrate(ctx context.Context, sample interface{}, opts ...Option) error {
+func (p *mysql) AutoMigrate(ctx context.Context, sample interface{}, opts ...QueryOption) error {
 	if len(opts) == 0 {
 		opts = DefaultMysqlTableOptions
 	}
@@ -254,7 +254,7 @@ func (p *mysql) GetTables(ctx context.Context) (tableList []string, err error) {
 	return
 }
 
-func (p *mysql) CreateTable(ctx context.Context, o *Options) (err error) {
+func (p *mysql) CreateTable(ctx context.Context, o *queryOptions) (err error) {
 	var (
 		SQL                     = "CREATE TABLE `" + o.Table() + "` ("
 		hasPrimaryKeyInDataType bool
@@ -330,7 +330,7 @@ func (p *mysql) CreateTable(ctx context.Context, o *Options) (err error) {
 	return nil
 }
 
-func (p *mysql) DropTable(ctx context.Context, o *Options) error {
+func (p *mysql) DropTable(ctx context.Context, o *queryOptions) error {
 	//p.Exec("SET FOREIGN_KEY_CHECKS = 0;")
 	_, err := p.Exec(ctx, "DROP TABLE IF EXISTS `"+o.Table()+"`")
 	//p.Exec("SET FOREIGN_KEY_CHECKS = 1;")
@@ -344,7 +344,7 @@ func (p *mysql) HasTable(ctx context.Context, tableName string) bool {
 	return count > 0
 }
 
-func (p *mysql) AddColumn(ctx context.Context, field string, o *Options) error {
+func (p *mysql) AddColumn(ctx context.Context, field string, o *queryOptions) error {
 	// avoid using the same name field
 	f := GetField(o.Sample(), field, p)
 	if f == nil {
@@ -356,12 +356,12 @@ func (p *mysql) AddColumn(ctx context.Context, field string, o *Options) error {
 	return err
 }
 
-func (p *mysql) DropColumn(ctx context.Context, field string, o *Options) error {
+func (p *mysql) DropColumn(ctx context.Context, field string, o *queryOptions) error {
 	_, err := p.Exec(ctx, "ALTER TABLE `"+o.Table()+"` DROP COLUMN `"+field+"`")
 	return err
 }
 
-func (p *mysql) AlterColumn(ctx context.Context, field string, o *Options) error {
+func (p *mysql) AlterColumn(ctx context.Context, field string, o *queryOptions) error {
 	f := GetField(o.Sample(), field, p)
 	if f == nil {
 		return fmt.Errorf("failed to look up field with name: %s", field)
@@ -371,7 +371,7 @@ func (p *mysql) AlterColumn(ctx context.Context, field string, o *Options) error
 	return err
 }
 
-func (p *mysql) HasColumn(ctx context.Context, field string, o *Options) bool {
+func (p *mysql) HasColumn(ctx context.Context, field string, o *queryOptions) bool {
 	var count int64
 	p.Query(ctx, "SELECT count(*) FROM INFORMATION_SCHEMA.columns WHERE table_schema=? AND table_name=? AND column_name=?",
 		p.CurrentDatabase(ctx), o.Table(), field,
@@ -382,7 +382,7 @@ func (p *mysql) HasColumn(ctx context.Context, field string, o *Options) bool {
 
 // field: 1 - expect
 // columntype: 2 - actual
-func (p *mysql) MigrateColumn(ctx context.Context, expect, actual *StructField, o *Options) error {
+func (p *mysql) MigrateColumn(ctx context.Context, expect, actual *StructField, o *queryOptions) error {
 	alterColumn := false
 
 	// check size
@@ -406,7 +406,7 @@ func (p *mysql) MigrateColumn(ctx context.Context, expect, actual *StructField, 
 }
 
 // ColumnTypes return columnTypes []gColumnType and execErr error
-func (p *mysql) ColumnTypes(ctx context.Context, o *Options) ([]StructField, error) {
+func (p *mysql) ColumnTypes(ctx context.Context, o *queryOptions) ([]StructField, error) {
 	query := "SELECT column_name, is_nullable, data_type, character_maximum_length, numeric_precision, numeric_scale FROM information_schema.columns WHERE table_schema=? AND table_name=?"
 
 	columns := []mysqlColumn{}
@@ -424,7 +424,7 @@ func (p *mysql) ColumnTypes(ctx context.Context, o *Options) ([]StructField, err
 
 }
 
-func (p *mysql) CreateIndex(ctx context.Context, name string, o *Options) error {
+func (p *mysql) CreateIndex(ctx context.Context, name string, o *queryOptions) error {
 	f := GetField(o.Sample(), name, p)
 	if f == nil {
 		return fmt.Errorf("failed to create index with name %s", name)
@@ -441,12 +441,12 @@ func (p *mysql) CreateIndex(ctx context.Context, name string, o *Options) error 
 
 }
 
-func (p *mysql) DropIndex(ctx context.Context, name string, o *Options) error {
+func (p *mysql) DropIndex(ctx context.Context, name string, o *queryOptions) error {
 	_, err := p.Exec(ctx, fmt.Sprintf("DROP INDEX `%s` ON `%s`", name, o.Table()))
 	return err
 }
 
-func (p *mysql) HasIndex(ctx context.Context, name string, o *Options) bool {
+func (p *mysql) HasIndex(ctx context.Context, name string, o *queryOptions) bool {
 	var count int64
 	p.Query(ctx, "SELECT count(*) FROM information_schema.statistics WHERE table_schema=? AND table_name=? AND index_name=?",
 		p.CurrentDatabase(ctx), o.Table(), name).Row(&count)
