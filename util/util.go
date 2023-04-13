@@ -767,7 +767,7 @@ func NewUUID() string {
 	return uuid.New().String()
 }
 
-// Name get name of type/func
+// Name get name of type/func, NameOfType, NameOfFunc, TypeName, FuncName
 func Name(a any) string {
 	rv := reflect.Indirect(reflect.ValueOf(a))
 	switch rv.Kind() {

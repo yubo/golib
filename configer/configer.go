@@ -438,7 +438,7 @@ func (p *configer) Read(path string, into interface{}) error {
 
 	if v := p.GetRaw(path); v != nil {
 		data, err := yaml.Marshal(v)
-		//klog.V(5).InfoS("marshal", "v", v, "data", string(data), "err", err)
+		//klog.InfoS("marshal", "v", v, "data", string(data), "err", err)
 		if err != nil {
 			return err
 		}
@@ -585,6 +585,7 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 		ps := joinPath(curPath...)
 		def := opt.getDefaultValue(ps, tag, p.ConfigerOptions)
 		var field *configField
+		//klog.InfoS("path", "ps", ps, "def", def, "type", util.Name(rv.Addr().Interface()))
 
 		switch value := rv.Addr().Interface().(type) {
 		case pflag.Value:
@@ -638,16 +639,18 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 				panic(fmt.Sprintf("add config unsupported type %s path %s kind %s", rt.String(), ps, rt.Kind()))
 			}
 
+			switch rt.Kind() {
 			// iterate struct{}
-			if rt.Kind() == reflect.Struct {
+			case reflect.Struct:
 				if err := p._var(curPath, fs, rv, rt, opt); err != nil {
 					return err
 				}
 				continue
+			default:
+				// set field.default
+				field = newConfigField(value, fs, ps, tag, nil, nil, util.ToStringMapString(def))
 			}
 
-			// set field.default
-			field = newConfigField(value, fs, ps, tag, nil, nil, util.ToStringMapString(def))
 		}
 		p.fields = append(p.fields, field)
 	}
