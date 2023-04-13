@@ -765,7 +765,7 @@ func TestTypeCustom(t *testing.T) {
 	})
 }
 
-func TestTypeTime(t *testing.T) {
+func TestTime(t *testing.T) {
 	runTests(t, func(db DB, ctx context.Context) {
 		createdAt := time.Unix(1000, 0).UTC()
 		updatedAt := time.Unix(2000, 0).UTC()
