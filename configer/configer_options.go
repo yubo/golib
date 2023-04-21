@@ -1,11 +1,11 @@
 package configer
 
 import (
+	"os"
 	"reflect"
 	"strings"
 
 	"github.com/yubo/golib/util"
-	"k8s.io/klog/v2"
 )
 
 type ConfigerOptions struct {
@@ -150,7 +150,7 @@ func (p *configFieldsOptions) getDefaultValue(path string, tag *FieldTag, opts *
 		}
 	}
 
-	klog.V(10).InfoS("default values", "values", Values(p.defaultValues).String())
+	dlog("default values", "values", Values(p.defaultValues).String())
 	// defaultValues
 	if v, _ := Values(p.defaultValues).PathValue(path); v != nil {
 		if def := ToString(v); len(def) > 0 {
@@ -160,6 +160,11 @@ func (p *configFieldsOptions) getDefaultValue(path string, tag *FieldTag, opts *
 	}
 
 	return tag.Default
+}
+
+func (p *configFieldsOptions) getEnv(key string) (string, bool) {
+	val, ok := os.LookupEnv(key)
+	return val, ok && (p.allowEmptyEnv || val != "")
 }
 
 type ConfigFieldsOption func(*configFieldsOptions)

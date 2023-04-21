@@ -22,7 +22,7 @@ func ExampleParse() {
 			{Name: "json"},
 		},
 	}
-	cfger := configer.NewConfiger()
+	cfger := configer.New()
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	cfger.Var(fs, "", &config)
 

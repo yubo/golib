@@ -20,3 +20,17 @@ or with template func
 version: {{env "VERSION"}}
 version: {{env "VERSION" | default "v1.0.0" }}
 ```
+
+
+## parse with struct tag
+- flag
+- description for flag
+- default
+- env
+
+e.g.
+```golang 
+type Config struct {
+	Version bool `json:"version" flag:"version,v" env:"VERION" default:"false" description:"Print version information and quit"`
+}
+```
