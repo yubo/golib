@@ -1,6 +1,7 @@
 package configer
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -134,7 +135,7 @@ func TestConfigWithConfig(t *testing.T) {
 //	v := Bar{Foo{2}, Foo{3}}
 //
 //	{
-//		c, _ := NewConfiger().Parse(WithDefault("foo", v.Foo))
+//		c, _ := New().Parse(WithDefault("foo", v.Foo))
 //		c.Set("foo", Foo{20})
 //
 //		var got Bar
@@ -147,7 +148,7 @@ func TestConfigWithConfig(t *testing.T) {
 //	}
 //
 //	{
-//		c, _ := NewConfiger().Parse(WithDefault("a", v.Foo2))
+//		c, _ := New().Parse(WithDefault("a", v.Foo2))
 //		c.Set("a", Foo{30})
 //
 //		var got Bar
@@ -185,7 +186,11 @@ fooo:
 	}
 
 	for _, c := range cases {
-		assert.Equalf(t, c.want, config.GetRaw(c.path), "configer.GetRaw(%s)", c.path)
+		v, err := config.GetRaw(c.path)
+		assert.Equalf(t, c.want, v, "configer.GetRaw(%s)", c.path)
+		if c.want == nil {
+			assert.Error(t, err)
+		}
 	}
 }
 
@@ -200,13 +205,12 @@ func TestEnv(t *testing.T) {
 
 	t.Setenv("FOO", "1")
 
-	config, _ := Parse(WithValueFile("conf.yml"))
+	config, err := New().Parse(WithValueFile("conf.yml"))
+	assert.NoError(t, err)
 
 	var got string
-	if err := config.Read("foo", &got); err != nil {
-		t.Error(err)
-	}
-
+	err = config.Read("foo", &got)
+	assert.NoError(t, err)
 	assert.Equalf(t, "1", got, "configer read env[FOO]")
 }
 
@@ -223,7 +227,8 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := Parse(WithValueFile("conf.yml"))
+	config, err := New().Parse(WithValueFile("conf.yml"))
+	assert.NoError(t, err)
 
 	var (
 		got  []string
@@ -261,7 +266,8 @@ ctrl:
 
 	cfg, _ := New().Parse(WithDefaultYaml("", yml))
 	for _, c := range cases {
-		if got := util.GetType(cfg.GetRaw(c.path)); got != c.want {
+		v, _ := cfg.GetRaw(c.path)
+		if got := util.GetType(v); got != c.want {
 			assert.Equalf(t, c.want, got, "data %s", cfg)
 		}
 	}
@@ -288,16 +294,19 @@ ctrl:
 		{"ctrl.auth.google", "client_id", "string"},
 	}
 
-	conf, _ := New().Parse(WithDefaultYaml("", yml))
-	for _, c := range cases {
-		cf := conf.GetConfiger(c.path1)
-		if cf == nil {
-			t.Fatalf("get %s error", c.path1)
-		}
+	conf, err := New().Parse(WithDefaultYaml("", yml))
+	assert.NoError(t, err)
+	for i, c := range cases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			cf, err := conf.GetConfiger(c.path1)
+			assert.NoError(t, err, conf.String())
 
-		got := util.GetType(cf.GetRaw(c.path2))
-		assert.Equal(t, c.want, got)
+			raw, err := cf.GetRaw(c.path2)
+			assert.NoError(t, err)
 
+			got := util.GetType(raw)
+			assert.Equal(t, c.want, got)
+		})
 	}
 }
 
@@ -326,7 +335,7 @@ ctrl:
 	var got auth
 
 	conf, _ := New().Parse(WithDefaultYaml("", yml))
-	conf2 := conf.GetConfiger("ctrl.auth")
+	conf2, _ := conf.GetConfiger("ctrl.auth")
 	err := conf2.Read("google", &got)
 	if err != nil {
 		t.Fatalf("error %s", err)
@@ -355,7 +364,7 @@ func TestWithValueFile(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := cf.GetRaw(c.path)
+		got, _ := cf.GetRaw(c.path)
 		assert.Equal(t, c.want, got)
 	}
 }
@@ -383,7 +392,7 @@ func TestWithDefaultYaml(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := cf.GetRaw(c.path)
+		got, _ := cf.GetRaw(c.path)
 		assert.Equal(t, c.want, got)
 	}
 }
@@ -410,7 +419,7 @@ func TestWithOverride(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := cf.GetRaw(c.path)
+		got, _ := cf.GetRaw(c.path)
 		assert.Equal(t, c.want, got)
 	}
 
@@ -469,7 +478,8 @@ e: v2_e
 	}
 
 	for _, c := range cases {
-		assert.Equalf(t, c.want, cf.GetRaw(c.path), "getRaw(%s)", c.path)
+		raw, _ := cf.GetRaw(c.path)
+		assert.Equalf(t, c.want, raw, "getRaw(%s)", c.path)
 	}
 }
 
@@ -584,8 +594,8 @@ func TestPriority(t *testing.T) {
 		want: "flag-a",
 	}, {
 		name:    "--set-file",
-		setFile: "set-file-a",
-		want:    "set-file-a",
+		setFile: "set-file-a\n",
+		want:    "set-file-a\n",
 	}, {
 		name: "--set",
 		set:  "set-a",
@@ -691,7 +701,8 @@ func TestPriority(t *testing.T) {
 			cfg, err := cff.Parse(opts...)
 			assert.NoError(t, err)
 
-			assert.Equalf(t, c.want, cfg.GetRaw("a"), "case %+v env [%s] cfg [%s]", c, os.Getenv("TEST_A"), cfg)
+			raw, _ := cfg.GetString("a")
+			assert.Equalf(t, c.want, raw, "case %+v env [%s] cfg [%s]", c, os.Getenv("TEST_A"), cfg)
 		})
 	}
 }
@@ -714,8 +725,8 @@ func TestConfigerDef(t *testing.T) {
 	cfg, err := cff.Parse()
 	assert.NoError(t, err)
 
-	assert.Equalf(t, "default-a", cfg.GetRaw("bar.foo.a"), "config [%s]", cfg)
-	assert.Equalf(t, "default-b", cfg.GetRaw("bar.foo.b"), "config [%s]", cfg)
+	assert.Equalf(t, "default-a", cfg.MustGetRaw("bar.foo.a"), "config [%s]", cfg)
+	assert.Equalf(t, "default-b", cfg.MustGetRaw("bar.foo.b"), "config [%s]", cfg)
 }
 
 func TestVar(t *testing.T) {
@@ -959,7 +970,7 @@ func TestConfigTypes(t *testing.T) {
 
 		// yaml -> obj
 		o := Foo{}
-		cf2, err := cff.Parse(WithOverrideYaml("", cf.String()))
+		cf2, err := New().Parse(WithOverrideYaml("", cf.String()))
 		assert.NoError(t, err)
 		err = cf2.Read("", &o)
 		assert.NoError(t, err)

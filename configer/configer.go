@@ -27,6 +27,7 @@ import (
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
+	"github.com/yubo/golib/util/validation/field"
 	"github.com/yubo/golib/util/yaml"
 )
 
@@ -40,6 +41,8 @@ type Configer interface {
 	Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error
 	// Parse
 	Parse(opts ...ConfigerOption) (ParsedConfiger, error)
+	// MustParse
+	MustParse(opts ...ConfigerOption) ParsedConfiger
 	// AddFlags: add configer flags to *pflag.FlagSet, like -f, --set, --set-string, --set-file
 	AddFlags(fs *pflag.FlagSet)
 	// ValueFiles: return files list, which set by --set-file
@@ -62,6 +65,11 @@ func Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigField
 // Parse:
 func Parse(opts ...ConfigerOption) (ParsedConfiger, error) {
 	return DefaultConfiger.Parse(opts...)
+}
+
+// MustParse:
+func MustParse(opts ...ConfigerOption) ParsedConfiger {
+	return DefaultConfiger.MustParse(opts...)
 }
 
 // AddFlags: add configer flags to *pflag.FlagSet, like -f, --set, --set-string, --set-file
@@ -104,8 +112,8 @@ type configer struct {
 	*ConfigerOptions
 
 	valueFiles   []string       // files, -f/--values
-	values       []string       // values, --set
-	stringValues []string       // values, --set-string
+	values       []string       // values, --set servers[0].port=80
+	stringValues []string       // values, --set-string servers[0].name=007
 	fileValues   []string       // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
 	fields       []*configField // all of config fields
 
@@ -113,6 +121,15 @@ type configer struct {
 	env    map[string]interface{}
 	path   []string
 	parsed bool
+}
+
+func (p *configer) Path(names ...string) (ret *field.Path) {
+	for _, v := range append(p.path, names...) {
+		if v != "" {
+			ret.Child(v)
+		}
+	}
+	return ret
 }
 
 // ValueFiles: return files list, which set by --set-file
@@ -295,6 +312,16 @@ func (p *configer) setVar(path []string, fs *pflag.FlagSet, sampleRv reflect.Val
 	return nil
 }
 
+// MustParse
+func (p *configer) MustParse(opts ...ConfigerOption) ParsedConfiger {
+	pc, err := p.Parse(opts...)
+	if err != nil {
+		panic(err)
+	}
+
+	return pc
+}
+
 // Parse
 func (p *configer) Parse(opts ...ConfigerOption) (ParsedConfiger, error) {
 	if p.parsed {
@@ -342,7 +369,6 @@ func (p *configer) parse() (err error) {
 		}
 		// Merge with the previous map
 		base = mergeValues(base, m)
-		dlog("config load", "filePath", filePath)
 	}
 
 	// User specified a value via --set
@@ -350,7 +376,6 @@ func (p *configer) parse() (err error) {
 		if err := strvals.ParseInto(value, base); err != nil {
 			return fmt.Errorf("failed parsing --set data: %s", err)
 		}
-		dlog("config load", "value", value)
 	}
 
 	// User specified a value via --set-string
@@ -370,7 +395,6 @@ func (p *configer) parse() (err error) {
 		if err := strvals.ParseIntoFile(value, base, reader); err != nil {
 			return fmt.Errorf("failed parsing --set-file data: %s", err)
 		}
-		dlog("config load", "set-file", value)
 	}
 
 	base = p.mergeFlagValues(base)

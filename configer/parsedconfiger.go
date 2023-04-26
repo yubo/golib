@@ -1,9 +1,11 @@
 package configer
 
 import (
+	"fmt"
+
 	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/errors"
 	"github.com/yubo/golib/util/yaml"
-	"k8s.io/klog/v2"
 )
 
 type ParsedConfiger interface {
@@ -15,9 +17,10 @@ type ParsedConfiger interface {
 	Flags() []string
 
 	//Set(path string, v interface{}) error
-	GetConfiger(path string) ParsedConfiger
-	GetRaw(path string) interface{}
-	GetString(path string) string
+	GetConfiger(path string) (ParsedConfiger, error)
+	GetRaw(path string) (interface{}, error)
+	MustGetRaw(path string) interface{}
+	GetString(path string) (string, error)
 	GetBool(path string) (bool, error)
 	GetBoolDef(path string, def bool) bool
 	GetFloat64(path string) (float64, error)
@@ -59,43 +62,53 @@ type parsedConfiger struct {
 //	return nil
 //}
 
-func (p *parsedConfiger) GetConfiger(path string) ParsedConfiger {
+func (p *parsedConfiger) GetConfiger(path string) (ParsedConfiger, error) {
 	if p == nil || !p.parsed {
-		return nil
+		return nil, errors.New("invalid configer")
 	}
 
-	data, _ := p.GetRaw(path).(map[string]interface{})
+	raw, err := p.GetRaw(path)
+	if err != nil {
+		return nil, err
+	}
 
 	// noneed deepCopy
-	out := new(parsedConfiger)
-	*out = *p
+	out := &parsedConfiger{&configer{}}
+	*out.configer = *p.configer
 
 	out.path = append(clonePath(p.path), parsePath(path)...)
-	out.data = data
+	out.data = raw.(map[string]interface{})
 
-	return out
+	return out, nil
 }
 
-func (p *parsedConfiger) GetRaw(path string) interface{} {
+func (p *parsedConfiger) MustGetRaw(path string) interface{} {
+	data, err := p.GetRaw(path)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func (p *parsedConfiger) GetRaw(path string) (interface{}, error) {
 	if path == "" {
-		return Values(p.data)
+		return Values(p.data), nil
 	}
 
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
-		dlog("get pathValue err, ignored", "path", path, "v", v, "err", err)
-		return nil
+		return nil, err
 	}
-	return v
+	return v, nil
 }
 
-func (p *parsedConfiger) GetString(path string) string {
+func (p *parsedConfiger) GetString(path string) (string, error) {
 	v, err := Values(p.data).PathValue(path)
 	if err != nil {
-		return ""
+		return "", nil
 	}
 
-	return util.ToString(v)
+	return util.ToString(v), nil
 }
 
 func (p *parsedConfiger) GetBool(path string) (bool, error) {
@@ -177,18 +190,19 @@ func (p *parsedConfiger) Read(path string, into interface{}) error {
 		return nil
 	}
 
-	if v := p.GetRaw(path); v != nil {
-		data, err := yaml.Marshal(v)
-		dlog("marshal", "v", v, "data", string(data), "err", err)
-		if err != nil {
-			return err
-		}
+	v, err := p.GetRaw(path)
+	if err != nil {
+		return err
+	}
 
-		err = yaml.Unmarshal(data, into)
-		if err != nil {
-			dlog("unmarshal", "data", string(data), "err", err)
-			return err
-		}
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		return errors.Wrap(err, fmt.Sprintf("%#v", v))
+	}
+
+	err = yaml.Unmarshal(data, into)
+	if err != nil {
+		return errors.Wrap(err, string(data))
 	}
 
 	if v, ok := into.(validator); ok {
@@ -197,10 +211,6 @@ func (p *parsedConfiger) Read(path string, into interface{}) error {
 		}
 	}
 
-	if DEBUG {
-		b, _ := yaml.Marshal(into)
-		klog.Infof("Read \n[%s]\n%s", path, string(b))
-	}
 	return nil
 }
 
