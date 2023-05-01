@@ -267,9 +267,7 @@ ctrl:
 	cfg, _ := New().Parse(WithDefaultYaml("", yml))
 	for _, c := range cases {
 		v, _ := cfg.GetRaw(c.path)
-		if got := util.GetType(v); got != c.want {
-			assert.Equalf(t, c.want, got, "data %s", cfg)
-		}
+		assert.Equalf(t, c.want, util.Name(v), "data %s", cfg)
 	}
 
 	// test to configer
@@ -304,8 +302,7 @@ ctrl:
 			raw, err := cf.GetRaw(c.path2)
 			assert.NoError(t, err)
 
-			got := util.GetType(raw)
-			assert.Equal(t, c.want, got)
+			assert.Equal(t, c.want, util.Name(raw))
 		})
 	}
 }
