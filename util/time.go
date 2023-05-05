@@ -48,7 +48,6 @@ func Until(f func(), interval time.Duration, stopCh <-chan struct{}) {
 
 func UntilWithTick(f func(), c <-chan time.Time, stopCh <-chan struct{}) {
 	go func() {
-
 		// first call
 		select {
 		case <-stopCh:

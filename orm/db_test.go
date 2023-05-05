@@ -49,7 +49,7 @@ func init() {
 
 func runTests(t *testing.T, tests ...func(db DB, ctx context.Context)) {
 	if !testAvailable {
-		t.Skipf("SQL server not running on %s", testDsn)
+		t.Skipf("SQL server not running on %s:%s", testDriver, testDsn)
 	}
 
 	_runTests(t, testDriver, testDsn, tests...)
@@ -76,8 +76,8 @@ func TestAutoMigrate(t *testing.T) {
 	runTests(t, func(db DB, ctx context.Context) {
 		{
 			type test struct {
-				ID   *int   `sql:",primary_key,auto_increment=1000"`
-				Name string `sql:",index,unique"`
+				ID   *int   `sql:"primary_key,auto_increment=1000"`
+				Name string `sql:"index,unique"`
 			}
 
 			// mysql: CREATE TABLE `test` (`id` bigint AUTO_INCREMENT,`name` varchar(255) UNIQUE,PRIMARY KEY (`id`),INDEX (`name`) ) auto_increment=1000
@@ -88,7 +88,7 @@ func TestAutoMigrate(t *testing.T) {
 
 		{
 			type test struct {
-				ID          *int `sql:",index,auto_increment=1000"`
+				ID          *int `sql:"index,auto_increment=1000"`
 				Name        string
 				DisplayName string
 			}
@@ -101,11 +101,11 @@ func TestAutoMigrate(t *testing.T) {
 
 		{
 			type test struct {
-				ID          *int `sql:",index,auto_increment=1000"`
+				ID          *int `sql:"index,auto_increment=1000"`
 				Name        string
 				DisplayName string
-				CreatedAt   int64 `sql:",auto_createtime"`
-				UpdatedAt   int64 `sql:",auto_updatetime"`
+				CreatedAt   int64 `sql:"auto_createtime"`
+				UpdatedAt   int64 `sql:"auto_updatetime"`
 			}
 
 			// mysql: ALTER TABLE `test` ADD `created_at` bigint
@@ -131,7 +131,7 @@ func TestInsert(t *testing.T) {
 		assert.Equal(t, 1, v)
 	}, func(db DB, ctx context.Context) {
 		type test struct {
-			ID    *int `sql:",primary_key,auto_increment=1000"`
+			ID    *int `sql:"primary_key,auto_increment=1000"`
 			Value int
 		}
 
@@ -165,8 +165,8 @@ func TestInsert(t *testing.T) {
 			Name  string //
 			Admin bool   // bool
 			User         // inline
-			Group Group  `sql:",inline"`        // inline
-			Role  Role   `sql:"role,size=1024"` // use json.Marshal as []byte
+			Group Group  `sql:"inline"`              // inline
+			Role  Role   `sql:"name=role,size=1024"` // use json.Marshal as []byte
 		}
 
 		v := test{Name: "test", User: User{1, "user-name"}, Admin: true, Group: Group{2, "group-name"}, Role: Role{3, "role-name"}}
@@ -397,7 +397,7 @@ func TestSqlArg(t *testing.T) {
 	}, func(db DB, ctx context.Context) {
 		type foo struct {
 			PointX  *int
-			PointY  *int `sql:"point_y"`
+			PointY  *int `sql:"name=point_y"`
 			Private *int `sql:"-"`
 			private *int
 		}
@@ -494,10 +494,10 @@ func TestCRUD(t *testing.T) {
 		c.SetTime(createdAt)
 
 		type test struct {
-			Name      string `sql:",where"`
+			Name      string `sql:"where"`
 			Age       int
 			Address   string
-			NickName  *string `sql:",size=1024"`
+			NickName  *string `sql:"size=1024"`
 			CreatedAt time.Time
 			UpdatedAt time.Time
 		}
@@ -788,12 +788,12 @@ func TestTypeTime(t *testing.T) {
 		c.SetTime(createdAt)
 
 		type test struct {
-			Name      string     `sql:",where"`
-			TimeSec   int64      `sql:",auto_updatetime"`
-			TimeMilli int64      `sql:",auto_updatetime=milli"`
-			TimeNano  int64      `sql:",auto_updatetime=nano"`
-			Time      time.Time  `sql:",auto_updatetime"`
-			TimeP     *time.Time `sql:",auto_updatetime"`
+			Name      string     `sql:"where"`
+			TimeSec   int64      `sql:"auto_updatetime"`
+			TimeMilli int64      `sql:"auto_updatetime=milli"`
+			TimeNano  int64      `sql:"auto_updatetime=nano"`
+			Time      time.Time  `sql:"auto_updatetime"`
+			TimeP     *time.Time `sql:"auto_updatetime"`
 		}
 
 		v := test{Name: "test"}

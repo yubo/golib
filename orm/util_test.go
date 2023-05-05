@@ -122,7 +122,7 @@ func newSelector(s string) Selector {
 
 func TestGenUpdateSql(t *testing.T) {
 	type User struct {
-		Name   *string `sql:",where"`
+		Name   *string `sql:"where"`
 		Age    *int
 		Passwd *string
 	}

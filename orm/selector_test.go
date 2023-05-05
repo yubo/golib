@@ -977,12 +977,22 @@ func TestSelectorSql(t *testing.T) {
 		field:    "`user_name` != ? and `id` < ?",
 		args:     []interface{}{"tom", "10"},
 	}, {
-		name:     "contains",
+		name:     "has prefix",
 		selector: "user_name =~ tom",
+		field:    "`user_name` like ?",
+		args:     []interface{}{"tom%"},
+	}, {
+		name:     "contains",
+		selector: "user_name ~ tom",
 		field:    "`user_name` like ?",
 		args:     []interface{}{"%tom%"},
 	}, {
-		name:     "and",
+		name:     "has suffix",
+		selector: "user_name ~= tom",
+		field:    "`user_name` like ?",
+		args:     []interface{}{"%tom"},
+	}, {
+		name:     "not contains",
 		selector: "user_name!~tom",
 		field:    "`user_name` not like ?",
 		args:     []interface{}{"%tom%"},
@@ -995,7 +1005,6 @@ func TestSelectorSql(t *testing.T) {
 			field, args := s.Sql()
 			require.Equal(t, c.field, field, c.selector)
 			require.Equal(t, c.args, args, c.selector)
-
 		})
 	}
 }
