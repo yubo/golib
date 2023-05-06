@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 	"math"
 	"strings"
 
@@ -200,7 +199,6 @@ func (p mysql) FullDataTypeOf(field *StructField) string {
 
 // AutoMigrate
 func (p *mysql) AutoMigrate(ctx context.Context, sample interface{}, opts ...QueryOption) error {
-	log.Printf("--")
 	if len(opts) == 0 {
 		opts = DefaultMysqlTableOptions
 	}
