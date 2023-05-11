@@ -193,7 +193,9 @@ func (p *Rows) Rows(dst interface{}) error {
 
 	for p.rows.Next() {
 		row := reflect.New(sample).Elem()
-		b.scan(row)
+		if err := b.scan(row); err != nil {
+			return err
+		}
 		rv.Set(reflect.Append(rv, row))
 
 		if n += 1; n >= limit {
