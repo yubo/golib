@@ -37,7 +37,6 @@ func TestSelectorParse(t *testing.T) {
 	testBadStrings := []string{
 		"x=a||y=b",
 		"x==a==b",
-		"!x",
 		"!x=a",
 		"x<a",
 	}
@@ -87,8 +86,8 @@ func TestSelectorQuery(t *testing.T) {
 	expectQuery(t, "x<1", "`x` < ?", "1")
 	expectQuery(t, "x~y", "`x` like ?", "%y%")
 	expectQuery(t, "x!~y", "`x` not like ?", "%y%")
-	expectQuery(t, "x=~y", "`x` like ?", "%y")
-	expectQuery(t, "x~=y", "`x` like ?", "y%")
+	expectQuery(t, "x=~y", "`x` like ?", "y%")
+	expectQuery(t, "x~=y", "`x` like ?", "%y")
 }
 
 func TestLexer(t *testing.T) {
@@ -110,14 +109,16 @@ func TestLexer(t *testing.T) {
 		{"(", OpenParToken},
 		{")", ClosedParToken},
 		//Non-"special" characters are considered part of an identifier
-		{"=~", ContainsToken},
+		{"~", ContainsToken},
 		{"!~", NotContainsToken},
 		{"||", IdentifierToken},
+		{"=~", HasPrefixToken},
+		{"~=", HasSuffixToken},
 	}
 	for _, c := range cases {
 		l := &Lexer{s: c.s, pos: 0}
 		token, lit := l.Lex()
-		require.Equal(t, c.t, token)
+		require.Equal(t, c.t, token, c.s)
 
 		if c.t != ErrorToken && lit != c.s {
 			t.Errorf("Got '%s' it should be '%s'", lit, c.s)

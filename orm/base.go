@@ -55,7 +55,7 @@ func (p *rawDBWrapper) prepareInterpolateParams(ctx context.Context, query *stri
 			return err
 		}
 		if out != nil {
-			*out = sql
+			out(sql)
 		}
 		if DEBUG {
 			klog.InfoS("debug", "sql", sql)
