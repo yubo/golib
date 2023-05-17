@@ -121,7 +121,7 @@ func (p *mysql) getSchemaStringType(f *StructField) string {
 		if p.stringSize > 0 {
 			size = int64(p.stringSize)
 		} else {
-			hasIndex := f.Has("index") || f.Has("unique")
+			hasIndex := f.Has("index") || f.Has("unique") || f.Has("unique_index")
 			// TEXT, GEOMETRY or JSON column can't have a default value
 			if f.PrimaryKey || f.HasDefaultValue || hasIndex {
 				size = 191 // utf8mb4
@@ -144,7 +144,6 @@ func (p *mysql) getSchemaStringType(f *StructField) string {
 		return "mediumtext"
 	}
 
-	// size >= int64(math.Pow(2, 24)) || size <= 0
 	return "longtext"
 }
 

@@ -1,6 +1,7 @@
 package configer
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -59,7 +60,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	_, err := NewConfiger().Parse(WithValueFile("conf.yml"))
+	_, err := New().Parse(WithValueFile("conf.yml"))
 	assert.NoError(t, err)
 }
 
@@ -78,7 +79,7 @@ foos: ["1", "2"]`}})
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	c, err := NewConfiger().Parse(WithValueFile("conf.yml"))
+	c, err := New().Parse(WithValueFile("conf.yml"))
 	assert.NoError(t, err)
 
 	assert.Equal(t, `foo1: b_bar1
@@ -103,7 +104,7 @@ func TestConfigWithConfig(t *testing.T) {
 	v := Bar{Foo{2}, Foo{3}}
 
 	{
-		c, err := NewConfiger().Parse(WithDefault("foo", v.Foo))
+		c, err := New().Parse(WithDefault("foo", v.Foo))
 		assert.NoError(t, err)
 
 		var got Bar
@@ -113,7 +114,7 @@ func TestConfigWithConfig(t *testing.T) {
 	}
 
 	{
-		c, err := NewConfiger().Parse(WithDefault("", v))
+		c, err := New().Parse(WithDefault("", v))
 		assert.NoError(t, err)
 
 		var got Bar
@@ -123,39 +124,39 @@ func TestConfigWithConfig(t *testing.T) {
 	}
 }
 
-func TestConfigSet(t *testing.T) {
-	type Foo struct {
-		A int `json:"a"`
-	}
-	type Bar struct {
-		Foo  Foo `json:"foo"`
-		Foo2 Foo `json:"foo2"`
-	}
-	v := Bar{Foo{2}, Foo{3}}
-
-	{
-		c, _ := NewConfiger().Parse(WithDefault("foo", v.Foo))
-		c.Set("foo", Foo{20})
-
-		var got Bar
-		c.Read("foo", &got.Foo)
-		assert.Equalf(t, 20, got.Foo.A, "configer read \"foo\"")
-
-		c.Set("foo.a", 200)
-		c.Read("foo", &got.Foo)
-		assert.Equalf(t, 200, got.Foo.A, "configer read \"foo.a\"")
-	}
-
-	{
-		c, _ := NewConfiger().Parse(WithDefault("a", v.Foo2))
-		c.Set("a", Foo{30})
-
-		var got Bar
-		c.Read("a", &got.Foo2)
-		assert.Equalf(t, 30, got.Foo2.A, "configer read \"a\"")
-	}
-
-}
+//func TestConfigSet(t *testing.T) {
+//	type Foo struct {
+//		A int `json:"a"`
+//	}
+//	type Bar struct {
+//		Foo  Foo `json:"foo"`
+//		Foo2 Foo `json:"foo2"`
+//	}
+//	v := Bar{Foo{2}, Foo{3}}
+//
+//	{
+//		c, _ := New().Parse(WithDefault("foo", v.Foo))
+//		c.Set("foo", Foo{20})
+//
+//		var got Bar
+//		c.Read("foo", &got.Foo)
+//		assert.Equalf(t, 20, got.Foo.A, "configer read \"foo\"")
+//
+//		c.Set("foo.a", 200)
+//		c.Read("foo", &got.Foo)
+//		assert.Equalf(t, 200, got.Foo.A, "configer read \"foo.a\"")
+//	}
+//
+//	{
+//		c, _ := New().Parse(WithDefault("a", v.Foo2))
+//		c.Set("a", Foo{30})
+//
+//		var got Bar
+//		c.Read("a", &got.Foo2)
+//		assert.Equalf(t, 30, got.Foo2.A, "configer read \"a\"")
+//	}
+//
+//}
 
 func TestRaw(t *testing.T) {
 	dir := createTestDir([]templateFile{
@@ -170,7 +171,7 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := NewConfiger().Parse(WithValueFile("conf.yml"))
+	config, _ := New().Parse(WithValueFile("conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -185,7 +186,11 @@ fooo:
 	}
 
 	for _, c := range cases {
-		assert.Equalf(t, c.want, config.GetRaw(c.path), "configer.GetRaw(%s)", c.path)
+		v, err := config.GetRaw(c.path)
+		assert.Equalf(t, c.want, v, "configer.GetRaw(%s)", c.path)
+		if c.want == nil {
+			assert.Error(t, err)
+		}
 	}
 }
 
@@ -200,13 +205,12 @@ func TestEnv(t *testing.T) {
 
 	t.Setenv("FOO", "1")
 
-	config, _ := Parse(WithValueFile("conf.yml"))
+	config, err := New().Parse(WithValueFile("conf.yml"))
+	assert.NoError(t, err)
 
 	var got string
-	if err := config.Read("foo", &got); err != nil {
-		t.Error(err)
-	}
-
+	err = config.Read("foo", &got)
+	assert.NoError(t, err)
 	assert.Equalf(t, "1", got, "configer read env[FOO]")
 }
 
@@ -223,7 +227,8 @@ fooo:
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	config, _ := Parse(WithValueFile("conf.yml"))
+	config, err := New().Parse(WithValueFile("conf.yml"))
+	assert.NoError(t, err)
 
 	var (
 		got  []string
@@ -259,11 +264,10 @@ ctrl:
 		{"ctrl.auth.google.client_id", "string"},
 	}
 
-	cfg, _ := NewConfiger().Parse(WithDefaultYaml("", yml))
+	cfg, _ := New().Parse(WithDefaultYaml("", yml))
 	for _, c := range cases {
-		if got := util.GetType(cfg.GetRaw(c.path)); got != c.want {
-			assert.Equalf(t, c.want, got, "data %s", cfg)
-		}
+		v, _ := cfg.GetRaw(c.path)
+		assert.Equalf(t, c.want, util.Name(v), "data %s", cfg)
 	}
 
 	// test to configer
@@ -288,16 +292,18 @@ ctrl:
 		{"ctrl.auth.google", "client_id", "string"},
 	}
 
-	conf, _ := NewConfiger().Parse(WithDefaultYaml("", yml))
-	for _, c := range cases {
-		cf := conf.GetConfiger(c.path1)
-		if cf == nil {
-			t.Fatalf("get %s error", c.path1)
-		}
+	conf, err := New().Parse(WithDefaultYaml("", yml))
+	assert.NoError(t, err)
+	for i, c := range cases {
+		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
+			cf, err := conf.GetConfiger(c.path1)
+			assert.NoError(t, err, conf.String())
 
-		got := util.GetType(cf.GetRaw(c.path2))
-		assert.Equal(t, c.want, got)
+			raw, err := cf.GetRaw(c.path2)
+			assert.NoError(t, err)
 
+			assert.Equal(t, c.want, util.Name(raw))
+		})
 	}
 }
 
@@ -325,8 +331,8 @@ ctrl:
 
 	var got auth
 
-	conf, _ := NewConfiger().Parse(WithDefaultYaml("", yml))
-	conf2 := conf.GetConfiger("ctrl.auth")
+	conf, _ := New().Parse(WithDefaultYaml("", yml))
+	conf2, _ := conf.GetConfiger("ctrl.auth")
 	err := conf2.Read("google", &got)
 	if err != nil {
 		t.Fatalf("error %s", err)
@@ -343,7 +349,7 @@ func TestWithValueFile(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := NewConfiger().Parse(WithValueFile("base.yml", "conf.yml"))
+	cf, _ := New().Parse(WithValueFile("base.yml", "conf.yml"))
 
 	var cases = []struct {
 		path string
@@ -355,7 +361,7 @@ func TestWithValueFile(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := cf.GetRaw(c.path)
+		got, _ := cf.GetRaw(c.path)
 		assert.Equal(t, c.want, got)
 	}
 }
@@ -368,7 +374,7 @@ func TestWithDefaultYaml(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := NewConfiger().Parse(
+	cf, _ := New().Parse(
 		WithValueFile("conf.yml"),
 		WithDefaultYaml("foo", "foo1: base1"),
 		WithDefaultYaml("foo", "foo3: base3"))
@@ -383,7 +389,7 @@ func TestWithDefaultYaml(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := cf.GetRaw(c.path)
+		got, _ := cf.GetRaw(c.path)
 		assert.Equal(t, c.want, got)
 	}
 }
@@ -396,7 +402,7 @@ func TestWithOverride(t *testing.T) {
 	defer os.RemoveAll(dir)
 	os.Chdir(dir)
 
-	cf, _ := NewConfiger().Parse(
+	cf, _ := New().Parse(
 		WithValueFile("conf.yml"),
 		WithOverrideYaml("foo", "foo1: override1"),
 	)
@@ -410,7 +416,7 @@ func TestWithOverride(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got := cf.GetRaw(c.path)
+		got, _ := cf.GetRaw(c.path)
 		assert.Equal(t, c.want, got)
 	}
 
@@ -469,7 +475,8 @@ e: v2_e
 	}
 
 	for _, c := range cases {
-		assert.Equalf(t, c.want, cf.GetRaw(c.path), "getRaw(%s)", c.path)
+		raw, _ := cf.GetRaw(c.path)
+		assert.Equalf(t, c.want, raw, "getRaw(%s)", c.path)
 	}
 }
 
@@ -509,7 +516,7 @@ func TestConfigerWithTagOptsGetter(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		cff := NewConfiger()
+		cff := New()
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 		err := cff.Var(fs, "", &Foo{})
 		assert.NoError(t, err)
@@ -584,8 +591,8 @@ func TestPriority(t *testing.T) {
 		want: "flag-a",
 	}, {
 		name:    "--set-file",
-		setFile: "set-file-a",
-		want:    "set-file-a",
+		setFile: "set-file-a\n",
+		want:    "set-file-a\n",
 	}, {
 		name: "--set",
 		set:  "set-a",
@@ -625,7 +632,7 @@ func TestPriority(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			cff := NewConfiger()
+			cff := New()
 			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
 			if c.env != "" {
@@ -691,7 +698,8 @@ func TestPriority(t *testing.T) {
 			cfg, err := cff.Parse(opts...)
 			assert.NoError(t, err)
 
-			assert.Equalf(t, c.want, cfg.GetRaw("a"), "case %+v env [%s] cfg [%s]", c, os.Getenv("TEST_A"), cfg)
+			raw, _ := cfg.GetString("a")
+			assert.Equalf(t, c.want, raw, "case %+v env [%s] cfg [%s]", c, os.Getenv("TEST_A"), cfg)
 		})
 	}
 }
@@ -705,7 +713,7 @@ func TestConfigerDef(t *testing.T) {
 		Foo *Foo `json:"foo"`
 	}
 
-	cff := NewConfiger()
+	cff := New()
 
 	fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	err := cff.Var(fs, "bar", &Bar{Foo: &Foo{B: "default-b"}})
@@ -714,8 +722,8 @@ func TestConfigerDef(t *testing.T) {
 	cfg, err := cff.Parse()
 	assert.NoError(t, err)
 
-	assert.Equalf(t, "default-a", cfg.GetRaw("bar.foo.a"), "config [%s]", cfg)
-	assert.Equalf(t, "default-b", cfg.GetRaw("bar.foo.b"), "config [%s]", cfg)
+	assert.Equalf(t, "default-a", cfg.MustGetRaw("bar.foo.a"), "config [%s]", cfg)
+	assert.Equalf(t, "default-b", cfg.MustGetRaw("bar.foo.b"), "config [%s]", cfg)
 }
 
 func TestVar(t *testing.T) {
@@ -768,7 +776,7 @@ func TestVar(t *testing.T) {
 				defer os.RemoveAll(dir)
 				os.Chdir(dir)
 
-				cff := NewConfiger()
+				cff := New()
 
 				fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
@@ -836,7 +844,7 @@ func TestAddFlags(t *testing.T) {
 
 	for _, c := range cases {
 
-		cff := NewConfiger()
+		cff := New()
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
 		var got Foo
@@ -946,7 +954,7 @@ func TestConfigTypes(t *testing.T) {
 		},
 	}}
 	for _, c := range cases {
-		cff := NewConfiger()
+		cff := New()
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
 		err := cff.Var(fs, "", &c.sample)
@@ -959,7 +967,7 @@ func TestConfigTypes(t *testing.T) {
 
 		// yaml -> obj
 		o := Foo{}
-		cf2, err := cff.Parse(WithOverrideYaml("", cf.String()))
+		cf2, err := New().Parse(WithOverrideYaml("", cf.String()))
 		assert.NoError(t, err)
 		err = cf2.Read("", &o)
 		assert.NoError(t, err)
@@ -986,7 +994,7 @@ func TestConfigDefault(t *testing.T) {
 			Foo{A: "2", B: util.String("2")},
 		}}
 		for _, c := range cases {
-			cff := NewConfiger()
+			cff := New()
 			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
 			err := cff.Var(fs, "", &c.sample)
@@ -1018,7 +1026,7 @@ func TestConfigDefault(t *testing.T) {
 			Foo{A: 2, B: util.Int(2), C: 2},
 		}}
 		for _, c := range cases {
-			cff := NewConfiger()
+			cff := New()
 			fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
 			err := cff.Var(fs, "", &c.sample)
@@ -1042,7 +1050,7 @@ func TestConfigString(t *testing.T) {
 		sample := Foo{A: 0}
 		want := "a: 0\n"
 
-		cff := NewConfiger()
+		cff := New()
 		fs := pflag.NewFlagSet("test", pflag.ContinueOnError)
 
 		err := cff.Var(fs, "", &sample)

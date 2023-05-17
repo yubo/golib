@@ -1,7 +1,6 @@
 package configer
 
 import (
-	"context"
 	"fmt"
 	"reflect"
 	"strings"
@@ -9,7 +8,12 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/yaml"
+	"k8s.io/klog/v2"
 )
+
+type validator interface {
+	Validate() error
+}
 
 // ErrNoTable indicates that a chart does not have a matching table.
 type ErrNoTable struct {
@@ -24,6 +28,17 @@ type ErrNoValue struct {
 }
 
 func (e ErrNoValue) Error() string { return fmt.Sprintf("%q is not a value", e.Key) }
+
+func indirectValue(rv reflect.Value, rt reflect.Type) (reflect.Value, reflect.Type) {
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			rv.Set(reflect.New(rt.Elem()))
+		}
+		rv = rv.Elem()
+		rt = rv.Type()
+	}
+	return rv, rt
+}
 
 // merge path.bytes -> into
 func mergePathYaml(into map[string]interface{}, path string, yaml []byte) (map[string]interface{}, error) {
@@ -328,6 +343,14 @@ type configField struct {
 	defaultValue interface{} // field's default value
 }
 
+func (f configField) getFlagValue() interface{} {
+	if f.flag != "" && f.fs.Changed(f.flag) {
+		return reflect.ValueOf(f.flagValue).Elem().Interface()
+	}
+
+	return nil
+}
+
 type defaultSetter interface {
 	SetDefault(string) error
 }
@@ -430,29 +453,8 @@ func newConfigField(value interface{}, fs *pflag.FlagSet, path string, tag *Fiel
 	return field
 }
 
-// The key type is unexported to prevent collisions
-type key int
-
-const (
-	configerKey key = iota
-)
-
-func WithConfiger(parent context.Context, cf ParsedConfiger) context.Context {
-	if _, ok := ConfigerFrom(parent); ok {
-		panic("configer has been exist")
+func dlog(msg string, keysAndValues ...interface{}) {
+	if DEBUG {
+		klog.InfoSDepth(2, msg, keysAndValues...)
 	}
-	return context.WithValue(parent, configerKey, cf)
-}
-
-func ConfigerFrom(ctx context.Context) (ParsedConfiger, bool) {
-	cf, ok := ctx.Value(configerKey).(ParsedConfiger)
-	return cf, ok
-}
-
-func ConfigerMustFrom(ctx context.Context) ParsedConfiger {
-	cf, ok := ctx.Value(configerKey).(ParsedConfiger)
-	if !ok {
-		panic("unable to get configer from context")
-	}
-	return cf
 }

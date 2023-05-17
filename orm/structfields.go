@@ -26,6 +26,7 @@ var (
 		"scale",
 		"not_null",
 		"unique",
+		"unique_index",
 		"comment",
 		"auto_createtime",
 		"auto_updatetime",
@@ -230,12 +231,8 @@ func getSubv(rv reflect.Value, index []int, allowCreate bool) (reflect.Value, er
 	return subv, nil
 }
 
-// `param:"(path|header|param|data)?(,required)?"`
-// `name:"keyName"`
-// `json:"keyName"`
-// `format:"password"`
-// `description:"ooxxoo"`
-// func getTags(ff reflect.StructField) (name, paramType, format string, skip, bool) {
+// parseStructField parse the `sql` tag
+// keyWords
 func parseStructField(sf reflect.StructField) (*StructField, error) {
 	if sf.Anonymous {
 		return &StructField{}, nil
@@ -249,8 +246,6 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 		return opt, nil
 	}
 
-	tag = prepareTag(tag)
-
 	set := ParseFields(tag)
 	if set.Has("where") {
 		opt.Where = true
@@ -260,7 +255,6 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 	}
 	opt.Set = set
 
-	//opt.key = snakeCasedName(sf.Name)
 	opt.FieldName = sf.Name
 	opt.Name = set.Get("name")
 	if opt.Name == "" {
@@ -303,7 +297,7 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 	if set.Has("not_null") || set.Has("notnull") {
 		opt.NotNull = util.Bool(true)
 	}
-	if set.Has("unique") {
+	if set.Has("unique") || set.Has("unique_index") {
 		opt.Unique = util.Bool(true)
 	}
 	if set.Has("comment") {
@@ -428,7 +422,6 @@ func parseStructField(sf reflect.StructField) (*StructField, error) {
 		case reflect.Int32, reflect.Uint32, reflect.Float32:
 			opt.Size = util.Int64(32)
 		case reflect.Struct, reflect.Array, reflect.Slice, reflect.Map:
-			// json string, 32k
 			opt.Size = util.Int64(16384)
 		}
 	}
@@ -451,25 +444,4 @@ func isValidTag(s string) bool {
 		}
 	}
 	return true
-}
-
-//func panicType(ft reflect.Type, args ...interface{}) {
-//	msg := fmt.Sprintf("type field %s %s", ft.PkgPath(), ft.Name())
-//
-//	if len(args) > 0 {
-//		panic(fmt.Sprint(args...) + " " + msg)
-//	}
-//	panic(msg)
-//}
-
-func prepareTag(tag string) string {
-	if tag == "" {
-		return ""
-	}
-
-	if tags := strings.SplitN(tag, ",", 2); tags[0] == "" || strings.IndexByte(tags[0], '=') > 0 {
-		return tag
-	}
-
-	return "name=" + tag
 }

@@ -17,27 +17,32 @@ package configer
 //    - RegisterConfigFields.sample.field.tags.default
 
 import (
+	"errors"
 	"fmt"
-	"io"
 	"net"
-	"os"
 	"reflect"
-	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/strvals"
 	"github.com/yubo/golib/util/template"
+	"github.com/yubo/golib/util/validation/field"
 	"github.com/yubo/golib/util/yaml"
-	"k8s.io/klog/v2"
+)
+
+var (
+	DEBUG           = false
+	DefaultConfiger = New()
 )
 
 type Configer interface {
 	// Var: set config fields to yaml configfile reader and pflags.FlagSet from sample
 	Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error
-
+	// Parse
 	Parse(opts ...ConfigerOption) (ParsedConfiger, error)
+	// MustParse
+	MustParse(opts ...ConfigerOption) ParsedConfiger
 	// AddFlags: add configer flags to *pflag.FlagSet, like -f, --set, --set-string, --set-file
 	AddFlags(fs *pflag.FlagSet)
 	// ValueFiles: return files list, which set by --set-file
@@ -48,42 +53,23 @@ type Configer interface {
 	Flags() []string
 }
 
-type ParsedConfiger interface {
-	// ValueFiles: return files list, which set by --set-file
-	ValueFiles() []string
-	// Envs: return envs list from fields, used with flags
-	Envs() []string
-	// Envs: return flags list
-	Flags() []string
-
-	//FlagSet() *pflag.FlagSet
-	Set(path string, v interface{}) error
-	GetConfiger(path string) ParsedConfiger
-	GetRaw(path string) interface{}
-	GetString(path string) string
-	GetBool(path string) (bool, error)
-	GetBoolDef(path string, def bool) bool
-	GetFloat64(path string) (float64, error)
-	GetFloat64Def(path string, def float64) float64
-	GetInt64(path string) (int64, error)
-	GetInt64Def(path string, def int64) int64
-	GetInt(path string) (int, error)
-	GetIntDef(path string, def int) int
-	IsSet(path string) bool
-	Read(path string, into interface{}) error
-	String() string
-}
-
-var (
-	DefaultConfiger = NewConfiger()
-)
-
-func NewConfiger() Configer {
+func New() Configer {
 	return newConfiger()
 }
 
+// Var: set config fields to yaml configfile reader and pflags.FlagSet from sample
+func Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
+	return DefaultConfiger.Var(fs, path, sample, opts...)
+}
+
+// Parse:
 func Parse(opts ...ConfigerOption) (ParsedConfiger, error) {
 	return DefaultConfiger.Parse(opts...)
+}
+
+// MustParse:
+func MustParse(opts ...ConfigerOption) ParsedConfiger {
+	return DefaultConfiger.MustParse(opts...)
 }
 
 // AddFlags: add configer flags to *pflag.FlagSet, like -f, --set, --set-string, --set-file
@@ -107,40 +93,11 @@ func Flags() []string {
 }
 
 // FalgSet: set config fields to pflags.FlagSet from sample
-func FlagSet(fs *pflag.FlagSet, sample interface{}, opts ...ConfigFieldsOption) error {
-	return NewConfiger().Var(fs, "", sample, opts...)
-}
+//func FlagSet(fs *pflag.FlagSet, sample interface{}, opts ...ConfigFieldsOption) error {
+//	return NewConfiger().Var(fs, "", sample, opts...)
+//}
 
-// Var: set config fields to yaml configfile reader and pflags.FlagSet from sample
-func Var(fs *pflag.FlagSet, path string, sample interface{}, opts ...ConfigFieldsOption) error {
-	return DefaultConfiger.Var(fs, path, sample, opts...)
-}
-
-type configer struct {
-	*ConfigerOptions
-
-	// factory options
-	valueFiles   []string       // files, -f/--values
-	values       []string       // values, --set
-	stringValues []string       // values, --set-string
-	fileValues   []string       // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
-	fields       []*configField // all of config fields
-	//fs           *pflag.FlagSet
-
-	// instance data
-	data   map[string]interface{}
-	env    map[string]interface{}
-	path   []string
-	parsed bool
-	//samples []*ConfigFields
-}
-
-type ConfigFields struct {
-	fs     *pflag.FlagSet
-	path   string
-	sample interface{}
-	opts   []ConfigFieldsOption
-}
+var _ Configer = new(configer)
 
 func newConfiger() *configer {
 	return &configer{
@@ -151,123 +108,33 @@ func newConfiger() *configer {
 	}
 }
 
-func (p *configer) Parse(opts ...ConfigerOption) (ParsedConfiger, error) {
-	for _, opt := range opts {
-		opt(p.ConfigerOptions)
-	}
+type configer struct {
+	*ConfigerOptions
 
-	if err := p.ConfigerOptions.Validate(); err != nil {
-		return nil, err
-	}
+	valueFiles   []string       // files, -f/--values
+	values       []string       // values, --set servers[0].port=80
+	stringValues []string       // values, --set-string servers[0].name=007
+	fileValues   []string       // values from file, --set-file=rsaPubData=/etc/ssh/ssh_host_rsa_key.pub
+	fields       []*configField // all of config fields
 
-	if err := p.parse(); err != nil {
-		return nil, err
-	}
-
-	return p, nil
+	data   map[string]interface{}
+	env    map[string]interface{}
+	path   []string
+	parsed bool
 }
 
-//func (p *configer) FlagSet() *pflag.FlagSet {
-//	return p.fs
-//}
-
-func (p *configer) PrintFlags(out io.Writer) {
-	fmt.Fprintf(out, "configer FLAG:\n")
-	for _, value := range p.valueFiles {
-		fmt.Fprintf(out, "  --values=%s\n", value)
+func (p *configer) Path(names ...string) (ret *field.Path) {
+	for _, v := range append(p.path, names...) {
+		if v != "" {
+			ret.Child(v)
+		}
 	}
-	for _, value := range p.values {
-		fmt.Fprintf(out, "  --set=%s\n", value)
-	}
-	for _, value := range p.stringValues {
-		fmt.Fprintf(out, "  --set-string=%s\n", value)
-	}
-	for _, value := range p.fileValues {
-		fmt.Fprintf(out, "  --set-file=%s\n", value)
-	}
+	return ret
 }
 
-func (p *configer) parse() (err error) {
-	if p.parsed {
-		return nil
-	}
-
-	base := map[string]interface{}{}
-
-	// merge default from RegisterConfigFields.sample
-	base = mergePathFields(base, p.path, p.fields)
-
-	// merge WithDefault values
-	base = mergeValues(base, p.defaultValues)
-
-	// merge env from RegisterConfigFields.sample
-	base = mergeValues(base, p.env)
-
-	// configFile & valueFile --values
-	for _, filePath := range append(p.valueFiles, p.filesOverride...) {
-		m := map[string]interface{}{}
-
-		bytes, err := template.ParseTemplateFile(nil, filePath)
-		if err != nil {
-			return err
-		}
-
-		if err := yaml.Unmarshal(bytes, &m); err != nil {
-			return fmt.Errorf("failed to parse %s: %s", filePath, err)
-		}
-		// Merge with the previous map
-		base = mergeValues(base, m)
-		klog.V(1).InfoS("config load", "filePath", filePath)
-	}
-
-	// User specified a value via --set
-	for _, value := range p.values {
-		if err := strvals.ParseInto(value, base); err != nil {
-			return fmt.Errorf("failed parsing --set data: %s", err)
-		}
-		klog.V(1).InfoS("config load", "value", value)
-	}
-
-	// User specified a value via --set-string
-	for _, value := range p.stringValues {
-		if err := strvals.ParseIntoString(value, base); err != nil {
-			return fmt.Errorf("failed parsing --set-string data: %s", err)
-		}
-		klog.V(1).InfoS("config load", "filepath(string)", value)
-	}
-
-	// User specified a value via --set-file
-	for _, value := range p.fileValues {
-		reader := func(rs []rune) (interface{}, error) {
-			bytes, err := template.ParseTemplateFile(nil, string(rs))
-			return string(bytes), err
-		}
-		if err := strvals.ParseIntoFile(value, base, reader); err != nil {
-			return fmt.Errorf("failed parsing --set-file data: %s", err)
-		}
-		klog.V(1).InfoS("config load", "set-file", value)
-	}
-
-	base = p.mergeFlagValues(base)
-
-	// override
-	base = mergeValues(base, p.overrideValues)
-
-	p.data = base
-	p.parsed = true
-	return nil
-}
-
-// merge flag value into ${into}
-func (p *configer) mergeFlagValues(into map[string]interface{}) map[string]interface{} {
-	for _, f := range p.fields {
-		if v := p.getFlagValue(f); v != nil {
-			klog.V(10).InfoS("flag", "path", joinPath(append(p.path, f.configPath)...), "value", v)
-			mergeValues(into, pathValueToValues(joinPath(append(p.path, f.configPath)...), v))
-		}
-	}
-
-	return into
+// ValueFiles: return files list, which set by --set-file
+func (p *configer) ValueFiles() []string {
+	return append(p.valueFiles, p.filesOverride...)
 }
 
 // Envs: return envs list from fields, used with flags
@@ -293,211 +160,12 @@ func (p *configer) Flags() (names []string) {
 	return
 }
 
-func (p *configer) Set(path string, v interface{}) error {
-	if path == "" {
-		b, err := yaml.Marshal(v)
-		if err != nil {
-			return err
-		}
-		return yaml.Unmarshal(b, &p.data)
-	}
-
-	ps := strings.Split(path, ".")
-	src := map[string]interface{}{ps[len(ps)-1]: v}
-
-	for i := len(ps) - 2; i >= 0; i-- {
-		src = map[string]interface{}{ps[i]: src}
-	}
-
-	p.data = mergeValues(p.data, src)
-
-	return nil
-}
-
-func (p *configer) GetConfiger(path string) ParsedConfiger {
-	if p == nil || !p.parsed {
-		return nil
-	}
-
-	data, _ := p.GetRaw(path).(map[string]interface{})
-
-	// noneed deepCopy
-	out := new(configer)
-	*out = *p
-
-	out.path = append(clonePath(p.path), parsePath(path)...)
-	out.data = data
-
-	return out
-}
-
-func (p *configer) GetRaw(path string) interface{} {
-	if path == "" {
-		return Values(p.data)
-	}
-
-	v, err := Values(p.data).PathValue(path)
-	if err != nil {
-		klog.V(5).InfoS("get pathValue err, ignored", "path", path, "v", v, "err", err)
-		return nil
-	}
-	return v
-}
-
-func (p *configer) GetString(path string) string {
-	v, err := Values(p.data).PathValue(path)
-	if err != nil {
-		return ""
-	}
-
-	return util.ToString(v)
-}
-
-func (p *configer) GetBool(path string) (bool, error) {
-	v, err := Values(p.data).PathValue(path)
-	if err != nil {
-		return false, err
-	}
-
-	return util.ToBool(v), nil
-}
-
-func (p *configer) GetBoolDef(path string, def bool) bool {
-	v, err := p.GetBool(path)
-	if err != nil {
-		return def
-	}
-	return v
-}
-
-func (p *configer) GetFloat64(path string) (float64, error) {
-	v, err := Values(p.data).PathValue(path)
-	if err != nil {
-		return 0, err
-	}
-
-	return util.ToFloat64(v), nil
-}
-
-func (p *configer) GetFloat64Def(path string, def float64) float64 {
-	v, err := p.GetFloat64(path)
-	if err != nil {
-		return def
-	}
-
-	return v
-}
-
-func (p *configer) GetInt64(path string) (int64, error) {
-	v, err := p.GetFloat64(path)
-	if err != nil {
-		return 0, err
-	}
-
-	return util.ToInt64(v), nil
-}
-
-func (p *configer) GetInt64Def(path string, def int64) int64 {
-	v, err := p.GetInt64(path)
-	if err != nil {
-		return def
-	}
-	return v
-}
-
-func (p *configer) GetInt(path string) (int, error) {
-	v, err := p.GetFloat64(path)
-	if err != nil {
-		return 0, err
-	}
-
-	return util.ToInt(v), nil
-}
-
-func (p *configer) GetIntDef(path string, def int) int {
-	v, err := p.GetInt(path)
-	if err != nil {
-		return def
-	}
-	return v
-}
-
-type validator interface {
-	Validate() error
-}
-
-func (p *configer) IsSet(path string) bool {
-	_, err := Values(p.data).PathValue(path)
-	return err == nil
-}
-
-func (p *configer) Read(path string, into interface{}) error {
-	if into == nil {
-		return nil
-	}
-
-	if v := p.GetRaw(path); v != nil {
-		data, err := yaml.Marshal(v)
-		//klog.InfoS("marshal", "v", v, "data", string(data), "err", err)
-		if err != nil {
-			return err
-		}
-
-		err = yaml.Unmarshal(data, into)
-		if err != nil {
-			klog.V(5).InfoS("unmarshal", "data", string(data), "err", err)
-			if klog.V(5).Enabled() {
-				panic(err)
-			}
-			return err
-		}
-	}
-
-	if v, ok := into.(validator); ok {
-		if err := v.Validate(); err != nil {
-			return err
-		}
-	}
-
-	if klog.V(10).Enabled() {
-		b, _ := yaml.Marshal(into)
-		klog.Infof("Read \n[%s]\n%s", path, string(b))
-	}
-	return nil
-}
-
-func (p *configer) String() string {
-	buf, err := yaml.Marshal(p.data)
-	if err != nil {
-		return err.Error()
-	}
-	return string(buf)
-}
-
-func (p *configer) Document() string {
-	buf, err := yaml.Marshal(p.data)
-	if err != nil {
-		return err.Error()
-	}
-	return string(buf)
-}
-
-func (p *configer) getEnv(key string) (string, bool) {
-	val, ok := os.LookupEnv(key)
-	return val, ok && (p.allowEmptyEnv || val != "")
-}
-
 // AddFlags: add configer flags to *pflag.FlagSet, like -f, --set, --set-string, --set-file
 func (p *configer) AddFlags(f *pflag.FlagSet) {
 	f.StringSliceVarP(&p.valueFiles, "values", "f", p.valueFiles, "specify values in a YAML file or a URL (can specify multiple)")
 	f.StringArrayVar(&p.values, "set", p.values, "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&p.stringValues, "set-string", p.stringValues, "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringArrayVar(&p.fileValues, "set-file", p.fileValues, "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
-}
-
-// ValueFiles: return files list, which set by --set-file
-func (p *configer) ValueFiles() []string {
-	return append(p.valueFiles, p.filesOverride...)
 }
 
 // Var: set config fields to yaml configfile reader and pflags.FlagSet from sample
@@ -534,32 +202,21 @@ func (p *configer) Var(fs *pflag.FlagSet, path string, sample interface{}, opts 
 		return fmt.Errorf("Addflag: sample must be a struct, got %v/%v", rv.Kind(), rt)
 	}
 
-	if err := p._var(parsePath(path), fs, rv, rt, o); err != nil {
+	if err := p.setVar(parsePath(path), fs, rv, rt, o); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func indirectValue(rv reflect.Value, rt reflect.Type) (reflect.Value, reflect.Type) {
-	if rv.Kind() == reflect.Ptr {
-		if rv.IsNil() {
-			rv.Set(reflect.New(rt.Elem()))
-		}
-		rv = rv.Elem()
-		rt = rv.Type()
-	}
-	return rv, rt
-}
-
-func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt reflect.Type, opt *configFieldsOptions) error {
+func (p *configer) setVar(path []string, fs *pflag.FlagSet, sampleRv reflect.Value, sampleRt reflect.Type, opt *configFieldsOptions) error {
 	if len(path) > p.maxDepth {
 		return fmt.Errorf("path.depth is larger than the maximum allowed depth of %d", p.maxDepth)
 	}
 
-	for i := 0; i < _rv.NumField(); i++ {
-		sf := _rt.Field(i)
-		rv := _rv.Field(i)
+	for i := 0; i < sampleRv.NumField(); i++ {
+		sf := sampleRt.Field(i)
+		rv := sampleRv.Field(i)
 		rt := rv.Type()
 
 		if !rv.CanSet() {
@@ -572,7 +229,6 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 		if tag.skip {
 			continue
 		}
-		//klog.InfoS("getTagOpts", "flag", tag.Flag, "def", tag.Default)
 
 		curPath := make([]string, len(path))
 		copy(curPath, path)
@@ -585,7 +241,6 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 		ps := joinPath(curPath...)
 		def := opt.getDefaultValue(ps, tag, p.ConfigerOptions)
 		var field *configField
-		//klog.InfoS("path", "ps", ps, "def", def, "type", util.Name(rv.Addr().Interface()))
 
 		switch value := rv.Addr().Interface().(type) {
 		case pflag.Value:
@@ -642,7 +297,7 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 			switch rt.Kind() {
 			// iterate struct{}
 			case reflect.Struct:
-				if err := p._var(curPath, fs, rv, rt, opt); err != nil {
+				if err := p.setVar(curPath, fs, rv, rt, opt); err != nil {
 					return err
 				}
 				continue
@@ -657,18 +312,109 @@ func (p *configer) _var(path []string, fs *pflag.FlagSet, _rv reflect.Value, _rt
 	return nil
 }
 
-func (p *configer) getFlagValue(f *configField) interface{} {
-	if f.flag != "" && f.fs.Changed(f.flag) {
-		return reflect.ValueOf(f.flagValue).Elem().Interface()
+// MustParse
+func (p *configer) MustParse(opts ...ConfigerOption) ParsedConfiger {
+	pc, err := p.Parse(opts...)
+	if err != nil {
+		panic(err)
 	}
 
+	return pc
+}
+
+// Parse
+func (p *configer) Parse(opts ...ConfigerOption) (ParsedConfiger, error) {
+	if p.parsed {
+		return nil, errors.New("already parsed")
+	}
+
+	for _, opt := range opts {
+		opt(p.ConfigerOptions)
+	}
+
+	if err := p.ConfigerOptions.Validate(); err != nil {
+		return nil, err
+	}
+
+	if err := p.parse(); err != nil {
+		return nil, err
+	}
+
+	return &parsedConfiger{p}, nil
+}
+
+func (p *configer) parse() (err error) {
+	base := map[string]interface{}{}
+
+	// merge default from RegisterConfigFields.sample
+	base = mergePathFields(base, p.path, p.fields)
+
+	// merge WithDefault values
+	base = mergeValues(base, p.defaultValues)
+
+	// merge env from RegisterConfigFields.sample
+	base = mergeValues(base, p.env)
+
+	// configFile & valueFile --values
+	for _, filePath := range append(p.valueFiles, p.filesOverride...) {
+		m := map[string]interface{}{}
+
+		bytes, err := template.ParseTemplateFile(nil, filePath)
+		if err != nil {
+			return err
+		}
+
+		if err := yaml.Unmarshal(bytes, &m); err != nil {
+			return fmt.Errorf("failed to parse %s: %s", filePath, err)
+		}
+		// Merge with the previous map
+		base = mergeValues(base, m)
+	}
+
+	// User specified a value via --set
+	for _, value := range p.values {
+		if err := strvals.ParseInto(value, base); err != nil {
+			return fmt.Errorf("failed parsing --set data: %s", err)
+		}
+	}
+
+	// User specified a value via --set-string
+	for _, value := range p.stringValues {
+		if err := strvals.ParseIntoString(value, base); err != nil {
+			return fmt.Errorf("failed parsing --set-string data: %s", err)
+		}
+		dlog("config load", "filepath(string)", value)
+	}
+
+	// User specified a value via --set-file
+	for _, value := range p.fileValues {
+		reader := func(rs []rune) (interface{}, error) {
+			bytes, err := template.ParseTemplateFile(nil, string(rs))
+			return string(bytes), err
+		}
+		if err := strvals.ParseIntoFile(value, base, reader); err != nil {
+			return fmt.Errorf("failed parsing --set-file data: %s", err)
+		}
+	}
+
+	base = p.mergeFlagValues(base)
+
+	// override
+	base = mergeValues(base, p.overrideValues)
+
+	p.data = base
+	p.parsed = true
 	return nil
 }
 
-func (p *configer) GetDefault(path string) (interface{}, bool) {
-	return "", false
-}
+// merge flag value into ${into}
+func (p *configer) mergeFlagValues(into map[string]interface{}) map[string]interface{} {
+	for _, f := range p.fields {
+		if v := f.getFlagValue(); v != nil {
+			dlog("flag", "path", joinPath(append(p.path, f.configPath)...), "value", v)
+			mergeValues(into, pathValueToValues(joinPath(append(p.path, f.configPath)...), v))
+		}
+	}
 
-func (p *configer) GetDescription(path string) (string, bool) {
-	return "", false
+	return into
 }

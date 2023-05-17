@@ -10,8 +10,8 @@ db, err := orm.Open(driverName, dataSourceName)
 * Define table struct to database and automigrate
 ```go
 type User struct {
-    Id   *int   `sql:",index,auto_increment=1000"`
-    Name string `sql:",primary_key"`
+    Id   *int   `sql:"index,auto_increment=1000"`
+    Name string `sql:"primary_key"`
 }
 
 // create table `user` if not exist
@@ -80,7 +80,7 @@ err := db.List(context.Backgroud(), &users,
 * `Update` update one record
 ```go
 type User struct {
-    Name   *string `sql:",where"`
+    Name   *string `sql:"where"`
     Age    *int
     Passwd *string
 }
@@ -140,19 +140,22 @@ sqltag: <key>[=<value>],...
 ```
 
 sql tags:
-  - `name`: name of the field
-  - `where`
-  - `inline`
-  - `index`
-  - `primary_key`
-  - `auto_increment`
-  - `default`
-  - `size`
-  - `precision`
-  - `scale`
-  - `not_null`
-  - `unique`
-  - `comment`
-  - `auto_createtime`
-  - `auto_updatetime`
-  - `type`
+
+```yaml
+  name:   name of the field
+  where:  field of the where expression
+  inline: 展开 struct 的字段
+  index:  
+  primary_key:
+  auto_increment:
+  default:
+  size:
+  precision: used for mysql datetime(precision)
+  scale: no used
+  not_null, notnull:
+  unique, unique_index:
+  comment:
+  auto_createtime:
+  auto_updatetime:
+  type: [bool, int, uint, float, string, time, bytes]
+```

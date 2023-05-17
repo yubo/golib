@@ -62,7 +62,7 @@ func (p PageParams) GetListOptions(query string, total *int, orders ...string) (
 			sqlOrder(p.Order)}, orders...)
 	}
 	return &GetListOptions{
-		Query:   query,
+		Query:   strings.Trim(query, ","),
 		Offset:  offset,
 		Limit:   limit,
 		Total:   total,

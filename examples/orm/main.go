@@ -22,7 +22,7 @@ func main() {
 }
 
 type User struct {
-	Name      *string `sql:",primary_key,where"`
+	Name      *string `sql:"primary_key,where"`
 	Age       *int
 	CreatedAt *time.Time
 	UpdatedAt *time.Time

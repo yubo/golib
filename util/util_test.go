@@ -11,6 +11,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestName(t *testing.T) {
+	type Interface interface{}
+	type Foo struct{}
+	type bar struct{}
+	cases := []struct {
+		in   any
+		want string
+	}{
+		{Name, "Name"},
+		{time.Unix, "Unix"},
+		{"", "string"},
+		{0, "int"},
+		{Foo{}, "util.Foo"},
+		{&Foo{}, "*util.Foo"},
+		{[2]Foo{}, "[2]util.Foo"},
+		{bar{}, "util.bar"},
+		{time.Time{}, "time.Time"},
+		{nil, "nil"},
+		{(*Foo)(nil), "*util.Foo"},
+		{(**Foo)(nil), "**util.Foo"},
+		{(***Foo)(nil), "***util.Foo"},
+		{(map[string]*Foo)(nil), "map[string]*util.Foo"},
+		{(*map[string]*Foo)(nil), "*map[string]*util.Foo"},
+		{([]*Foo)(nil), "[]*util.Foo"},
+		{(*[]*Foo)(nil), "*[]*util.Foo"},
+		{Interface(([]*Foo)(nil)), "[]*util.Foo"},
+		{Interface((*[]*Foo)(nil)), "*[]*util.Foo"},
+		{Interface(([]*bar)(nil)), "[]*util.bar"},
+		{(chan (*Foo)(nil)), "chan *util.Foo"},
+	}
+
+	for i, c := range cases {
+		require.Equal(t, c.want, Name(c.in), i)
+	}
+}
+
 func TestSrcAddrs(t *testing.T) {
 	cases := []struct {
 		addrs []net.IPAddr
@@ -324,27 +360,6 @@ func TestSubStr(t *testing.T) {
 	for i, c := range cases {
 		got := SubStr(c.in, c.begin, c.end)
 		require.Equalf(t, c.want, got, "%d - SubStr(%s, %d, %d)", i, c.in, c.begin, c.end)
-	}
-
-}
-
-func TestName(t *testing.T) {
-	type Foo struct{}
-	type bar struct{}
-	cases := []struct {
-		in   any
-		want string
-	}{
-		{Foo{}, "Foo"},
-		{&Foo{}, "Foo"},
-		{bar{}, "bar"},
-		{Name, "Name"},
-		{time.Time{}, "Time"},
-		{time.Unix, "Unix"},
-	}
-
-	for _, c := range cases {
-		require.Equal(t, c.want, Name(c.in))
 	}
 
 }

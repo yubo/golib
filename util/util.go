@@ -111,26 +111,6 @@ func StructCopy(dst, src interface{}) error {
 	return nil
 }
 
-func GetType(v interface{}) string {
-	if v == nil {
-		return "nil"
-	}
-	t := reflect.TypeOf(v)
-	switch t.Kind() {
-	case reflect.Ptr:
-		//return "*" + t.Elem().Name()
-		return t.Elem().Name()
-	case reflect.Map:
-		return fmt.Sprintf("%v", reflect.MapOf(t.Key(), t.Elem()))
-	default:
-		return t.Name()
-	}
-}
-
-func GetName(v interface{}) string {
-	return strings.ToLower(GetType(v))
-}
-
 // Environment Variables $HOME value instead of ${HOME}
 func EnvVarFilter(data []byte) []byte {
 	// flag : 0 - out,  1 - find '$', 2 - in value
@@ -769,13 +749,35 @@ func NewUUID() string {
 
 // Name get name of type/func, NameOfType, NameOfFunc, TypeName, FuncName
 func Name(a any) string {
-	rv := reflect.Indirect(reflect.ValueOf(a))
-	switch rv.Kind() {
-	case reflect.Func:
-		return funcName(runtime.FuncForPC(rv.Pointer()).Name())
-	default:
-		return rv.Type().Name()
+	if a == nil {
+		return "nil"
 	}
+
+	rv := reflect.ValueOf(a)
+	rt := rv.Type()
+	buf := new(bytes.Buffer)
+
+	for rt.Kind() == reflect.Ptr {
+		buf.WriteByte('*')
+		rt = rt.Elem()
+	}
+
+	switch rt.Kind() {
+	case reflect.Func:
+		buf.WriteString(funcName(runtime.FuncForPC(rv.Pointer()).Name()))
+	//case reflect.Map:
+	//	buf.WriteString(reflect.MapOf(rt.Key(), rt.Elem()).String())
+	//case reflect.Slice:
+	//	buf.WriteString(reflect.SliceOf(rt.Elem()).String())
+	//case reflect.Array:
+	//	buf.WriteString(reflect.ArrayOf(rt.Len(), rt.Elem()).String())
+	//case reflect.Chan:
+	//	buf.WriteString(reflect.ChanOf(rt.ChanDir(), rt.Elem()).String())
+	default:
+		buf.WriteString(rt.String())
+	}
+
+	return buf.String()
 }
 
 // PkgPath get package path of type/func
