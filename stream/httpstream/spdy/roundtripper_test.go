@@ -416,9 +416,8 @@ func TestRoundTripAndNewConnection(t *testing.T) {
 				if !ok {
 					t.Fatalf("invalid proxy auth header %s", proxyCalledWithAuthHeader)
 				}
-				if username != expectedUsername || password != expectedPassword {
-					t.Fatalf("expected proxy auth \"%s:%s\", got \"%s:%s\"", expectedUsername, expectedPassword, username, password)
-				}
+				require.Equal(t, expectedUsername, username)
+				require.Equal(t, expectedPassword, password)
 			} else if proxyCalledWithAuth {
 				t.Fatalf("proxy authorization unexpected, got %q", proxyCalledWithAuthHeader)
 			}

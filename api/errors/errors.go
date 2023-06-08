@@ -147,9 +147,22 @@ func NewAlreadyExists(name string) *StatusError {
 		Details: &api.StatusDetails{
 			Name: name,
 		},
-		Message: fmt.Sprintf(
-			"%q already exists, the server was not able to generate a unique name for the object",
-			name),
+		Message: fmt.Sprintf("%q already exists", name),
+	}}
+}
+
+// NewGenerateNameConflict returns an error indicating the server
+// was not able to generate a valid name for a resource.
+func NewGenerateNameConflict(name string, retryAfterSeconds int) *StatusError {
+	return &StatusError{api.Status{
+		Status: api.StatusFailure,
+		Code:   http.StatusConflict,
+		Reason: api.StatusReasonAlreadyExists,
+		Details: &api.StatusDetails{
+			Name:              name,
+			RetryAfterSeconds: int32(retryAfterSeconds),
+		},
+		Message: fmt.Sprintf("%q already exists, the server was not able to generate a unique name for the object", name),
 	}}
 }
 

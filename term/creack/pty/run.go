@@ -1,10 +1,20 @@
 package pty
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"syscall"
 )
+
+// ErrUnsupported is returned if a function is not
+// available on the current platform.
+var ErrUnsupported = errors.New("unsupported")
+
+// Open a pty and its corresponding tty.
+func Open() (pty, tty *os.File, err error) {
+	return open()
+}
 
 // Start assigns a pseudo-terminal tty os.File to c.Stdin, c.Stdout,
 // and c.Stderr, calls c.Start, and returns the File of the tty's

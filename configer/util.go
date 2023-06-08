@@ -7,9 +7,14 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/yubo/golib/util"
+	"github.com/yubo/golib/util/validation/field"
 	"github.com/yubo/golib/util/yaml"
 	"k8s.io/klog/v2"
 )
+
+type fieldValidator interface {
+	Validate(fldPath *field.Path) error
+}
 
 type validator interface {
 	Validate() error

@@ -765,14 +765,14 @@ func Name(a any) string {
 	switch rt.Kind() {
 	case reflect.Func:
 		buf.WriteString(funcName(runtime.FuncForPC(rv.Pointer()).Name()))
-	//case reflect.Map:
-	//	buf.WriteString(reflect.MapOf(rt.Key(), rt.Elem()).String())
-	//case reflect.Slice:
-	//	buf.WriteString(reflect.SliceOf(rt.Elem()).String())
-	//case reflect.Array:
-	//	buf.WriteString(reflect.ArrayOf(rt.Len(), rt.Elem()).String())
-	//case reflect.Chan:
-	//	buf.WriteString(reflect.ChanOf(rt.ChanDir(), rt.Elem()).String())
+	case reflect.Map:
+		buf.WriteString(reflect.MapOf(rt.Key(), rt.Elem()).String())
+	case reflect.Slice:
+		buf.WriteString(reflect.SliceOf(rt.Elem()).String())
+	case reflect.Array:
+		buf.WriteString(reflect.ArrayOf(rt.Len(), rt.Elem()).String())
+	case reflect.Chan:
+		buf.WriteString(reflect.ChanOf(rt.ChanDir(), rt.Elem()).String())
 	default:
 		buf.WriteString(rt.String())
 	}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/yubo/golib/util"
 	"github.com/yubo/golib/util/errors"
+	"github.com/yubo/golib/util/validation/field"
 	"github.com/yubo/golib/util/yaml"
 )
 
@@ -185,6 +186,11 @@ func (p *parsedConfiger) IsSet(path string) bool {
 	return err == nil
 }
 
+func (p *parsedConfiger) Path(path ...string) *field.Path {
+	return field.NewPath(joinPath(p.path...), path...)
+
+}
+
 func (p *parsedConfiger) Read(path string, into interface{}) error {
 	if into == nil {
 		return nil
@@ -205,7 +211,12 @@ func (p *parsedConfiger) Read(path string, into interface{}) error {
 		return errors.Wrap(err, string(data))
 	}
 
-	if v, ok := into.(validator); ok {
+	switch v := into.(type) {
+	case fieldValidator:
+		if err := v.Validate(p.Path(path)); err != nil {
+			return err
+		}
+	case validator:
 		if err := v.Validate(); err != nil {
 			return err
 		}

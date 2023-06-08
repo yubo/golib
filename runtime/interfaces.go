@@ -24,7 +24,7 @@ const (
 	// APIVersionInternal may be used if you are registering a type that should not
 	// be considered stable or serialized - it is a convention only and has no
 	// special behavior in this package.
-	APIVersionInternal = "__internal"
+	APIVersionInternal = "__internal__"
 )
 
 type Validator interface {
