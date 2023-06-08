@@ -32,8 +32,8 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%+s",
-		"github.com/pkg/errors.init\n" +
-			"\t.+/github.com/pkg/errors/stack_test.go",
+		"github.com/yubo/golib/util/errors.init\n" +
+			"\t.+/golib/util/errors/stack_test.go",
 	}, {
 		0,
 		"%s",
@@ -79,8 +79,8 @@ func TestFrameFormat(t *testing.T) {
 	}, {
 		initpc,
 		"%+v",
-		"github.com/pkg/errors.init\n" +
-			"\t.+/github.com/pkg/errors/stack_test.go:9",
+		"github.com/yubo/golib/util/errors.init\n" +
+			"\t.+/golib/util/errors/stack_test.go:9",
 	}, {
 		0,
 		"%v",
@@ -98,7 +98,7 @@ func TestFuncname(t *testing.T) {
 	}{
 		{"", ""},
 		{"runtime.main", "main"},
-		{"github.com/pkg/errors.funcname", "funcname"},
+		{"github.com/yubo/golib/util/errors.funcname", "funcname"},
 		{"funcname", "funcname"},
 		{"io.copyBuffer", "copyBuffer"},
 		{"main.(*R).Write", "(*R).Write"},
@@ -119,25 +119,25 @@ func TestStackTrace(t *testing.T) {
 		want []string
 	}{{
 		New("ooh"), []string{
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:121",
+			"github.com/yubo/golib/util/errors.TestStackTrace\n" +
+				"\t.+/golib/util/errors/stack_test.go:121",
 		},
 	}, {
 		Wrap(New("ooh"), "ahh"), []string{
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:126", // this is the stack of Wrap, not New
+			"github.com/yubo/golib/util/errors.TestStackTrace\n" +
+				"\t.+/golib/util/errors/stack_test.go:126", // this is the stack of Wrap, not New
 		},
 	}, {
 		Cause(Wrap(New("ooh"), "ahh")), []string{
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:131", // this is the stack of New
+			"github.com/yubo/golib/util/errors.TestStackTrace\n" +
+				"\t.+/golib/util/errors/stack_test.go:131", // this is the stack of New
 		},
 	}, {
 		func() error { return New("ooh") }(), []string{
-			`github.com/pkg/errors.TestStackTrace.func1` +
-				"\n\t.+/github.com/pkg/errors/stack_test.go:136", // this is the stack of New
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:136", // this is the stack of New's caller
+			`github.com/yubo/golib/util/errors.TestStackTrace.func1` +
+				"\n\t.+/golib/util/errors/stack_test.go:136", // this is the stack of New
+			"github.com/yubo/golib/util/errors.TestStackTrace\n" +
+				"\t.+/golib/util/errors/stack_test.go:136", // this is the stack of New's caller
 		},
 	}, {
 		Cause(func() error {
@@ -145,12 +145,12 @@ func TestStackTrace(t *testing.T) {
 				return Errorf("hello %s", fmt.Sprintf("world: %s", "ooh"))
 			}()
 		}()), []string{
-			`github.com/pkg/errors.TestStackTrace.func2.1` +
-				"\n\t.+/github.com/pkg/errors/stack_test.go:145", // this is the stack of Errorf
-			`github.com/pkg/errors.TestStackTrace.func2` +
-				"\n\t.+/github.com/pkg/errors/stack_test.go:146", // this is the stack of Errorf's caller
-			"github.com/pkg/errors.TestStackTrace\n" +
-				"\t.+/github.com/pkg/errors/stack_test.go:147", // this is the stack of Errorf's caller's caller
+			`github.com/yubo/golib/util/errors.TestStackTrace.func2.1` +
+				"\n\t.+/golib/util/errors/stack_test.go:145", // this is the stack of Errorf
+			`github.com/yubo/golib/util/errors.TestStackTrace.func2` +
+				"\n\t.+/golib/util/errors/stack_test.go:146", // this is the stack of Errorf's caller
+			"github.com/yubo/golib/util/errors.TestStackTrace\n" +
+				"\t.+/golib/util/errors/stack_test.go:147", // this is the stack of Errorf's caller's caller
 		},
 	}}
 	for i, tt := range tests {
@@ -225,10 +225,10 @@ func TestStackTraceFormat(t *testing.T) {
 		stackTrace()[:2],
 		"%+v",
 		"\n" +
-			"github.com/pkg/errors.stackTrace\n" +
-			"\t.+/github.com/pkg/errors/stack_test.go:174\n" +
-			"github.com/pkg/errors.TestStackTraceFormat\n" +
-			"\t.+/github.com/pkg/errors/stack_test.go:225",
+			"github.com/yubo/golib/util/errors.stackTrace\n" +
+			"\t.+/golib/util/errors/stack_test.go:174\n" +
+			"github.com/yubo/golib/util/errors.TestStackTraceFormat\n" +
+			"\t.+/golib/util/errors/stack_test.go:225",
 	}, {
 		stackTrace()[:2],
 		"%#v",

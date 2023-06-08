@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"github.com/yubo/golib/stream/httpstream"
-	"github.com/yubo/golib/stream/httpstream/docker/spdystream"
+	"github.com/yubo/golib/stream/httpstream/moby/spdystream"
 )
 
 func runProxy(t *testing.T, backendUrl string, proxyUrl chan<- string, proxyDone chan<- struct{}, errCh chan<- error) {
@@ -247,12 +247,12 @@ func TestConnectionPings(t *testing.T) {
 		t.Fatalf("client: error connecting to proxy: %v", err)
 	}
 	defer clConn.Close()
-	start := time.Now()
 	clSPDYConn, err := NewClientConnection(clConn)
 	if err != nil {
 		t.Fatalf("client: error creating spdy connection: %v", err)
 	}
 	defer clSPDYConn.Close()
+	start := time.Now()
 	clSPDYStream, err := clSPDYConn.CreateStream(http.Header{})
 	if err != nil {
 		t.Fatalf("client: error creating stream: %v", err)

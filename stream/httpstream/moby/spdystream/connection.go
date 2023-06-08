@@ -1,21 +1,36 @@
+/*
+   Copyright 2014-2021 Docker Inc.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package spdystream
 
 import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/yubo/golib/stream/httpstream/docker/spdystream/spdy"
+	"github.com/yubo/golib/stream/httpstream/moby/spdystream/spdy"
 )
 
 var (
 	ErrInvalidStreamId   = errors.New("Invalid stream id")
-	ErrTimeout           = errors.New("Timeout occured")
+	ErrTimeout           = errors.New("Timeout occurred")
 	ErrReset             = errors.New("Stream reset")
 	ErrWriteClosedStream = errors.New("Write on closed stream")
 )
@@ -102,14 +117,14 @@ Loop:
 			// attempts to grab the write lock that Write() already has, causing a
 			// deadlock.
 			//
-			// See https://github.com/yubo/golib/stream/httpstream/docker/spdystream/issues/49 for more details.
+			// See https://github.com/moby/spdystream/issues/49 for more details.
 			go func() {
-				for _ = range resetChan {
+				for range resetChan {
 				}
 			}()
 
 			go func() {
-				for _ = range setTimeoutChan {
+				for range setTimeoutChan {
 				}
 			}()
 
@@ -128,7 +143,7 @@ Loop:
 	}
 
 	// Drain resetChan
-	for _ = range resetChan {
+	for range resetChan {
 	}
 }
 
@@ -201,7 +216,7 @@ type Connection struct {
 	shutdownChan chan error
 	hasShutdown  bool
 
-	// for testing https://github.com/yubo/golib/stream/httpstream/docker/spdystream/pull/56
+	// for testing https://github.com/moby/spdystream/pull/56
 	dataFrameHandler func(*spdy.DataFrame) error
 }
 
@@ -285,7 +300,7 @@ func (s *Connection) Ping() (time.Duration, error) {
 		}
 		break
 	}
-	return time.Now().Sub(startTime), nil
+	return time.Since(startTime), nil
 }
 
 // Serve handles frames sent from the server, including reply frames
@@ -326,7 +341,7 @@ Loop:
 		readFrame, err := s.framer.ReadFrame()
 		if err != nil {
 			if err != io.EOF {
-				log.Printf("frame read error: %s", err)
+				debugMessage("frame read error: %s", err)
 			} else {
 				debugMessage("(%p) EOF received", s)
 			}
@@ -422,7 +437,7 @@ func (s *Connection) frameHandler(frameQueue *PriorityFrameQueue, newHandler Str
 		}
 
 		if frameErr != nil {
-			log.Printf("frame handling error: %s", frameErr)
+			debugMessage("frame handling error: %s", frameErr)
 		}
 	}
 }
@@ -452,6 +467,7 @@ func (s *Connection) addStreamFrame(frame *spdy.SynStreamFrame) {
 		dataChan:   make(chan []byte),
 		headerChan: make(chan http.Header),
 		closeChan:  make(chan bool),
+		priority:   frame.Priority,
 	}
 	if frame.CFHeader.Flags&spdy.ControlFlagFin != 0x00 {
 		stream.closeRemoteChannels()
@@ -474,7 +490,7 @@ func (s *Connection) checkStreamFrame(frame *spdy.SynStreamFrame) bool {
 		go func() {
 			resetErr := s.sendResetFrame(spdy.ProtocolError, frame.StreamId)
 			if resetErr != nil {
-				log.Printf("reset error: %s", resetErr)
+				debugMessage("reset error: %s", resetErr)
 			}
 		}()
 		return false
@@ -719,7 +735,7 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 			select {
 			case err, ok := <-s.shutdownChan:
 				if ok {
-					log.Printf("Unhandled close error after %s: %s", duration, err)
+					debugMessage("Unhandled close error after %s: %s", duration, err)
 				}
 			default:
 			}
@@ -727,8 +743,6 @@ func (s *Connection) shutdown(closeTimeout time.Duration) {
 		s.shutdownChan <- err
 	}
 	close(s.shutdownChan)
-
-	return
 }
 
 // Closes spdy connection by sending GoAway frame and initiating shutdown
@@ -752,11 +766,10 @@ func (s *Connection) Close() error {
 	}
 
 	err := s.framer.WriteFrame(goAwayFrame)
+	go s.shutdown(s.closeTimeout)
 	if err != nil {
 		return err
 	}
-
-	go s.shutdown(s.closeTimeout)
 
 	return nil
 }

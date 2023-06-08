@@ -23,7 +23,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -119,7 +119,7 @@ func (s *SpdyRoundTripper) TLSClientConfig() *tls.Config {
 	return s.tlsConfig
 }
 
-// Dial implements github.com/yubo/golib/util/net.Dialer.
+// Dial implements k8s.io/apimachinery/pkg/util/net.Dialer.
 func (s *SpdyRoundTripper) Dial(req *http.Request) (net.Conn, error) {
 	conn, err := s.dial(req)
 	if err != nil {
@@ -295,9 +295,10 @@ func (s *SpdyRoundTripper) proxyAuth(proxyURL *url.URL) string {
 	if proxyURL == nil || proxyURL.User == nil {
 		return ""
 	}
-	credentials := proxyURL.User.String()
-	encodedAuth := base64.StdEncoding.EncodeToString([]byte(credentials))
-	return fmt.Sprintf("Basic %s", encodedAuth)
+	username := proxyURL.User.Username()
+	password, _ := proxyURL.User.Password()
+	auth := username + ":" + password
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
 // RoundTrip executes the Request and upgrades it. After a successful upgrade,
@@ -334,12 +335,12 @@ func (s *SpdyRoundTripper) NewConnection(resp *http.Response) (httpstream.Connec
 	if (resp.StatusCode != http.StatusSwitchingProtocols) || !strings.Contains(connectionHeader, strings.ToLower(httpstream.HeaderUpgrade)) || !strings.Contains(upgradeHeader, strings.ToLower(HeaderSpdy31)) {
 		defer resp.Body.Close()
 		responseError := ""
-		responseErrorBytes, err := ioutil.ReadAll(resp.Body)
+		responseErrorBytes, err := io.ReadAll(resp.Body)
 		if err != nil {
 			responseError = "unable to read error from server response"
 		} else {
 			// TODO: I don't belong here, I should be abstracted from this class
-			//if obj, err := statusCodecs.UniversalDecoder().Decode(responseErrorBytes, &api.Status{}); err == nil {
+			//if obj, _, err := statusCodecs.UniversalDecoder().Decode(responseErrorBytes, nil, &api.Status{}); err == nil {
 			if obj, err := scheme.Codecs.UniversalDecoder().Decode(responseErrorBytes, &api.Status{}); err == nil {
 				if status, ok := obj.(*api.Status); ok {
 					return nil, &apierrors.StatusError{ErrStatus: *status}

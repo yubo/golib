@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/yubo/golib/stream/httpstream"
-	"github.com/yubo/golib/stream/httpstream/docker/spdystream"
+	"github.com/yubo/golib/stream/httpstream/moby/spdystream"
 	"k8s.io/klog/v2"
 )
 

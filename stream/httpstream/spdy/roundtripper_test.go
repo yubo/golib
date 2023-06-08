@@ -29,11 +29,11 @@ import (
 	"testing"
 
 	"github.com/armon/go-socks5"
-	"github.com/elazarl/goproxy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/yubo/golib/stream/httpstream"
+	utilnettesting "github.com/yubo/golib/util/net/testing"
 )
 
 type serverHandlerConfig struct {
@@ -313,6 +313,7 @@ func TestRoundTripAndNewConnection(t *testing.T) {
 				},
 			))
 			defer server.Close()
+			t.Logf("Server URL: %v", server.URL)
 
 			serverURL, err := url.Parse(server.URL)
 			if err != nil {
@@ -330,18 +331,20 @@ func TestRoundTripAndNewConnection(t *testing.T) {
 			var proxyCalledWithAuth bool
 			var proxyCalledWithAuthHeader string
 			if testCase.proxyServerFunc != nil {
-				proxyHandler := goproxy.NewProxyHttpServer()
-
-				proxyHandler.OnRequest().HandleConnectFunc(func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
-					proxyCalledWithHost = host
+				proxyHandler := utilnettesting.NewHTTPProxyHandler(t, func(req *http.Request) bool {
+					proxyCalledWithHost = req.Host
 
 					proxyAuthHeaderName := "Proxy-Authorization"
-					_, proxyCalledWithAuth = ctx.Req.Header[proxyAuthHeaderName]
-					proxyCalledWithAuthHeader = ctx.Req.Header.Get(proxyAuthHeaderName)
-					return goproxy.OkConnect, host
+					_, proxyCalledWithAuth = req.Header[proxyAuthHeaderName]
+					proxyCalledWithAuthHeader = req.Header.Get(proxyAuthHeaderName)
+					return true
 				})
+				defer proxyHandler.Wait()
 
 				proxy := testCase.proxyServerFunc(proxyHandler)
+				defer proxy.Close()
+
+				t.Logf("Proxy URL: %v", proxy.URL)
 
 				spdyTransport.proxier = func(proxierReq *http.Request) (*url.URL, error) {
 					proxierCalled = true
@@ -352,7 +355,6 @@ func TestRoundTripAndNewConnection(t *testing.T) {
 					proxyURL.User = testCase.proxyAuth
 					return proxyURL, nil
 				}
-				defer proxy.Close()
 			}
 
 			client := &http.Client{Transport: spdyTransport}
@@ -416,8 +418,9 @@ func TestRoundTripAndNewConnection(t *testing.T) {
 				if !ok {
 					t.Fatalf("invalid proxy auth header %s", proxyCalledWithAuthHeader)
 				}
-				require.Equal(t, expectedUsername, username)
-				require.Equal(t, expectedPassword, password)
+				if username != expectedUsername || password != expectedPassword {
+					t.Fatalf("expected proxy auth \"%s:%s\", got \"%s:%s\"", expectedUsername, expectedPassword, username, password)
+				}
 			} else if proxyCalledWithAuth {
 				t.Fatalf("proxy authorization unexpected, got %q", proxyCalledWithAuthHeader)
 			}
