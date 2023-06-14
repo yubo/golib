@@ -2,6 +2,7 @@ package configer
 
 import (
 	"fmt"
+	"net"
 	"reflect"
 	"strings"
 
@@ -335,6 +336,43 @@ func ToFloat64SliceE(i interface{}) ([]float64, error) {
 		return a, nil
 	default:
 		return []float64{}, fmt.Errorf("unable to cast %#v of type %T to []float64", i, i)
+	}
+}
+
+func ToIPSlice(str string) []net.IP {
+	v := []net.IP{}
+	if err := yaml.Unmarshal([]byte(str), &v); err != nil {
+		v, _ = ToIPSliceE(str)
+	}
+
+	return v
+}
+
+func ToIPSliceE(i interface{}) ([]net.IP, error) {
+	if i == nil {
+		return []net.IP{}, fmt.Errorf("unable to cast %#v of type %T to []net.IP", i, i)
+	}
+
+	switch v := i.(type) {
+	case []net.IP:
+		return v, nil
+	}
+
+	kind := reflect.TypeOf(i).Kind()
+	switch kind {
+	case reflect.Slice, reflect.Array:
+		s := reflect.ValueOf(i)
+		a := make([]net.IP, s.Len())
+		for j := 0; j < s.Len(); j++ {
+			val, err := util.ToIPE(s.Index(j).Interface())
+			if err != nil {
+				return []net.IP{}, fmt.Errorf("unable to cast %#v of type %T to []net.IP", i, i)
+			}
+			a[j] = val
+		}
+		return a, nil
+	default:
+		return []net.IP{}, fmt.Errorf("unable to cast %#v of type %T to []net.IP", i, i)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net"
 	"reflect"
 	"strconv"
 	"strings"
@@ -753,6 +754,22 @@ func ToUint8E(i interface{}) (uint8, error) {
 		return 0, nil
 	default:
 		return 0, fmt.Errorf("unable to cast %#v of type %T to uint8", i, i)
+	}
+}
+
+// ToIPE casts an interface to an net.IP type.
+func ToIPE(i interface{}) (net.IP, error) {
+	i = indirect(i)
+
+	switch s := i.(type) {
+	case net.IP:
+		return s, nil
+	case string:
+		return net.ParseIP(s), nil
+	case nil:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unable to cast %#v of type %T to int64", i, i)
 	}
 }
 

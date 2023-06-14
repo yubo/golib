@@ -246,11 +246,7 @@ func (p *configer) setVar(path []string, fs *pflag.FlagSet, sampleRv reflect.Val
 		case pflag.Value:
 			field = newConfigFieldByValue(value, fs, ps, tag, def)
 		case *net.IP:
-			var df net.IP
-			if def != "" {
-				df = net.ParseIP(def)
-			}
-			field = newConfigField(value, fs, ps, tag, fs.IPVar, fs.IPVarP, df)
+			field = newConfigField(value, fs, ps, tag, fs.IPVar, fs.IPVarP, util.ToIP(def))
 		case *bool:
 			field = newConfigField(value, fs, ps, tag, fs.BoolVar, fs.BoolVarP, util.ToBool(def))
 		case *string:
@@ -287,6 +283,8 @@ func (p *configer) setVar(path []string, fs *pflag.FlagSet, sampleRv reflect.Val
 			field = newConfigField(value, fs, ps, tag, fs.IntSliceVar, fs.IntSliceVarP, ToIntSlice(def))
 		case *[]float64:
 			field = newConfigField(value, fs, ps, tag, fs.Float64SliceVar, fs.Float64SliceVarP, ToFloat64Slice(def))
+		case *[]net.IP:
+			field = newConfigField(value, fs, ps, tag, fs.Float64SliceVar, fs.Float64SliceVarP, ToIPSlice(def))
 		case *map[string]string:
 			field = newConfigField(value, fs, ps, tag, fs.StringToStringVar, fs.StringToStringVarP, ToStringMapString(def))
 		default:

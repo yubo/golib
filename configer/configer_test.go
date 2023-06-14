@@ -872,6 +872,7 @@ func TestConfigTypes(t *testing.T) {
 		Int64    *int64            `json:"int64" default:"1"`
 		Ints     []int             `json:"ints" default:"[1,2]"`
 		IP       net.IP            `json:"ip" default:"1.1.1.1"`
+		IPs      []net.IP          `json:"ips" default:"[\"1.1.1.1\", \"1.1.1.2\"]"`
 		String   *string           `json:"string" default:"1"`
 		Stringm  map[string]string `json:"stringm" default:"{\"1\":\"1\", \"2\":\"2\"}"`
 		Strings  []string          `json:"strings" default:"[\"1\", \"2\"]"`
@@ -898,6 +899,7 @@ func TestConfigTypes(t *testing.T) {
 			Int64:    util.Int64(1),
 			Ints:     []int{1, 2},
 			IP:       net.IPv4(1, 1, 1, 1),
+			IPs:      []net.IP{net.IPv4(1, 1, 1, 1), net.IPv4(1, 1, 1, 2)},
 			String:   util.String("1"),
 			Stringm:  map[string]string{"1": "1", "2": "2"},
 			Strings:  []string{"1", "2"},
@@ -921,6 +923,7 @@ func TestConfigTypes(t *testing.T) {
 			Int64:    util.Int64(3),
 			Ints:     []int{3, 4},
 			IP:       net.IPv4(3, 3, 3, 3),
+			IPs:      []net.IP{net.IPv4(2, 1, 1, 1), net.IPv4(2, 1, 1, 2)},
 			String:   util.String("3"),
 			Stringm:  map[string]string{"3": "3", "4": "4"},
 			Strings:  []string{"3", "4"},
@@ -943,6 +946,7 @@ func TestConfigTypes(t *testing.T) {
 			Int64:    util.Int64(3),
 			Ints:     []int{3, 4},
 			IP:       net.IPv4(3, 3, 3, 3),
+			IPs:      []net.IP{net.IPv4(2, 1, 1, 1), net.IPv4(2, 1, 1, 2)},
 			String:   util.String("3"),
 			Stringm:  map[string]string{"3": "3", "4": "4"},
 			Strings:  []string{"3", "4"},

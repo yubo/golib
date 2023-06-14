@@ -6,7 +6,16 @@
 // Package cast provides easy and safe casting in Go.
 package util
 
-import "time"
+import (
+	"net"
+	"time"
+)
+
+// ToIP casts an interface to a net.IP type.
+func ToIP(i interface{}) net.IP {
+	v, _ := ToIPE(i)
+	return v
+}
 
 // ToBool casts an interface to a bool type.
 func ToBool(i interface{}) bool {
