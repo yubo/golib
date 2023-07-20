@@ -117,6 +117,10 @@ func clonePath(path []string) []string {
 }
 
 func objToValues(in interface{}) (map[string]interface{}, error) {
+	if out, ok := in.(map[string]interface{}); ok {
+		return out, nil
+	}
+
 	b, err := yaml.Marshal(in)
 	if err != nil {
 		return nil, err
@@ -154,6 +158,14 @@ func isZero(in interface{}) bool {
 }
 
 func pathValueToValues(path string, value interface{}) map[string]interface{} {
+	if path == "" {
+		out, err := objToValues(value)
+		if err != nil {
+			panic(err)
+		}
+		return out
+	}
+
 	paths := parsePath(path)
 	p := value
 
@@ -214,7 +226,7 @@ func GetFieldTag(sf reflect.StructField) (tag *FieldTag) {
 		tag.Arg = "arg2"
 	}
 
-	if flag := strings.Split(strings.TrimSpace(sf.Tag.Get("flag")), ","); len(flag) > 0 && flag[0] != "" && flag[0] != "-" {
+	if flag, ok := getFlagFromStructField(sf); ok {
 		tag.Flag = flag
 	}
 
@@ -227,6 +239,24 @@ func GetFieldTag(sf reflect.StructField) (tag *FieldTag) {
 	}
 
 	return
+}
+
+func getFlagFromStructField(sf reflect.StructField) ([]string, bool) {
+	flag := strings.Split(strings.TrimSpace(strings.TrimSpace(sf.Tag.Get("flag"))), ",")
+	n := len(flag)
+	if n != 1 && n != 2 {
+		return nil, false
+	}
+
+	if n == 1 && len(flag[0]) > 0 {
+		return flag, true
+	}
+
+	if n == 2 && len(flag[0]) > 0 && len(flag[1]) > 0 {
+		return flag, true
+	}
+
+	return nil, false
 }
 
 // tagOptions is the string following a comma in a struct field's "json"
@@ -427,8 +457,8 @@ func newConfigFieldByValue(value pflag.Value, fs *pflag.FlagSet, path string, ta
 
 	switch len(tag.Flag) {
 	case 0:
+		// nothing
 		return field
-	// nothing
 	case 1:
 		field.flag = tag.Flag[0]
 		fs.Var(value, tag.Flag[0], tag.Description)

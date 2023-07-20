@@ -1,3 +1,4 @@
+//go:build go1.8
 // +build go1.8
 
 /*
@@ -33,11 +34,13 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/yubo/golib/util/wait"
 )
+
+var ForeverTestTimeout = time.Second * 30
 
 func TestGetClientIP(t *testing.T) {
 	ipString := "10.0.0.1"
@@ -401,8 +404,8 @@ func TestConnectWithRedirects(t *testing.T) {
 			}
 
 			netdialer := &net.Dialer{
-				Timeout:   wait.ForeverTestTimeout,
-				KeepAlive: wait.ForeverTestTimeout,
+				Timeout:   ForeverTestTimeout,
+				KeepAlive: ForeverTestTimeout,
 			}
 			dialer := DialerFunc(func(req *http.Request) (net.Conn, error) {
 				conn, err := netdialer.Dial("tcp", req.URL.Host)

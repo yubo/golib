@@ -23,8 +23,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/yubo/golib/util/wait"
 )
+
+var ForeverTestTimeout = time.Second * 30
 
 type myType struct {
 	ID    string
@@ -138,7 +139,7 @@ func TestBroadcasterWatcherStopDeadlock(t *testing.T) {
 	}(w, w2)
 	m.Action(Added, &myType{})
 	select {
-	case <-time.After(wait.ForeverTestTimeout):
+	case <-time.After(ForeverTestTimeout):
 		t.Error("timeout: deadlocked")
 	case <-done:
 	}

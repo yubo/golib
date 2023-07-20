@@ -31,6 +31,10 @@ import (
 	"github.com/yubo/golib/util/yaml"
 )
 
+const (
+	rootPath = "root"
+)
+
 var (
 	DEBUG           = false
 	DefaultConfiger = New()
@@ -298,6 +302,10 @@ func (p *configer) setVar(path []string, fs *pflag.FlagSet, sampleRv reflect.Val
 				if err := p.setVar(curPath, fs, rv, rt, opt); err != nil {
 					return err
 				}
+				continue
+			case reflect.Slice:
+				// TODO: 不支持数组
+				dlog("slice flags not supported", ps, rt.String())
 				continue
 			default:
 				// set field.default

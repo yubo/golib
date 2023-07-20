@@ -1,6 +1,8 @@
 package wait
 
-import "github.com/yubo/golib/api"
+import (
+	"github.com/yubo/golib/api"
+)
 
 type BackoffConfig struct {
 	// The initial duration.
@@ -27,12 +29,28 @@ type BackoffConfig struct {
 	Cap api.Duration `json:"cap"`
 }
 
-func (c BackoffConfig) Backoff() Backoff {
-	return Backoff{
+func (c *BackoffConfig) Backoff() *Backoff {
+	if c == nil {
+		return nil
+	}
+	return &Backoff{
 		Duration: c.Duration.Duration,
 		Factor:   c.Factor,
 		Jitter:   c.Jitter,
 		Steps:    c.Steps,
 		Cap:      c.Cap.Duration,
+	}
+}
+
+func (b *Backoff) BackoffConfig() *BackoffConfig {
+	if b == nil {
+		return nil
+	}
+	return &BackoffConfig{
+		Duration: api.Duration{Duration: b.Duration},
+		Factor:   b.Factor,
+		Jitter:   b.Jitter,
+		Steps:    b.Steps,
+		Cap:      api.Duration{Duration: b.Cap},
 	}
 }

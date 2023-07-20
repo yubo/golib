@@ -98,10 +98,11 @@ func TestConfigWithConfig(t *testing.T) {
 		A int `json:"a"`
 	}
 	type Bar struct {
-		Foo  Foo `json:"foo"`
-		Foo2 Foo `json:"foo2"`
+		Foo  Foo   `json:"foo"`
+		Foo2 Foo   `json:"foo2"`
+		Foo3 []Foo `json:"foo3"`
 	}
-	v := Bar{Foo{2}, Foo{3}}
+	v := Bar{Foo{2}, Foo{3}, []Foo{{4}, {5}}}
 
 	{
 		c, err := New().Parse(WithDefault("foo", v.Foo))
