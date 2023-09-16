@@ -386,13 +386,13 @@ func (p *mysql) MigrateColumn(ctx context.Context, expect, actual *StructField, 
 
 	// check size
 	if expect.Size != nil && actual.Size != nil && util.Int64Value(expect.Size) != util.Int64Value(actual.Size) {
-		klog.V(3).InfoS("migrate", "column", expect.Name, "expect", util.Int64Value(expect.Size), "actiual", util.Int64Value(actual.Size))
+		klog.V(3).InfoSDepth(fileDepth(), "migrate", "column", expect.Name, "expect", util.Int64Value(expect.Size), "actiual", util.Int64Value(actual.Size))
 		alterColumn = true
 	}
 
 	// check nullable
 	if expect.NotNull != nil && util.BoolValue(expect.NotNull) != util.BoolValue(actual.NotNull) {
-		klog.V(3).InfoS("migrate.nullable", "column", expect.Name,
+		klog.V(3).InfoSDepth(fileDepth(), "migrate.nullable", "column", expect.Name,
 			"expect", util.BoolValue(expect.NotNull), "actiual", util.BoolValue(actual.NotNull))
 		alterColumn = true
 	}

@@ -58,7 +58,7 @@ func (p *rawDBWrapper) prepareInterpolateParams(ctx context.Context, query *stri
 			out(sql)
 		}
 		if DEBUG {
-			klog.InfoS("debug", "sql", sql)
+			klog.InfoSDepth(fileDepth(), "debug", "sql", sql)
 		}
 	}
 

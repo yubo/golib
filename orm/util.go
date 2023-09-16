@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -34,14 +35,31 @@ var (
 	defaultClock     clock.Clock = clock.RealClock{}
 )
 
+var sourceDir string
+
+func init() {
+	_, file, _, _ := runtime.Caller(0)
+	sourceDir = regexp.MustCompile(`orm.util\.go`).ReplaceAllString(file, "")
+}
+
+func fileDepth() int {
+	for i := 2; i < 15; i++ {
+		_, file, _, ok := runtime.Caller(i)
+		if ok && (!strings.HasPrefix(file, sourceDir) || strings.HasSuffix(file, "_test.go")) {
+			return i - 1
+		}
+	}
+	return 0
+}
+
 func dlog(format string, args ...interface{}) {
-	if klog.V(6).Enabled() || DEBUG {
-		klog.InfofDepth(2, format, args...)
+	if DEBUG {
+		klog.V(6).InfofDepth(fileDepth(), format, args...)
 	}
 }
 
 func elog(format string, args ...interface{}) {
-	klog.ErrorfDepth(1, format, args...)
+	klog.ErrorfDepth(fileDepth(), format, args...)
 }
 
 // {1,2,3} => "(1,2,3)"
@@ -186,7 +204,7 @@ func NewCurTime(t TimeType, cur time.Time) interface{} {
 	case UnixNanosecond:
 		return cur.UnixNano()
 	default:
-		klog.Errorf("unsupported timetype %d", t)
+		klog.ErrorfDepth(fileDepth(), "unsupported timetype %d", t)
 		return nil
 	}
 }

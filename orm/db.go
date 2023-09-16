@@ -487,7 +487,6 @@ func (p *ormDB) ExecRows(bytes []byte) (err error) {
 	for i := 0; i < len(cmds); i++ {
 		_, err := tx.Exec(cmds[i])
 		if err != nil {
-			klog.V(3).Infof("%v", err)
 			return fmt.Errorf("sql %s\nerr %s", cmds[i], err)
 		}
 	}
