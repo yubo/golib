@@ -737,6 +737,7 @@ func TestTypeCustom(t *testing.T) {
 			CustomTime   CustomTime
 			Point        Point
 			PointP       *Point
+			Strings      Data[[]string]
 		}
 
 		err := db.AutoMigrate(ctx, &test{})
@@ -760,6 +761,7 @@ func TestTypeCustom(t *testing.T) {
 				CustomTime:   CustomTime(ts),
 				Point:        Point{X: 1, Y: 2},
 				PointP:       &Point{X: 1, Y: 2},
+				Strings:      NewData([]string{"a", "b"}),
 			},
 		}}
 

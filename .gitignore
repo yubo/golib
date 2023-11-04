@@ -1,5 +1,6 @@
 *.out
 *.swp
+.DS_Store
 test.sh
 
 tmp/

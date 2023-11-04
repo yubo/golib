@@ -3,6 +3,9 @@ package orm
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
 )
 
 type DataType string
@@ -134,3 +137,42 @@ func (b nonDriver) ColumnTypes(ctx context.Context, o *queryOptions) ([]StructFi
 func (b nonDriver) CreateIndex(ctx context.Context, name string, o *queryOptions) error { return nil }
 func (b nonDriver) DropIndex(ctx context.Context, name string, o *queryOptions) error   { return nil }
 func (b nonDriver) HasIndex(ctx context.Context, name string, o *queryOptions) bool     { return false }
+
+func NewData[T any](data T) Data[T] {
+	return Data[T]{
+		Data: data,
+	}
+}
+
+type Data[T any] struct {
+	Data T
+}
+
+func (p Data[T]) Value() (driver.Value, error) {
+	return p.MarshalJSON()
+}
+
+func (p *Data[T]) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	buf, ok := value.([]byte)
+	if !ok {
+		return errors.New("invalid Scan Source")
+	}
+	return p.UnmarshalJSON(buf)
+}
+
+func (p Data[T]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(p.Data)
+}
+
+func (p *Data[T]) UnmarshalJSON(data []byte) error {
+	if p == nil {
+		return errors.New("null point exception")
+	}
+	if err := json.Unmarshal(data, &p.Data); err != nil {
+		return err
+	}
+	return nil
+}
